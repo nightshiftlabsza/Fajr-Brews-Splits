@@ -1,0 +1,151 @@
+/* ============================================================
+   Fajr Brews — Design Tokens
+   3 themes: porcelain | obsidian | slate
+   Applied via [data-theme] on <html>
+   ============================================================ */
+
+/* ── Theme 1: Porcelain Ledger (default) ──────────────────── */
+:root,
+[data-theme="porcelain"] {
+  /* Backgrounds */
+  --color-bg:             #FAF8F5;
+  --color-surface:        #FFFFFF;
+  --color-surface-raised: #F5F2EE;
+  --color-surface-hover:  #F0EDE8;
+
+  /* Text */
+  --color-text-primary:   #1A1208;
+  --color-text-secondary: #6B5E4E;
+  --color-text-muted:     #9B8F82;
+  --color-text-inverse:   #FFFFFF;
+
+  /* Borders */
+  --color-border:         #E5DDD4;
+  --color-border-strong:  #C8BDB2;
+  --color-border-focus:   #3D5A3E;
+
+  /* Accent (deep forest) */
+  --color-accent:         #3D5A3E;
+  --color-accent-mid:     #4E7250;
+  --color-accent-light:   #D4E4D5;
+  --color-accent-text:    #FFFFFF;
+
+  /* Status */
+  --color-paid:           #2D6A4F;
+  --color-paid-bg:        #D8EFE6;
+  --color-partial:        #7A5C14;
+  --color-partial-bg:     #FBF0D0;
+  --color-unpaid:         #8B2020;
+  --color-unpaid-bg:      #F8DADA;
+
+  /* Shadows */
+  --shadow-xs:  0 1px 2px rgba(26, 18, 8, 0.06);
+  --shadow-sm:  0 2px 8px rgba(26, 18, 8, 0.08);
+  --shadow-md:  0 4px 16px rgba(26, 18, 8, 0.10);
+  --shadow-lg:  0 8px 32px rgba(26, 18, 8, 0.12);
+
+  /* Typography */
+  --font-display:  'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  --font-body:     'Sora', system-ui, -apple-system, sans-serif;
+  --font-mono:     'IBM Plex Mono', 'Menlo', monospace;
+
+  /* Spacing rhythm (base 4px) */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast:   120ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow:   350ms ease;
+}
+
+/* ── Theme 2: Obsidian Ledger ─────────────────────────────── */
+[data-theme="obsidian"] {
+  --color-bg:             #1A1814;
+  --color-surface:        #22201C;
+  --color-surface-raised: #2A2720;
+  --color-surface-hover:  #323028;
+
+  --color-text-primary:   #F0EBE3;
+  --color-text-secondary: #B5AD9E;
+  --color-text-muted:     #7A7268;
+  --color-text-inverse:   #1A1814;
+
+  --color-border:         #3A3630;
+  --color-border-strong:  #504C45;
+  --color-border-focus:   #C9A84C;
+
+  --color-accent:         #C9A84C;
+  --color-accent-mid:     #D4B75E;
+  --color-accent-light:   #3A2F10;
+  --color-accent-text:    #1A1208;
+
+  --color-paid:           #5BA070;
+  --color-paid-bg:        #1A3024;
+  --color-partial:        #C9A84C;
+  --color-partial-bg:     #2A2210;
+  --color-unpaid:         #C05858;
+  --color-unpaid-bg:      #2A1818;
+
+  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.30);
+  --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.40);
+
+  --font-display:  'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  --font-body:     'Manrope', system-ui, -apple-system, sans-serif;
+  --font-mono:     'IBM Plex Mono', 'Menlo', monospace;
+}
+
+/* ── Theme 3: Slate Monograph ─────────────────────────────── */
+[data-theme="slate"] {
+  --color-bg:             #EEF0F3;
+  --color-surface:        #FFFFFF;
+  --color-surface-raised: #F4F5F7;
+  --color-surface-hover:  #EBECEf;
+
+  --color-text-primary:   #1C2028;
+  --color-text-secondary: #5A6272;
+  --color-text-muted:     #8A94A6;
+  --color-text-inverse:   #FFFFFF;
+
+  --color-border:         #D4D8DF;
+  --color-border-strong:  #B0B8C4;
+  --color-border-focus:   #1B4F72;
+
+  --color-accent:         #1B4F72;
+  --color-accent-mid:     #2C6B9A;
+  --color-accent-light:   #D6E8F5;
+  --color-accent-text:    #FFFFFF;
+
+  --color-paid:           #1B6B45;
+  --color-paid-bg:        #D4EDDF;
+  --color-partial:        #7A5C1B;
+  --color-partial-bg:     #F5EDD0;
+  --color-unpaid:         #8B2020;
+  --color-unpaid-bg:      #F8DADA;
+
+  --shadow-xs:  0 1px 2px rgba(28, 32, 40, 0.05);
+  --shadow-sm:  0 2px 8px rgba(28, 32, 40, 0.07);
+  --shadow-md:  0 4px 16px rgba(28, 32, 40, 0.09);
+  --shadow-lg:  0 8px 32px rgba(28, 32, 40, 0.11);
+
+  --font-display:  'Space Grotesk', system-ui, -apple-system, sans-serif;
+  --font-body:     'Space Grotesk', system-ui, -apple-system, sans-serif;
+  --font-mono:     'IBM Plex Mono', 'Menlo', monospace;
+}

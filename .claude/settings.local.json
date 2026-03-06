@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(test -d \"C:\\\\Users\\\\mzaka.ZAK-PC\\\\Documents\\\\Apps\\\\Fajr Brews App\")",
+      "Bash(npm install)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run build)",
+      "mcp__Desktop_Commander__interact_with_process",
+      "mcp__Desktop_Commander__read_process_output"
+    ]
+  }
+}

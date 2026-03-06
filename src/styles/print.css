@@ -1,0 +1,112 @@
+/* ============================================================
+   Fajr Brews — Print Styles
+   Applied when printing invoices or using "Save as PDF" from browser
+   ============================================================ */
+
+@media print {
+  /* ── Reset for print ───────────────────────────────────── */
+  *, *::before, *::after {
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── Hide UI chrome ────────────────────────────────────── */
+  .nav-top,
+  .nav-bottom,
+  .invoice-actions,
+  .app-header,
+  .page-tabs,
+  button:not(.print-visible),
+  .btn:not(.print-visible) {
+    display: none !important;
+  }
+
+  /* ── Page ──────────────────────────────────────────────── */
+  @page {
+    margin: 18mm 20mm;
+    size: A4 portrait;
+  }
+
+  body {
+    background: #fff !important;
+    color: #1A1208 !important;
+    font-size: 11pt;
+    font-family: 'Sora', 'Inter', sans-serif;
+  }
+
+  /* ── Show only invoice ─────────────────────────────────── */
+  .app-shell > *:not(.print-invoice-wrapper) {
+    display: none !important;
+  }
+
+  .print-invoice-wrapper {
+    display: block !important;
+  }
+
+  /* ── Invoice paper for print ───────────────────────────── */
+  .invoice-paper {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+
+  .invoice-header {
+    background: #3D5A3E !important;
+    color: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    padding: 16pt 18pt !important;
+    page-break-inside: avoid;
+  }
+
+  .invoice-header h2 {
+    color: #fff !important;
+    font-size: 18pt !important;
+  }
+
+  .invoice-body {
+    padding: 18pt !important;
+  }
+
+  .invoice-grand-total {
+    background: #3D5A3E !important;
+    color: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .invoice-grand-total span {
+    color: #fff !important;
+  }
+
+  /* ── Avoid page breaks inside sections ─────────────────── */
+  .invoice-lot,
+  .invoice-section,
+  .invoice-grand-total,
+  .invoice-bank-row {
+    page-break-inside: avoid;
+  }
+
+  /* ── Force page breaks ─────────────────────────────────── */
+  .page-break-before {
+    page-break-before: always;
+  }
+
+  /* ── Colors for print ──────────────────────────────────── */
+  .pill-paid    { background: #D8EFE6 !important; color: #2D6A4F !important; }
+  .pill-partial { background: #FBF0D0 !important; color: #7A5C14 !important; }
+  .pill-unpaid  { background: #F8DADA !important; color: #8B2020 !important; }
+
+  .invoice-lot {
+    background: #F5F2EE !important;
+    border: 1px solid #E5DDD4 !important;
+  }
+
+  /* ── Typography ────────────────────────────────────────── */
+  h1, h2, h3 {
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
+  }
+}
