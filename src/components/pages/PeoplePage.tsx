@@ -17,6 +17,7 @@ export function PeoplePage() {
   const [form, setForm] = useState<PersonForm>(emptyForm);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [search, setSearch] = useState('');
 
   const filtered = people.filter((p) =>
@@ -57,8 +58,13 @@ export function PeoplePage() {
 
   async function handleDelete(id: string, name: string) {
     if (!confirm(`Remove ${name} from the directory?`)) return;
-    await deletePerson(id);
-    if (editingId === id) setEditingId(null);
+    setDeleteError('');
+    try {
+      await deletePerson(id);
+      if (editingId === id) setEditingId(null);
+    } catch (e) {
+      setDeleteError(String(e));
+    }
   }
 
   return (
@@ -92,6 +98,10 @@ export function PeoplePage() {
           <div className="section-label" style={{ marginBottom: 'var(--space-4)' }}>New person</div>
           <PersonForm form={form} error={error} saving={saving} onChange={setForm} onSave={handleSave} onCancel={() => setEditingId(null)} />
         </div>
+      )}
+
+      {deleteError && (
+        <div className="alert alert-error" style={{ marginBottom: 'var(--space-3)' }}>{deleteError}</div>
       )}
 
       {/* People list */}

@@ -1,17 +1,22 @@
 import { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import type { Theme, WorkspaceMember } from '../../types';
+import type { Theme, ThemeMode, WorkspaceMember } from '../../types';
 import { formatDateShort } from '../../lib/formatters';
 
 const THEMES: { id: Theme; name: string; description: string }[] = [
-  { id: 'porcelain', name: 'Porcelain Ledger', description: 'Light luxury · Warm ivory · Forest accents' },
-  { id: 'obsidian', name: 'Obsidian Ledger', description: 'Dark editorial · Charcoal · Antique gold' },
-  { id: 'slate', name: 'Slate Monograph', description: 'Swiss editorial · Pale slate · Deep navy' },
+  { id: 'emerald', name: 'Emerald Ledger', description: 'Warm mineral · Deep emerald · Serif headings' },
+  { id: 'yinmn', name: 'YInMn Ledger', description: 'Cool mineral · YInMn blue · Geometric headings' },
+];
+
+const MODES: { id: ThemeMode; label: string; icon: string }[] = [
+  { id: 'light', label: 'Light', icon: '☀️' },
+  { id: 'dark',  label: 'Dark',  icon: '🌙' },
+  { id: 'auto',  label: 'Auto',  icon: '🖥' },
 ];
 
 export function SettingsPage() {
   const {
-    user, memberRole, settings, setTheme, signOut,
+    user, memberRole, settings, setTheme, setThemeMode, signOut,
     workspaceMembers, fetchWorkspaceMembers, addMemberByEmail, removeMember,
   } = useAppStore();
 
@@ -21,6 +26,7 @@ export function SettingsPage() {
   const [inviteError, setInviteError] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState('');
   const [inviting, setInviting] = useState(false);
+  const [removeError, setRemoveError] = useState('');
 
   const isAdmin = memberRole === 'owner' || memberRole === 'admin';
 
@@ -49,7 +55,12 @@ export function SettingsPage() {
 
   async function handleRemove(member: WorkspaceMember) {
     if (!confirm(`Remove ${member.email || member.fullName || 'this member'} from the workspace?`)) return;
-    await removeMember(member.userId);
+    setRemoveError('');
+    try {
+      await removeMember(member.userId);
+    } catch (e) {
+      setRemoveError(String(e));
+    }
   }
 
   return (
@@ -76,7 +87,7 @@ export function SettingsPage() {
 
       {/* Theme */}
       <Section title="Theme">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }}>
           {THEMES.map((theme) => (
             <label key={theme.id} style={{
               display: 'flex',
@@ -105,6 +116,34 @@ export function SettingsPage() {
             </label>
           ))}
         </div>
+
+        <div className="section-label">Mode</div>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+          {MODES.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => setThemeMode(m.id)}
+              style={{
+                flex: '1 1 auto',
+                minWidth: 80,
+                padding: 'var(--space-3) var(--space-4)',
+                border: `1.5px solid ${settings.themeMode === m.id ? 'var(--color-accent)' : 'var(--color-border)'}`,
+                borderRadius: 'var(--radius-sm)',
+                background: settings.themeMode === m.id ? 'var(--color-accent-light)' : 'var(--color-surface-raised)',
+                color: settings.themeMode === m.id ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                fontWeight: settings.themeMode === m.id ? 700 : 400,
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                transition: 'border-color var(--transition-fast), background var(--transition-fast)',
+              }}
+            >
+              {m.icon} {m.label}
+            </button>
+          ))}
+        </div>
+        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 'var(--space-2)' }}>
+          Auto follows your device's dark/light preference.
+        </p>
       </Section>
 
       {/* Workspace members (admin only) */}
@@ -163,6 +202,10 @@ export function SettingsPage() {
                   </div>
                 ))}
               </div>
+            )}
+
+            {removeError && (
+              <div className="alert alert-error" style={{ marginBottom: 'var(--space-4)' }}>{removeError}</div>
             )}
 
             {isAdmin && (
@@ -245,9 +288,8 @@ function Section({ title, children, action }: { title: string; children: React.R
 
 function ThemeSwatch({ themeId }: { themeId: Theme }) {
   const palettes: Record<Theme, { bg: string; accent: string }> = {
-    porcelain: { bg: '#FAF8F5', accent: '#3D5A3E' },
-    obsidian: { bg: '#1A1814', accent: '#C9A84C' },
-    slate: { bg: '#EEF0F3', accent: '#1B4F72' },
+    emerald: { bg: '#F4F7F2', accent: '#1B5E40' },
+    yinmn:   { bg: '#EEF0F7', accent: '#2E4DAA' },
   };
   const p = palettes[themeId];
   return (

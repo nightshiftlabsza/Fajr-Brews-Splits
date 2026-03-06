@@ -15,7 +15,7 @@ export function formatZARShort(amount: number): string {
 
 export function formatDate(isoDate: string): string {
   if (!isoDate) return '';
-  const d = new Date(isoDate + 'T00:00:00');
+  const d = new Date(isoDate + 'T12:00:00');
   return d.toLocaleDateString('en-ZA', {
     day: 'numeric',
     month: 'long',
@@ -25,7 +25,7 @@ export function formatDate(isoDate: string): string {
 
 export function formatDateShort(isoDate: string): string {
   if (!isoDate) return '';
-  const d = new Date(isoDate + 'T00:00:00');
+  const d = new Date(isoDate + 'T12:00:00');
   return d.toLocaleDateString('en-ZA', {
     day: 'numeric',
     month: 'short',
@@ -49,7 +49,7 @@ export function resolveReference(
   personName: string,
   orderDate?: string
 ): string {
-  const d = orderDate ? new Date(orderDate + 'T00:00:00') : new Date();
+  const d = orderDate ? new Date(orderDate + 'T12:00:00') : new Date();
   const month = d.toLocaleString('default', { month: 'short' }).toUpperCase();
   const year = d.getFullYear().toString();
 

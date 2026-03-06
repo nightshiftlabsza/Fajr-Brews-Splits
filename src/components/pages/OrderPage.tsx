@@ -27,6 +27,7 @@ export function OrderPage() {
   const currentOrder = useAppStore(getCurrentOrder);
   const [open, setOpen] = useState<Section>('setup');
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   function toggle(section: Section) {
     setOpen((prev) => (prev === section ? 'setup' : section));
@@ -34,6 +35,7 @@ export function OrderPage() {
 
   async function handleNewOrder() {
     setCreating(true);
+    setCreateError(null);
     try {
       const order = await createOrder({
         name: 'New Order',
@@ -47,6 +49,8 @@ export function OrderPage() {
         payments: {},
       });
       if (order) setCurrentOrderId(order.id);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Failed to create order. Please try again.');
     } finally {
       setCreating(false);
     }
@@ -62,6 +66,11 @@ export function OrderPage() {
           <button className="btn btn-primary btn-lg" onClick={handleNewOrder} disabled={creating}>
             {creating ? <span className="spinner" style={{ width: 18, height: 18 }} /> : 'New Order'}
           </button>
+          {createError && (
+            <div className="alert alert-warning" style={{ marginTop: 'var(--space-3)', textAlign: 'left' }}>
+              {createError}
+            </div>
+          )}
         </div>
       </div>
     );

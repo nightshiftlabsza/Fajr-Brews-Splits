@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from './store/appStore';
+import type { ThemeMode } from './types';
 import { AuthPage } from './components/auth/AuthPage';
 import { PendingAccess } from './components/auth/PendingAccess';
 import { Header } from './components/layout/Header';
@@ -21,12 +22,48 @@ export default function App() {
     initialize();
   }, []);
 
-  // Apply saved theme on mount (also done in initialize, but ensure it's set)
+  // Track mediaQuery listener for cleanup
+  const modeListenerRef = useRef<((e: MediaQueryListEvent) => void) | null>(null);
+  const modeMediaRef = useRef<MediaQueryList | null>(null);
+
+  // Apply saved theme + mode on mount (also done in initialize, but ensures fast flash-of-wrong-theme prevention)
   useEffect(() => {
-    const saved = localStorage.getItem('fb_theme');
-    if (saved && ['porcelain', 'obsidian', 'slate'].includes(saved)) {
-      document.documentElement.setAttribute('data-theme', saved);
+    try {
+      const savedTheme = localStorage.getItem('fb_theme');
+      if (savedTheme && ['emerald', 'yinmn'].includes(savedTheme)) {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      }
+
+      const savedMode = (localStorage.getItem('fb_theme_mode') ?? 'light') as ThemeMode;
+      const validMode = (['light', 'dark', 'auto'] as ThemeMode[]).includes(savedMode) ? savedMode : 'light';
+      document.documentElement.setAttribute('data-mode', validMode);
+    } catch {
+      // Private browsing — ignore
     }
+
+    // Listen for OS dark-mode changes (used when mode='auto')
+    try {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      modeMediaRef.current = mq;
+      const handler = () => {
+        // Force a repaint so @media (prefers-color-scheme) CSS re-evaluates
+        const mode = document.documentElement.getAttribute('data-mode');
+        if (mode === 'auto') {
+          // Toggling a dummy attribute triggers CSS re-evaluation
+          document.documentElement.setAttribute('data-mode', 'auto');
+        }
+      };
+      modeListenerRef.current = handler;
+      mq.addEventListener('change', handler);
+    } catch { /* ignore */ }
+
+    return () => {
+      try {
+        if (modeMediaRef.current && modeListenerRef.current) {
+          modeMediaRef.current.removeEventListener('change', modeListenerRef.current);
+        }
+      } catch { /* ignore */ }
+    };
   }, []);
 
   // Loading splash

@@ -25,6 +25,7 @@ body {
   color: var(--color-text-primary);
   line-height: 1.6;
   min-height: 100%;
+  overflow-x: hidden; /* R6: prevent accidental horizontal scroll on mobile */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color var(--transition-slow), color var(--transition-slow);
@@ -89,6 +90,9 @@ code {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  max-width: 1400px; /* R1: cap content width on ultrawides */
+  margin-inline: auto;
+  width: 100%;
 }
 
 .app-main {
@@ -312,10 +316,10 @@ code {
 }
 
 .btn-icon {
-  padding: 8px;
+  padding: 10px; /* R2: meet 44px touch target */
   border-radius: var(--radius-sm);
-  min-height: 36px;
-  min-width: 36px;
+  min-height: 44px;
+  min-width: 44px;
 }
 
 /* ── Tables ──────────────────────────────────────────────── */
@@ -673,8 +677,15 @@ tr:hover td {
   grid-template-columns: 1fr 1fr;
   gap: var(--space-4);
 }
-@media (max-width: 500px) {
-  .grid-2 { grid-template-columns: 1fr; }
+@media (max-width: 768px) {
+  .grid-2 { grid-template-columns: 1fr; } /* R7: align with primary breakpoint */
+}
+
+/* R8: laptop mid-breakpoint */
+@media (min-width: 1024px) {
+  .page-container {
+    padding: var(--space-10) var(--space-8);
+  }
 }
 
 /* ── Realtime indicator ──────────────────────────────────── */

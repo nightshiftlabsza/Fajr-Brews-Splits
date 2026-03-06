@@ -262,3 +262,166 @@ values (
 -- 4. Reload the app — you should now have full access.
 -- 5. Add other members via the Settings > Members page in the app,
 --    or repeat the INSERT above with their UUIDs and role = 'member'.
+
+-- ============================================================
+-- MIGRATION 001 — Theme Overhaul + Order PIN Access
+-- Run this in Supabase SQL Editor AFTER the initial schema above.
+-- Safe to run multiple times (uses IF NOT EXISTS / DO NOTHING).
+-- ============================================================
+
+-- ─── 1. Update user_settings theme constraint ─────────────────
+ALTER TABLE public.user_settings
+  DROP CONSTRAINT IF EXISTS user_settings_theme_check;
+
+ALTER TABLE public.user_settings
+  ADD CONSTRAINT user_settings_theme_check
+    CHECK (theme IN ('emerald', 'yinmn'));
+
+ALTER TABLE public.user_settings
+  ALTER COLUMN theme SET DEFAULT 'emerald';
+
+-- Migrate any existing rows to new theme names
+UPDATE public.user_settings SET theme = 'emerald'
+  WHERE theme NOT IN ('emerald', 'yinmn');
+
+-- ─── 2. Add theme_mode column to user_settings ────────────────
+ALTER TABLE public.user_settings
+  ADD COLUMN IF NOT EXISTS theme_mode text NOT NULL DEFAULT 'light';
+
+ALTER TABLE public.user_settings
+  DROP CONSTRAINT IF EXISTS user_settings_theme_mode_check;
+
+ALTER TABLE public.user_settings
+  ADD CONSTRAINT user_settings_theme_mode_check
+    CHECK (theme_mode IN ('light', 'dark', 'auto'));
+
+-- ─── 3. Add PIN columns to orders ────────────────────────────
+ALTER TABLE public.orders
+  ADD COLUMN IF NOT EXISTS pin_required boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS pin_hash text;
+
+-- ─── 4. Create order_participants table ──────────────────────
+CREATE TABLE IF NOT EXISTS public.order_participants (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id   uuid NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+  user_id    uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  added_at   timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (order_id, user_id)
+);
+
+ALTER TABLE public.order_participants ENABLE ROW LEVEL SECURITY;
+
+-- Participants can see their own rows
+DROP POLICY IF EXISTS "op_select" ON public.order_participants;
+CREATE POLICY "op_select" ON public.order_participants
+  FOR SELECT USING (auth.uid() = user_id);
+
+-- Existing participants can add others (within same workspace)
+DROP POLICY IF EXISTS "op_insert" ON public.order_participants;
+CREATE POLICY "op_insert" ON public.order_participants
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.order_participants op2
+      WHERE op2.order_id = order_participants.order_id
+        AND op2.user_id = auth.uid()
+    )
+  );
+
+-- Only the user themselves can be removed
+DROP POLICY IF EXISTS "op_delete" ON public.order_participants;
+CREATE POLICY "op_delete" ON public.order_participants
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- ─── 5. Auto-add creator as participant on INSERT ─────────────
+CREATE OR REPLACE FUNCTION public._add_order_creator_participant()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  INSERT INTO public.order_participants (order_id, user_id)
+  VALUES (NEW.id, auth.uid())
+  ON CONFLICT DO NOTHING;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_order_creator_participant ON public.orders;
+CREATE TRIGGER trg_order_creator_participant
+  AFTER INSERT ON public.orders
+  FOR EACH ROW EXECUTE FUNCTION public._add_order_creator_participant();
+
+-- ─── 6. Backfill: add current workspace members as participants
+--        for all existing orders (run once; safe if re-run)
+INSERT INTO public.order_participants (order_id, user_id)
+SELECT o.id, wm.user_id
+FROM public.orders o
+JOIN public.workspace_members wm ON wm.workspace_id = o.workspace_id
+ON CONFLICT DO NOTHING;
+
+-- ─── 7. RPC: set_order_pin ────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.set_order_pin(p_order_id uuid, p_pin text)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.order_participants
+    WHERE order_id = p_order_id AND user_id = auth.uid()
+  ) THEN
+    RAISE EXCEPTION 'Access denied';
+  END IF;
+  UPDATE public.orders SET
+    pin_required = true,
+    pin_hash = crypt(p_pin, gen_salt('bf'))
+  WHERE id = p_order_id;
+END;
+$$;
+
+-- ─── 8. RPC: clear_order_pin ─────────────────────────────────
+CREATE OR REPLACE FUNCTION public.clear_order_pin(p_order_id uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.order_participants
+    WHERE order_id = p_order_id AND user_id = auth.uid()
+  ) THEN
+    RAISE EXCEPTION 'Access denied';
+  END IF;
+  UPDATE public.orders SET
+    pin_required = false,
+    pin_hash = NULL
+  WHERE id = p_order_id;
+END;
+$$;
+
+-- ─── 9. RPC: verify_order_pin ────────────────────────────────
+CREATE OR REPLACE FUNCTION public.verify_order_pin(p_order_id uuid, p_pin text)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_hash    text;
+  v_req     boolean;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.order_participants
+    WHERE order_id = p_order_id AND user_id = auth.uid()
+  ) THEN
+    RETURN false;
+  END IF;
+  SELECT pin_hash, pin_required INTO v_hash, v_req
+  FROM public.orders WHERE id = p_order_id;
+  IF NOT v_req OR v_hash IS NULL THEN RETURN true; END IF;
+  RETURN v_hash = crypt(p_pin, v_hash);
+END;
+$$;
+
+-- ─── 10. RPC: add_order_participant ──────────────────────────
+CREATE OR REPLACE FUNCTION public.add_order_participant(p_order_id uuid, p_user_id uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.order_participants
+    WHERE order_id = p_order_id AND user_id = auth.uid()
+  ) THEN
+    RAISE EXCEPTION 'Access denied';
+  END IF;
+  INSERT INTO public.order_participants (order_id, user_id)
+  VALUES (p_order_id, p_user_id)
+  ON CONFLICT DO NOTHING;
+END;
+$$;

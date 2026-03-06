@@ -14,15 +14,19 @@ export function InvoiceActions({ order, person, payer, calc }: Props) {
   const [copying, setCopying] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const payload = { order, person, payer, calc };
 
   async function handleCopy() {
     setCopying(true);
+    setActionError(null);
     try {
       await copyPaymentSummary(payload);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to copy. Please try again.');
     } finally {
       setCopying(false);
     }
@@ -30,8 +34,11 @@ export function InvoiceActions({ order, person, payer, calc }: Props) {
 
   async function handlePDF() {
     setGenerating(true);
+    setActionError(null);
     try {
       await generateInvoicePDF(order, person, payer, calc);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to generate PDF. Please try again.');
     } finally {
       setGenerating(false);
     }
@@ -42,6 +49,10 @@ export function InvoiceActions({ order, person, payer, calc }: Props) {
   }
 
   return (
+    <div>
+    {actionError && (
+      <div className="alert alert-error" style={{ marginBottom: 'var(--space-3)', fontSize: '0.8125rem' }}>{actionError}</div>
+    )}
     <div className="invoice-actions" style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
       <button className="btn btn-primary btn-sm" onClick={handlePDF} disabled={generating}>
         {generating ? (
@@ -97,6 +108,7 @@ export function InvoiceActions({ order, person, payer, calc }: Props) {
         </svg>
         Print
       </button>
+    </div>
     </div>
   );
 }

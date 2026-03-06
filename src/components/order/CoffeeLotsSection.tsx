@@ -345,7 +345,7 @@ function SharesManager({ lot, people, onChange }: SharesManagerProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
       {shares.map((share, idx) => (
-        <div key={share.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+        <div key={share.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
           <select
             className="select"
             value={share.personId}
@@ -363,7 +363,7 @@ function SharesManager({ lot, people, onChange }: SharesManagerProps) {
             type="number"
             value={share.shareGrams || ''}
             onChange={(e) => updateShare(share.id, 'shareGrams', e.target.value)}
-            style={{ width: 90, flexShrink: 0 }}
+            style={{ width: 70, flexShrink: 0 }}
             min="1"
             step="1"
             placeholder="g"

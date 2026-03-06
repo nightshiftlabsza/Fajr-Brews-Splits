@@ -1,54 +1,13 @@
 /* ============================================================
    Fajr Brews — Design Tokens
-   3 themes: porcelain | obsidian | slate
-   Applied via [data-theme] on <html>
+   2 themes: emerald | yinmn
+   2 modes:  light (default) | dark
+   Auto mode follows prefers-color-scheme via @media query
+   Applied via [data-theme] + [data-mode] on <html>
    ============================================================ */
 
-/* ── Theme 1: Porcelain Ledger (default) ──────────────────── */
-:root,
-[data-theme="porcelain"] {
-  /* Backgrounds */
-  --color-bg:             #FAF8F5;
-  --color-surface:        #FFFFFF;
-  --color-surface-raised: #F5F2EE;
-  --color-surface-hover:  #F0EDE8;
-
-  /* Text */
-  --color-text-primary:   #1A1208;
-  --color-text-secondary: #6B5E4E;
-  --color-text-muted:     #9B8F82;
-  --color-text-inverse:   #FFFFFF;
-
-  /* Borders */
-  --color-border:         #E5DDD4;
-  --color-border-strong:  #C8BDB2;
-  --color-border-focus:   #3D5A3E;
-
-  /* Accent (deep forest) */
-  --color-accent:         #3D5A3E;
-  --color-accent-mid:     #4E7250;
-  --color-accent-light:   #D4E4D5;
-  --color-accent-text:    #FFFFFF;
-
-  /* Status */
-  --color-paid:           #2D6A4F;
-  --color-paid-bg:        #D8EFE6;
-  --color-partial:        #7A5C14;
-  --color-partial-bg:     #FBF0D0;
-  --color-unpaid:         #8B2020;
-  --color-unpaid-bg:      #F8DADA;
-
-  /* Shadows */
-  --shadow-xs:  0 1px 2px rgba(26, 18, 8, 0.06);
-  --shadow-sm:  0 2px 8px rgba(26, 18, 8, 0.08);
-  --shadow-md:  0 4px 16px rgba(26, 18, 8, 0.10);
-  --shadow-lg:  0 8px 32px rgba(26, 18, 8, 0.12);
-
-  /* Typography */
-  --font-display:  'Cormorant Garamond', Georgia, 'Times New Roman', serif;
-  --font-body:     'Sora', system-ui, -apple-system, sans-serif;
-  --font-mono:     'IBM Plex Mono', 'Menlo', monospace;
-
+/* ── Shared tokens (theme-independent) ──────────────────── */
+:root {
   /* Spacing rhythm (base 4px) */
   --space-1:  4px;
   --space-2:  8px;
@@ -62,10 +21,10 @@
   --space-16: 64px;
 
   /* Radius */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   16px;
+  --radius-xl:   24px;
   --radius-full: 9999px;
 
   /* Transitions */
@@ -74,63 +33,137 @@
   --transition-slow:   350ms ease;
 }
 
-/* ── Theme 2: Obsidian Ledger ─────────────────────────────── */
-[data-theme="obsidian"] {
-  --color-bg:             #1A1814;
-  --color-surface:        #22201C;
-  --color-surface-raised: #2A2720;
-  --color-surface-hover:  #323028;
+/* ── Theme 1: Emerald Ledger ─────────────────────────────── */
 
-  --color-text-primary:   #F0EBE3;
-  --color-text-secondary: #B5AD9E;
-  --color-text-muted:     #7A7268;
-  --color-text-inverse:   #1A1814;
-
-  --color-border:         #3A3630;
-  --color-border-strong:  #504C45;
-  --color-border-focus:   #C9A84C;
-
-  --color-accent:         #C9A84C;
-  --color-accent-mid:     #D4B75E;
-  --color-accent-light:   #3A2F10;
-  --color-accent-text:    #1A1208;
-
-  --color-paid:           #5BA070;
-  --color-paid-bg:        #1A3024;
-  --color-partial:        #C9A84C;
-  --color-partial-bg:     #2A2210;
-  --color-unpaid:         #C05858;
-  --color-unpaid-bg:      #2A1818;
-
-  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.25);
-  --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.30);
-  --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.35);
-  --shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.40);
-
-  --font-display:  'Cormorant Garamond', Georgia, 'Times New Roman', serif;
-  --font-body:     'Manrope', system-ui, -apple-system, sans-serif;
-  --font-mono:     'IBM Plex Mono', 'Menlo', monospace;
-}
-
-/* ── Theme 3: Slate Monograph ─────────────────────────────── */
-[data-theme="slate"] {
-  --color-bg:             #EEF0F3;
+/* Light (default) */
+[data-theme="emerald"] {
+  --color-bg:             #F4F7F2;
   --color-surface:        #FFFFFF;
-  --color-surface-raised: #F4F5F7;
-  --color-surface-hover:  #EBECEf;
+  --color-surface-raised: #EBF0E7;
+  --color-surface-hover:  #E0EAD9;
 
-  --color-text-primary:   #1C2028;
-  --color-text-secondary: #5A6272;
-  --color-text-muted:     #8A94A6;
+  --color-text-primary:   #0D1A10;
+  --color-text-secondary: #3A5240;
+  --color-text-muted:     #7A9080;
   --color-text-inverse:   #FFFFFF;
 
-  --color-border:         #D4D8DF;
-  --color-border-strong:  #B0B8C4;
-  --color-border-focus:   #1B4F72;
+  --color-border:         #C8DAC8;
+  --color-border-strong:  #A0BCA0;
+  --color-border-focus:   #1B5E40;
 
-  --color-accent:         #1B4F72;
-  --color-accent-mid:     #2C6B9A;
-  --color-accent-light:   #D6E8F5;
+  --color-accent:         #1B5E40;
+  --color-accent-mid:     #2D7D56;
+  --color-accent-light:   #C2E0CF;
+  --color-accent-text:    #FFFFFF;
+
+  --color-paid:           #1B5E40;
+  --color-paid-bg:        #C2E0CF;
+  --color-partial:        #7A5A14;
+  --color-partial-bg:     #FAF0D0;
+  --color-unpaid:         #8B2020;
+  --color-unpaid-bg:      #F8DADA;
+
+  --shadow-xs:  0 1px 2px rgba(13, 26, 16, 0.06);
+  --shadow-sm:  0 2px 8px rgba(13, 26, 16, 0.08);
+  --shadow-md:  0 4px 16px rgba(13, 26, 16, 0.10);
+  --shadow-lg:  0 8px 32px rgba(13, 26, 16, 0.12);
+
+  --font-display: 'Fraunces', 'Cormorant Garamond', Georgia, serif;
+  --font-body:    'Manrope', system-ui, -apple-system, sans-serif;
+  --font-mono:    'IBM Plex Mono', 'Menlo', monospace;
+}
+
+/* Dark */
+[data-theme="emerald"][data-mode="dark"] {
+  --color-bg:             #0D1510;
+  --color-surface:        #142018;
+  --color-surface-raised: #1C2D22;
+  --color-surface-hover:  #243830;
+
+  --color-text-primary:   #E0EEE4;
+  --color-text-secondary: #9AC0A4;
+  --color-text-muted:     #648E74;
+  --color-text-inverse:   #0D1510;
+
+  --color-border:         #243828;
+  --color-border-strong:  #3A5A40;
+  --color-border-focus:   #4ADE80;
+
+  --color-accent:         #4ADE80;
+  --color-accent-mid:     #5AEE90;
+  --color-accent-light:   #1A3C24;
+  --color-accent-text:    #0D1510;
+
+  --color-paid:           #4ADE80;
+  --color-paid-bg:        #1A3C24;
+  --color-partial:        #F5D060;
+  --color-partial-bg:     #2A2010;
+  --color-unpaid:         #F87171;
+  --color-unpaid-bg:      #2A1010;
+
+  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.40);
+  --shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* Auto (follows system dark preference) */
+@media (prefers-color-scheme: dark) {
+  [data-theme="emerald"][data-mode="auto"] {
+    --color-bg:             #0D1510;
+    --color-surface:        #142018;
+    --color-surface-raised: #1C2D22;
+    --color-surface-hover:  #243830;
+
+    --color-text-primary:   #E0EEE4;
+    --color-text-secondary: #9AC0A4;
+    --color-text-muted:     #648E74;
+    --color-text-inverse:   #0D1510;
+
+    --color-border:         #243828;
+    --color-border-strong:  #3A5A40;
+    --color-border-focus:   #4ADE80;
+
+    --color-accent:         #4ADE80;
+    --color-accent-mid:     #5AEE90;
+    --color-accent-light:   #1A3C24;
+    --color-accent-text:    #0D1510;
+
+    --color-paid:           #4ADE80;
+    --color-paid-bg:        #1A3C24;
+    --color-partial:        #F5D060;
+    --color-partial-bg:     #2A2010;
+    --color-unpaid:         #F87171;
+    --color-unpaid-bg:      #2A1010;
+
+    --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.30);
+    --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.35);
+    --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.40);
+    --shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.45);
+  }
+}
+
+/* ── Theme 2: YInMn Ledger ───────────────────────────────── */
+
+/* Light (default) */
+[data-theme="yinmn"] {
+  --color-bg:             #EEF0F7;
+  --color-surface:        #FFFFFF;
+  --color-surface-raised: #E4E8F4;
+  --color-surface-hover:  #D8DEEE;
+
+  --color-text-primary:   #111827;
+  --color-text-secondary: #374151;
+  --color-text-muted:     #6B7280;
+  --color-text-inverse:   #FFFFFF;
+
+  --color-border:         #C8D0E8;
+  --color-border-strong:  #A0AECE;
+  --color-border-focus:   #2E4DAA;
+
+  --color-accent:         #2E4DAA;
+  --color-accent-mid:     #3D5FC0;
+  --color-accent-light:   #DDEAFE;
   --color-accent-text:    #FFFFFF;
 
   --color-paid:           #1B6B45;
@@ -140,12 +173,82 @@
   --color-unpaid:         #8B2020;
   --color-unpaid-bg:      #F8DADA;
 
-  --shadow-xs:  0 1px 2px rgba(28, 32, 40, 0.05);
-  --shadow-sm:  0 2px 8px rgba(28, 32, 40, 0.07);
-  --shadow-md:  0 4px 16px rgba(28, 32, 40, 0.09);
-  --shadow-lg:  0 8px 32px rgba(28, 32, 40, 0.11);
+  --shadow-xs:  0 1px 2px rgba(17, 24, 39, 0.05);
+  --shadow-sm:  0 2px 8px rgba(17, 24, 39, 0.07);
+  --shadow-md:  0 4px 16px rgba(17, 24, 39, 0.09);
+  --shadow-lg:  0 8px 32px rgba(17, 24, 39, 0.11);
 
-  --font-display:  'Space Grotesk', system-ui, -apple-system, sans-serif;
-  --font-body:     'Space Grotesk', system-ui, -apple-system, sans-serif;
-  --font-mono:     'IBM Plex Mono', 'Menlo', monospace;
+  --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  --font-body:    'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:    'IBM Plex Mono', 'Menlo', monospace;
+}
+
+/* Dark */
+[data-theme="yinmn"][data-mode="dark"] {
+  --color-bg:             #0F1524;
+  --color-surface:        #151D30;
+  --color-surface-raised: #1C2640;
+  --color-surface-hover:  #243050;
+
+  --color-text-primary:   #E2E8F8;
+  --color-text-secondary: #94A3C8;
+  --color-text-muted:     #5A6890;
+  --color-text-inverse:   #0F1524;
+
+  --color-border:         #1E2A48;
+  --color-border-strong:  #2C3E60;
+  --color-border-focus:   #7B9FE8;
+
+  --color-accent:         #7B9FE8;
+  --color-accent-mid:     #90B0F5;
+  --color-accent-light:   #1A2A50;
+  --color-accent-text:    #0F1524;
+
+  --color-paid:           #4ADE80;
+  --color-paid-bg:        #1A3C24;
+  --color-partial:        #F5D060;
+  --color-partial-bg:     #2A2010;
+  --color-unpaid:         #F87171;
+  --color-unpaid-bg:      #2A1010;
+
+  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.40);
+  --shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* Auto (follows system dark preference) */
+@media (prefers-color-scheme: dark) {
+  [data-theme="yinmn"][data-mode="auto"] {
+    --color-bg:             #0F1524;
+    --color-surface:        #151D30;
+    --color-surface-raised: #1C2640;
+    --color-surface-hover:  #243050;
+
+    --color-text-primary:   #E2E8F8;
+    --color-text-secondary: #94A3C8;
+    --color-text-muted:     #5A6890;
+    --color-text-inverse:   #0F1524;
+
+    --color-border:         #1E2A48;
+    --color-border-strong:  #2C3E60;
+    --color-border-focus:   #7B9FE8;
+
+    --color-accent:         #7B9FE8;
+    --color-accent-mid:     #90B0F5;
+    --color-accent-light:   #1A2A50;
+    --color-accent-text:    #0F1524;
+
+    --color-paid:           #4ADE80;
+    --color-paid-bg:        #1A3C24;
+    --color-partial:        #F5D060;
+    --color-partial-bg:     #2A2010;
+    --color-unpaid:         #F87171;
+    --color-unpaid-bg:      #2A1010;
+
+    --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.30);
+    --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.35);
+    --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.40);
+    --shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.45);
+  }
 }

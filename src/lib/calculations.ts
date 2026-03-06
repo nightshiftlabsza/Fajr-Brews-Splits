@@ -193,6 +193,7 @@ export function calculate(
     const feeBreakdownForLater: Record<string, number> = {};
 
     if (fee.allocationType === 'fixed_shared') {
+      if (eligiblePeople.length === 0) continue; // guard: no participants
       const perPerson = fee.amountZar / eligiblePeople.length;
       for (const pid of eligiblePeople) {
         personFees[pid] += perPerson;
@@ -215,7 +216,7 @@ export function calculate(
     // Add fee breakdown to each person's record
     for (const pid of personIds) {
       const amt = feeBreakdownForLater[pid];
-      if (amt && amt > 0) {
+      if (amt !== undefined) {
         personFeeBreakdowns[pid].push({
           feeId: fee.id,
           label: fee.label,

@@ -1,5 +1,6 @@
 // ─── Theme ───────────────────────────────────────────────────
-export type Theme = 'porcelain' | 'obsidian' | 'slate';
+export type Theme = 'emerald' | 'yinmn';
+export type ThemeMode = 'light' | 'dark' | 'auto';
 
 // ─── Fee allocation types ─────────────────────────────────────
 export type FeeAllocationType =
@@ -75,9 +76,18 @@ export interface Order {
   fees: Fee[];
   payments: Record<string, PaymentRecord>; // personId → PaymentRecord
   isArchived: boolean;
+  pinRequired?: boolean;     // true if a PIN is set on this order
   createdBy?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// ─── Order Participants ───────────────────────────────────────
+export interface OrderParticipant {
+  id: string;
+  orderId: string;
+  userId: string;
+  addedAt: string;
 }
 
 // ─── Supabase DB row types ────────────────────────────────────
@@ -141,6 +151,7 @@ export interface DbUserSettings {
   id: string;
   user_id: string;
   theme: Theme;
+  theme_mode: ThemeMode;
   last_export_date: string | null;
   updated_at: string;
 }
@@ -191,6 +202,7 @@ export interface CalculationResult {
 // ─── App Settings ─────────────────────────────────────────────
 export interface AppSettings {
   theme: Theme;
+  themeMode: ThemeMode;
   lastExportDate?: string;
 }
 

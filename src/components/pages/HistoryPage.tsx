@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useAppStore, getCurrentOrder } from '../../store/appStore';
 import type { Order } from '../../types';
 import { formatDateShort, formatZAR, todayISO } from '../../lib/formatters';
@@ -8,14 +9,66 @@ interface Props {
 }
 
 export function HistoryPage({ onNavigateToOrder }: Props) {
-  const { orders, people, deleteOrder, setCurrentOrderId, createOrder, exportJSON, importJSON, setLastExportDate } = useAppStore();
+  const {
+    orders, people, deleteOrder, setCurrentOrderId, createOrder,
+    exportJSON, importJSON, setLastExportDate,
+    verifyOrderPin, unlockedOrderIds,
+  } = useAppStore();
   const currentOrder = useAppStore(getCurrentOrder);
+
+  // PIN modal state
+  const [pinOrderId, setPinOrderId] = useState<string | null>(null);
+  const [pin, setPin] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [pinAttempts, setPinAttempts] = useState(0);
+  const [pinVerifying, setPinVerifying] = useState(false);
 
   const personNames = Object.fromEntries(people.map((p) => [p.id, p.name]));
 
   async function handleLoad(order: Order) {
+    if (order.pinRequired && !unlockedOrderIds.has(order.id)) {
+      // Show PIN modal instead of opening directly
+      setPinOrderId(order.id);
+      setPin('');
+      setPinError('');
+      setPinAttempts(0);
+      return;
+    }
     setCurrentOrderId(order.id);
     onNavigateToOrder();
+  }
+
+  async function handlePinSubmit() {
+    if (!pinOrderId) return;
+    if (pinAttempts >= 5) return;
+    if (pin.length < 4 || pin.length > 6) {
+      setPinError('PIN must be 4–6 digits.');
+      return;
+    }
+    setPinVerifying(true);
+    setPinError('');
+    try {
+      const ok = await verifyOrderPin(pinOrderId, pin);
+      if (ok) {
+        // Unlock and open
+        setPinOrderId(null);
+        setCurrentOrderId(pinOrderId);
+        onNavigateToOrder();
+      } else {
+        const nextAttempts = pinAttempts + 1;
+        setPinAttempts(nextAttempts);
+        if (nextAttempts >= 5) {
+          setPinError('Too many incorrect attempts. Please try again later.');
+        } else {
+          setPinError(`Incorrect PIN. ${5 - nextAttempts} attempt${5 - nextAttempts === 1 ? '' : 's'} remaining.`);
+        }
+        setPin('');
+      }
+    } catch {
+      setPinError('Verification failed. Please try again.');
+    } finally {
+      setPinVerifying(false);
+    }
   }
 
   async function handleDuplicate(order: Order) {
@@ -24,6 +77,7 @@ export function HistoryPage({ onNavigateToOrder }: Props) {
       name: `${order.name} (copy)`,
       orderDate: todayISO(),
       payments: {},
+      pinRequired: false, // Duplicated orders start without PIN
     });
     if (newOrder) {
       setCurrentOrderId(newOrder.id);
@@ -70,8 +124,68 @@ export function HistoryPage({ onNavigateToOrder }: Props) {
     (a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()
   );
 
+  const pinOrder = pinOrderId ? orders.find((o) => o.id === pinOrderId) : null;
+
   return (
     <div className="page-container">
+      {/* PIN modal overlay */}
+      {pinOrderId && pinOrder && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 'var(--space-4)',
+        }}>
+          <div className="card card-padded" style={{ width: '100%', maxWidth: 380 }}>
+            <div style={{ textAlign: 'center', marginBottom: 'var(--space-4)' }}>
+              <div style={{ fontSize: '2rem', marginBottom: 'var(--space-2)' }}>🔒</div>
+              <div style={{ fontWeight: 700, fontSize: '1.0625rem', color: 'var(--color-text-primary)' }}>
+                Enter PIN
+              </div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
+                "{pinOrder.name}" requires a PIN to open.
+              </div>
+            </div>
+            <div className="field" style={{ marginBottom: 'var(--space-4)' }}>
+              <input
+                className="input"
+                type="number"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="Enter 4–6 digit PIN"
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onKeyDown={(e) => e.key === 'Enter' && !pinVerifying && pinAttempts < 5 && handlePinSubmit()}
+                autoFocus
+                style={{ textAlign: 'center', fontSize: '1.25rem', letterSpacing: '0.3em' }}
+                disabled={pinAttempts >= 5 || pinVerifying}
+              />
+            </div>
+            {pinError && (
+              <div className="alert alert-error" style={{ marginBottom: 'var(--space-4)', fontSize: '0.8125rem' }}>
+                {pinError}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+              <button
+                className="btn btn-primary"
+                style={{ flex: 1 }}
+                onClick={handlePinSubmit}
+                disabled={pinVerifying || pinAttempts >= 5 || pin.length < 4}
+              >
+                {pinVerifying ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Unlock'}
+              </button>
+              <button
+                className="btn btn-ghost"
+                onClick={() => setPinOrderId(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
           <h2 style={{ marginBottom: 4 }}>Order History</h2>
@@ -102,6 +216,7 @@ export function HistoryPage({ onNavigateToOrder }: Props) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
         {sortedOrders.map((order) => {
           const isCurrent = currentOrder?.id === order.id;
+          const isLocked = order.pinRequired && !unlockedOrderIds.has(order.id);
           const result = calculate(order, personNames);
           const participantCount = result.personIds.length;
           const paidCount = result.personIds.filter((pid) => order.payments[pid]?.status === 'paid').length;
@@ -119,6 +234,9 @@ export function HistoryPage({ onNavigateToOrder }: Props) {
                       <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {order.name}
                       </div>
+                      {isLocked && (
+                        <span title="PIN protected" style={{ fontSize: '0.875rem', flexShrink: 0 }}>🔒</span>
+                      )}
                       {isCurrent && (
                         <span style={{
                           fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.1em',
@@ -135,7 +253,7 @@ export function HistoryPage({ onNavigateToOrder }: Props) {
                       {participantCount} participant{participantCount !== 1 ? 's' : ''} &nbsp;·&nbsp;
                       {order.lots.length} lot{order.lots.length !== 1 ? 's' : ''}
                     </div>
-                    {result.isValid && (
+                    {result.isValid && !isLocked && (
                       <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', marginTop: 4 }}>
                         {formatZAR(result.totalOrderZar)} total &nbsp;·&nbsp;
                         <span style={{ color: paidCount === participantCount && participantCount > 0 ? 'var(--color-paid)' : 'var(--color-text-muted)' }}>
@@ -143,12 +261,17 @@ export function HistoryPage({ onNavigateToOrder }: Props) {
                         </span>
                       </div>
                     )}
+                    {isLocked && (
+                      <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 4, fontStyle: 'italic' }}>
+                        Enter PIN to view details
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0, flexWrap: 'wrap' }}>
                     {!isCurrent && (
                       <button className="btn btn-primary btn-sm" onClick={() => handleLoad(order)}>
-                        Open
+                        {isLocked ? '🔒 Open' : 'Open'}
                       </button>
                     )}
                     <button className="btn btn-secondary btn-sm" onClick={() => handleDuplicate(order)}>

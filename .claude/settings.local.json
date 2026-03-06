@@ -6,7 +6,11 @@
       "Bash(npm run typecheck)",
       "Bash(npm run build)",
       "mcp__Desktop_Commander__interact_with_process",
-      "mcp__Desktop_Commander__read_process_output"
+      "mcp__Desktop_Commander__read_process_output",
+      "mcp__Desktop_Commander__read_file",
+      "mcp__Desktop_Commander__list_sessions",
+      "mcp__Desktop_Commander__edit_block",
+      "mcp__Desktop_Commander__write_file"
     ]
   }
 }

@@ -178,13 +178,13 @@ function PaymentEditor({ personName, totalDue, payment, isPayer, onChange }: Pay
             {isPayer && <span style={{ marginLeft: 6, color: 'var(--color-accent)', fontWeight: 700, fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Payer</span>}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
           {(['unpaid', 'partial', 'paid'] as PaymentStatus[]).map((s) => (
             <button
               key={s}
               className={`btn btn-sm ${status === s ? 'btn-primary' : 'btn-ghost'}`}
               onClick={() => setStatus(s)}
-              style={{ fontSize: '0.75rem', padding: '4px 12px', minHeight: 32 }}
+              style={{ fontSize: '0.75rem', padding: '4px 12px', minHeight: 32, flex: '1 1 auto', minWidth: 80 }}
             >
               {s === 'unpaid' ? 'Unpaid' : s === 'partial' ? 'Partial' : 'Paid'}
             </button>

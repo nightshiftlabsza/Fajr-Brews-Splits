@@ -6,6 +6,7 @@ import type {
   Order,
   AppSettings,
   Theme,
+  ThemeMode,
   MembershipStatus,
   AuthUser,
   WorkspaceMember,
@@ -29,7 +30,7 @@ function mapPerson(row: DbPerson): Person {
   };
 }
 
-function mapOrder(row: DbOrder): Order {
+function mapOrder(row: DbOrder & { pin_required?: boolean }): Order {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -40,10 +41,13 @@ function mapOrder(row: DbOrder): Order {
     referenceTemplate: row.reference_template,
     payerNote: row.payer_note ?? undefined,
     goodsTotalZar: Number(row.goods_total_zar),
-    lots: row.lots ?? [],
-    fees: row.fees ?? [],
-    payments: row.payments ?? {},
+    lots: Array.isArray(row.lots) ? row.lots : [],
+    fees: Array.isArray(row.fees) ? row.fees : [],
+    payments: (row.payments && typeof row.payments === 'object' && !Array.isArray(row.payments))
+      ? row.payments
+      : {},
     isArchived: row.is_archived,
+    pinRequired: row.pin_required ?? false,
     createdBy: row.created_by ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -99,7 +103,15 @@ interface AppStore {
 
   // ── Settings Actions ──────────────────────────────────────
   setTheme: (theme: Theme) => Promise<void>;
+  setThemeMode: (mode: ThemeMode) => Promise<void>;
   setLastExportDate: (date: string) => Promise<void>;
+
+  // ── PIN / Order Access Actions ────────────────────────────
+  unlockedOrderIds: Set<string>;
+  verifyOrderPin: (orderId: string, pin: string) => Promise<boolean>;
+  setOrderPin: (orderId: string, pin: string) => Promise<void>;
+  clearOrderPin: (orderId: string) => Promise<void>;
+  addOrderParticipant: (orderId: string, userId: string) => Promise<void>;
 
   // ── Import/Export ─────────────────────────────────────────
   exportJSON: () => string;
@@ -111,6 +123,20 @@ interface AppStore {
   _loadSettings: (userId: string) => Promise<void>;
   _saveSettings: (userId: string, settings: Partial<AppSettings>) => Promise<void>;
 }
+
+// ─── Safe localStorage (private-browsing guard) ──────────────
+
+const safeLocalStorage = {
+  getItem: (key: string): string | null => {
+    try { return localStorage.getItem(key); } catch { return null; }
+  },
+  setItem: (key: string, value: string): void => {
+    try { localStorage.setItem(key, value); } catch { /* ignore */ }
+  },
+  removeItem: (key: string): void => {
+    try { localStorage.removeItem(key); } catch { /* ignore */ }
+  },
+};
 
 // ─── Computed getter ─────────────────────────────────────────
 
@@ -128,12 +154,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
   workspaceMembers: [],
   people: [],
   orders: [],
-  currentOrderId: localStorage.getItem('fb_current_order_id'),
-  settings: { theme: 'porcelain' },
+  currentOrderId: safeLocalStorage.getItem('fb_current_order_id'),
+  settings: { theme: 'emerald', themeMode: 'light' },
   isInitialized: false,
   isLoading: false,
   error: null,
   _realtimeChannel: null,
+  unlockedOrderIds: new Set<string>(),
 
   // ── Initialize ────────────────────────────────────────────
   initialize: async () => {
@@ -171,6 +198,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
         return;
       }
 
+      // Setup Realtime before fetch so no events are missed during the fetch window
+      get()._setupRealtime(WORKSPACE_ID);
+
       // Fetch data
       const [{ data: peopleRows }, { data: orderRows }] = await Promise.all([
         supabase
@@ -190,9 +220,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
       await get()._loadSettings(session.user.id);
 
-      // Apply saved theme to DOM
+      // Apply saved theme + mode to DOM
       const currentTheme = get().settings.theme;
+      const currentMode = get().settings.themeMode;
       document.documentElement.setAttribute('data-theme', currentTheme);
+      document.documentElement.setAttribute('data-mode', currentMode);
+      safeLocalStorage.setItem('fb_theme', currentTheme);
+      safeLocalStorage.setItem('fb_theme_mode', currentMode);
+
+      // Validate saved currentOrderId against fetched orders (Bug 4B)
+      const savedId = safeLocalStorage.getItem('fb_current_order_id');
+      const currentOrderId = orders.find((o) => o.id === savedId)
+        ? savedId
+        : (orders[0]?.id ?? null);
+      if (currentOrderId && currentOrderId !== savedId) {
+        safeLocalStorage.setItem('fb_current_order_id', currentOrderId);
+      }
 
       set({
         user,
@@ -200,11 +243,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
         memberRole: memberRow.role,
         people,
         orders,
+        currentOrderId,
         isInitialized: true,
         isLoading: false,
       });
-
-      get()._setupRealtime(WORKSPACE_ID);
     } catch (err) {
       set({ error: String(err), isInitialized: true, isLoading: false });
     }
@@ -311,7 +353,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (row) {
       const order = mapOrder(row as DbOrder);
       set((s) => ({ orders: [order, ...s.orders], currentOrderId: order.id }));
-      localStorage.setItem('fb_current_order_id', order.id);
+      safeLocalStorage.setItem('fb_current_order_id', order.id);
       return order;
     }
     return null;
@@ -344,16 +386,19 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (error) throw new Error(error.message);
     set((s) => {
       const orders = s.orders.filter((o) => o.id !== id);
-      const currentOrderId = s.currentOrderId === id ? null : s.currentOrderId;
-      if (currentOrderId === null) localStorage.removeItem('fb_current_order_id');
+      const currentOrderId = s.currentOrderId === id
+        ? (orders[0]?.id ?? null)
+        : s.currentOrderId;
+      if (currentOrderId) safeLocalStorage.setItem('fb_current_order_id', currentOrderId);
+      else safeLocalStorage.removeItem('fb_current_order_id');
       return { orders, currentOrderId };
     });
   },
 
   setCurrentOrderId: (id) => {
     set({ currentOrderId: id });
-    if (id) localStorage.setItem('fb_current_order_id', id);
-    else localStorage.removeItem('fb_current_order_id');
+    if (id) safeLocalStorage.setItem('fb_current_order_id', id);
+    else safeLocalStorage.removeItem('fb_current_order_id');
   },
 
   // ── Workspace Members ─────────────────────────────────────
@@ -363,7 +408,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       .select('*, profiles(email, full_name)')
       .eq('workspace_id', WORKSPACE_ID);
 
-    if (error) return;
+    if (error) throw new Error(error.message);
     const members: WorkspaceMember[] = (data as DbWorkspaceMember[]).map((row) => ({
       id: row.id,
       workspaceId: row.workspace_id,
@@ -404,24 +449,33 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   removeMember: async (userId) => {
-    await supabase
+    const { error } = await supabase
       .from('workspace_members')
       .delete()
       .eq('workspace_id', WORKSPACE_ID)
       .eq('user_id', userId);
+    if (error) throw new Error(error.message);
     await get().fetchWorkspaceMembers();
   },
 
   // ── Settings ──────────────────────────────────────────────
   _loadSettings: async (userId) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('user_settings')
       .select('*')
       .eq('user_id', userId)
       .single();
 
+    // PGRST116 = no row found — perfectly fine for first-time users
+    if (error && error.code !== 'PGRST116') throw new Error(error.message);
     if (data) {
-      set({ settings: { theme: data.theme, lastExportDate: data.last_export_date ?? undefined } });
+      set({
+        settings: {
+          theme: data.theme ?? 'emerald',
+          themeMode: (data as { theme_mode?: ThemeMode }).theme_mode ?? 'light',
+          lastExportDate: data.last_export_date ?? undefined,
+        },
+      });
     }
   },
 
@@ -429,18 +483,29 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const current = get().settings;
     const merged = { ...current, ...settings };
 
-    await supabase.from('user_settings').upsert({
+    const { error } = await supabase.from('user_settings').upsert({
       user_id: userId,
       theme: merged.theme,
+      theme_mode: merged.themeMode,
       last_export_date: merged.lastExportDate ?? null,
     });
+    if (error) throw new Error(error.message);
   },
 
   setTheme: async (theme) => {
     document.documentElement.setAttribute('data-theme', theme);
     set((s) => ({ settings: { ...s.settings, theme } }));
+    safeLocalStorage.setItem('fb_theme', theme);
     const userId = get().user?.id;
     if (userId) await get()._saveSettings(userId, { theme });
+  },
+
+  setThemeMode: async (mode) => {
+    document.documentElement.setAttribute('data-mode', mode);
+    set((s) => ({ settings: { ...s.settings, themeMode: mode } }));
+    safeLocalStorage.setItem('fb_theme_mode', mode);
+    const userId = get().user?.id;
+    if (userId) await get()._saveSettings(userId, { themeMode: mode });
   },
 
   setLastExportDate: async (date) => {
@@ -452,26 +517,107 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // ── Export / Import ───────────────────────────────────────
   exportJSON: () => {
     const { people, orders, settings } = get();
-    return JSON.stringify({ people, orders, settings, exportedAt: new Date().toISOString() }, null, 2);
+    // Strip PIN fields — they are security-sensitive and meaningless without the server-side hash
+    const cleanOrders = orders.map((o) => {
+      const { pinRequired: _pr, ...rest } = o;
+      return rest;
+    });
+    return JSON.stringify({ version: '1', people, orders: cleanOrders, settings, exportedAt: new Date().toISOString() }, null, 2);
   },
 
   importJSON: async (json) => {
     const parsed = JSON.parse(json);
+
+    if (parsed.version !== '1') {
+      throw new Error('Unsupported export format. Expected version 1.');
+    }
+
     if (parsed.people && Array.isArray(parsed.people)) {
       // Import people — insert any that don't exist by name
       for (const p of parsed.people) {
-        if (!get().people.find((ex) => ex.name === p.name)) {
-          await get().addPerson({ name: p.name, phone: p.phone, email: p.email, note: p.note });
+        if (!p || typeof p.name !== 'string') continue;
+        try {
+          if (!get().people.find((ex) => ex.name === p.name)) {
+            await get().addPerson({
+              name: String(p.name),
+              phone: p.phone ? String(p.phone) : undefined,
+              email: p.email ? String(p.email) : undefined,
+              note: p.note ? String(p.note) : undefined,
+            });
+          }
+        } catch (err) {
+          console.error('importJSON: skipping person due to error', p.name, err);
         }
       }
     }
+
     if (parsed.orders && Array.isArray(parsed.orders)) {
       for (const o of parsed.orders) {
-        if (!get().orders.find((ex) => ex.id === o.id)) {
-          await get().createOrder(o);
+        if (!o || typeof o.id !== 'string') continue;
+        try {
+          if (!get().orders.find((ex) => ex.id === o.id)) {
+            await get().createOrder({
+              name: String(o.name ?? 'Imported Order'),
+              orderDate: String(o.orderDate ?? new Date().toISOString().split('T')[0]),
+              payerId: o.payerId ? String(o.payerId) : null,
+              payerBank: o.payerBank && typeof o.payerBank === 'object' ? o.payerBank : { bankName: '', accountNumber: '', beneficiary: '' },
+              referenceTemplate: String(o.referenceTemplate ?? 'FAJR-{ORDER}-{NAME}'),
+              payerNote: o.payerNote ? String(o.payerNote) : undefined,
+              goodsTotalZar: Number(o.goodsTotalZar ?? 0),
+              lots: Array.isArray(o.lots) ? o.lots : [],
+              fees: Array.isArray(o.fees) ? o.fees : [],
+              payments: (o.payments && typeof o.payments === 'object' && !Array.isArray(o.payments)) ? o.payments : {},
+            });
+          }
+        } catch (err) {
+          console.error('importJSON: skipping order due to error', o.id, err);
         }
       }
     }
+  },
+
+  // ── PIN / Order Access ────────────────────────────────────
+  verifyOrderPin: async (orderId, pin) => {
+    const { data, error } = await supabase.rpc('verify_order_pin', {
+      p_order_id: orderId,
+      p_pin: pin,
+    });
+    if (error) throw new Error(error.message);
+    const success = data === true;
+    if (success) {
+      set((s) => ({ unlockedOrderIds: new Set([...s.unlockedOrderIds, orderId]) }));
+    }
+    return success;
+  },
+
+  setOrderPin: async (orderId, pin) => {
+    const { error } = await supabase.rpc('set_order_pin', {
+      p_order_id: orderId,
+      p_pin: pin,
+    });
+    if (error) throw new Error(error.message);
+    // Update local state to reflect pin is now required
+    set((s) => ({
+      orders: s.orders.map((o) => (o.id === orderId ? { ...o, pinRequired: true } : o)),
+      // The order is now unlocked for this session since we just set it
+      unlockedOrderIds: new Set([...s.unlockedOrderIds, orderId]),
+    }));
+  },
+
+  clearOrderPin: async (orderId) => {
+    const { error } = await supabase.rpc('clear_order_pin', { p_order_id: orderId });
+    if (error) throw new Error(error.message);
+    set((s) => ({
+      orders: s.orders.map((o) => (o.id === orderId ? { ...o, pinRequired: false } : o)),
+    }));
+  },
+
+  addOrderParticipant: async (orderId, userId) => {
+    const { error } = await supabase.rpc('add_order_participant', {
+      p_order_id: orderId,
+      p_user_id: userId,
+    });
+    if (error) throw new Error(error.message);
   },
 
   // ── Realtime ──────────────────────────────────────────────
@@ -485,18 +631,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
         'postgres_changes',
         { event: '*', schema: 'public', table: 'people', filter: `workspace_id=eq.${workspaceId}` },
         (payload) => {
-          const { eventType, new: newRow, old: oldRow } = payload;
-          if (eventType === 'INSERT') {
-            const person = mapPerson(newRow as DbPerson);
-            set((s) => ({
-              people: [...s.people.filter((p) => p.id !== person.id), person]
-                .sort((a, b) => a.name.localeCompare(b.name)),
-            }));
-          } else if (eventType === 'UPDATE') {
-            const person = mapPerson(newRow as DbPerson);
-            set((s) => ({ people: s.people.map((p) => (p.id === person.id ? person : p)) }));
-          } else if (eventType === 'DELETE') {
-            set((s) => ({ people: s.people.filter((p) => p.id !== (oldRow as DbPerson).id) }));
+          try {
+            const { eventType, new: newRow, old: oldRow } = payload;
+            if (eventType === 'INSERT') {
+              const person = mapPerson(newRow as DbPerson);
+              set((s) => ({
+                people: [...s.people.filter((p) => p.id !== person.id), person]
+                  .sort((a, b) => a.name.localeCompare(b.name)),
+              }));
+            } else if (eventType === 'UPDATE') {
+              const person = mapPerson(newRow as DbPerson);
+              set((s) => ({ people: s.people.map((p) => (p.id === person.id ? person : p)) }));
+            } else if (eventType === 'DELETE') {
+              set((s) => ({ people: s.people.filter((p) => p.id !== (oldRow as DbPerson).id) }));
+            }
+          } catch (err) {
+            console.error('Realtime people error:', err);
           }
         }
       )
@@ -504,17 +654,21 @@ export const useAppStore = create<AppStore>((set, get) => ({
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders', filter: `workspace_id=eq.${workspaceId}` },
         (payload) => {
-          const { eventType, new: newRow, old: oldRow } = payload;
-          if (eventType === 'INSERT') {
-            const order = mapOrder(newRow as DbOrder);
-            set((s) => ({
-              orders: [order, ...s.orders.filter((o) => o.id !== order.id)],
-            }));
-          } else if (eventType === 'UPDATE') {
-            const order = mapOrder(newRow as DbOrder);
-            set((s) => ({ orders: s.orders.map((o) => (o.id === order.id ? order : o)) }));
-          } else if (eventType === 'DELETE') {
-            set((s) => ({ orders: s.orders.filter((o) => o.id !== (oldRow as DbOrder).id) }));
+          try {
+            const { eventType, new: newRow, old: oldRow } = payload;
+            if (eventType === 'INSERT') {
+              const order = mapOrder(newRow as DbOrder);
+              set((s) => ({
+                orders: [order, ...s.orders.filter((o) => o.id !== order.id)],
+              }));
+            } else if (eventType === 'UPDATE') {
+              const order = mapOrder(newRow as DbOrder);
+              set((s) => ({ orders: s.orders.map((o) => (o.id === order.id ? order : o)) }));
+            } else if (eventType === 'DELETE') {
+              set((s) => ({ orders: s.orders.filter((o) => o.id !== (oldRow as DbOrder).id) }));
+            }
+          } catch (err) {
+            console.error('Realtime orders error:', err);
           }
         }
       )

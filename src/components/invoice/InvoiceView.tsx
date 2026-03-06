@@ -22,7 +22,7 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
     <div className="invoice-paper" id={`invoice-${person.id}`}>
       {/* Header */}
       <div className="invoice-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
           <div>
             <h2 style={{ marginBottom: 4 }}>Fajr Brews</h2>
             <div style={{

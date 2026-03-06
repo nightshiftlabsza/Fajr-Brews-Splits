@@ -1,6 +1,5 @@
 import type { Order, Person, PersonCalculation } from '../types';
-import { formatZAR, formatDate, resolveReference, effectivePricePerGram } from './formatters';
-import { pdfFilename } from './formatters';
+import { formatZAR, formatDate, resolveReference, effectivePricePerGram, pdfFilename } from './formatters';
 
 // Dynamic import to keep initial bundle smaller
 async function getJsPDF() {
@@ -229,7 +228,7 @@ export async function generateInvoicePDF(
     y = row(doc, label, value, y);
   }
 
-  if (order.payerNote) {
+  if (order.payerNote && typeof order.payerNote === 'string') {
     y += 4;
     setTextColor(doc, MID);
     doc.setFont('helvetica', 'italic');
