@@ -109,14 +109,12 @@ export function calculate(
   // ── B. Per-person accumulators (full precision) ──────────────
   const personGoods: Record<string, number> = {};
   const personCoffeeValueForeign: Record<string, number> = {};
-  const personBagShare: Record<string, number> = {};
   const personLotBreakdowns: Record<string, LotPersonBreakdown[]> = {};
   const personTotalGrams: Record<string, number> = {};
 
   for (const pid of personIds) {
     personGoods[pid] = 0;
     personCoffeeValueForeign[pid] = 0;
-    personBagShare[pid] = 0;
     personLotBreakdowns[pid] = [];
     personTotalGrams[pid] = 0;
   }
@@ -135,14 +133,9 @@ export function calculate(
       personGoods[pid] += shareGoodsZar;
       personTotalGrams[pid] += share.shareGrams;
 
-      // C. Coffee value foreign (for proportional_value fees)
+      // C. Coffee value foreign (for value_based fees)
       const shareForeign = (share.shareGrams / lotTotalGrams) * lotTotalForeign;
       personCoffeeValueForeign[pid] += shareForeign;
-
-      // D. Bag fraction (for per_bag fees)
-      // e.g. 125g from a 250g bag = 0.5 bag
-      const bagFraction = share.shareGrams / lot.gramsPerBag;
-      personBagShare[pid] += bagFraction;
 
       // Build lot breakdown for invoices
       const otherSharers = lot.shares
@@ -156,6 +149,7 @@ export function calculate(
         gramsPerBag: lot.gramsPerBag,
         lotQuantity: lot.quantity,
         goodsZar: shareGoodsZar,
+        valueBasedFeesZar: 0, // will be updated below
         splitWith: otherSharers,
       });
     }
@@ -166,19 +160,12 @@ export function calculate(
     (s, pid) => s + personCoffeeValueForeign[pid],
     0
   );
-  const totalBagShare = personIds.reduce(
-    (s, pid) => s + personBagShare[pid],
-    0
-  );
 
   const coffeeValueForeignShare: Record<string, number> = {};
-  const bagShareRatio: Record<string, number> = {};
 
   for (const pid of personIds) {
     coffeeValueForeignShare[pid] =
       totalCoffeeValueForeign > 0 ? personCoffeeValueForeign[pid] / totalCoffeeValueForeign : 0;
-    bagShareRatio[pid] =
-      totalBagShare > 0 ? personBagShare[pid] / totalBagShare : 0;
   }
 
   // ── E. Fee allocation ─────────────────────────────────────────
@@ -188,6 +175,9 @@ export function calculate(
 
   const personFeeBreakdowns: Record<string, FeePersonBreakdown[]> = {};
   for (const pid of personIds) personFeeBreakdowns[pid] = [];
+
+  // Track total value-based fee amount to distribute to lots
+  let totalValueBasedFeesZarAcrossOrder = 0;
 
   for (const fee of order.fees) {
     const feeBreakdownForLater: Record<string, number> = {};
@@ -199,15 +189,10 @@ export function calculate(
         personFees[pid] += perPerson;
         feeBreakdownForLater[pid] = perPerson;
       }
-    } else if (fee.allocationType === 'proportional_value') {
+    } else if (fee.allocationType === 'value_based') {
+      totalValueBasedFeesZarAcrossOrder += fee.amountZar;
       for (const pid of personIds) {
         const share = coffeeValueForeignShare[pid] * fee.amountZar;
-        personFees[pid] += share;
-        feeBreakdownForLater[pid] = share;
-      }
-    } else if (fee.allocationType === 'per_bag') {
-      for (const pid of personIds) {
-        const share = bagShareRatio[pid] * fee.amountZar;
         personFees[pid] += share;
         feeBreakdownForLater[pid] = share;
       }
@@ -224,6 +209,25 @@ export function calculate(
           amountZar: amt,
         });
       }
+    }
+  }
+
+  // Distribute value-based fees to person lot breakdowns
+  for (const pid of personIds) {
+    const pValueShare = coffeeValueForeignShare[pid];
+    if (pValueShare === 0 || totalValueBasedFeesZarAcrossOrder === 0) continue;
+
+    for (const lb of personLotBreakdowns[pid]) {
+      const lot = order.lots.find(l => l.id === lb.lotId);
+      if (!lot) continue;
+
+      const lotTotalGrams = lot.gramsPerBag * lot.quantity;
+      const lotTotalForeign = lot.foreignPricePerBag * lot.quantity;
+      const totalOrderForeign = order.lots.reduce((s, l) => s + l.foreignPricePerBag * l.quantity, 0);
+
+      const shareForeign = (lb.shareGrams / lotTotalGrams) * lotTotalForeign;
+      const shareValueBasedFee = (shareForeign / totalOrderForeign) * totalValueBasedFeesZarAcrossOrder;
+      lb.valueBasedFeesZar = shareValueBasedFee;
     }
   }
 
@@ -278,7 +282,6 @@ export function calculate(
       totalPreRound: personTotalsPreRound[pid],
       totalFinal: personTotalsFinal[pid],
       coffeeValueForeignShare: coffeeValueForeignShare[pid],
-      bagShareRatio: bagShareRatio[pid],
       lotBreakdowns: personLotBreakdowns[pid],
       feeBreakdowns: personFeeBreakdowns[pid],
     };

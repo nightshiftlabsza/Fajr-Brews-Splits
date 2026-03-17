@@ -83,10 +83,12 @@ interface AppStore {
   initialize: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<string | null>;
   signUp: (email: string, password: string, fullName: string) => Promise<string | null>;
+  requestPasswordReset: (email: string) => Promise<string | null>;
+  updatePassword: (password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
 
   // ── People Actions ────────────────────────────────────────
-  addPerson: (data: Omit<Person, 'id' | 'workspaceId' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  addPerson: (data: Omit<Person, 'id' | 'workspaceId' | 'createdAt' | 'updatedAt'>) => Promise<Person>;
   updatePerson: (id: string, data: Partial<Pick<Person, 'name' | 'phone' | 'email' | 'note'>>) => Promise<void>;
   deletePerson: (id: string) => Promise<void>;
 
@@ -137,6 +139,25 @@ const safeLocalStorage = {
     try { localStorage.removeItem(key); } catch { /* ignore */ }
   },
 };
+
+function normalizeAuthError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes('networkerror') ||
+    normalized.includes('failed to fetch') ||
+    normalized.includes('fetch resource')
+  ) {
+    return 'Fajr Brews could not reach Supabase. Please check that the Supabase project URL and publishable key are correct.';
+  }
+
+  return message;
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
 
 // ─── Computed getter ─────────────────────────────────────────
 
@@ -254,20 +275,58 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // ── Auth ──────────────────────────────────────────────────
   signIn: async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return error.message;
-    await get().initialize();
-    return null;
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: normalizeEmail(email),
+        password,
+      });
+      if (error) return normalizeAuthError(error);
+      await get().initialize();
+      return null;
+    } catch (error) {
+      return normalizeAuthError(error);
+    }
   },
 
   signUp: async (email, password, fullName) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName } },
-    });
-    if (error) return error.message;
-    return null;
+    try {
+      const { error } = await supabase.auth.signUp({
+        email: normalizeEmail(email),
+        password,
+        options: { data: { full_name: fullName.trim() } },
+      });
+      if (error) return normalizeAuthError(error);
+      return null;
+    } catch (error) {
+      return normalizeAuthError(error);
+    }
+  },
+
+  requestPasswordReset: async (email) => {
+    const redirectTo = typeof window === 'undefined'
+      ? undefined
+      : `${window.location.origin}${window.location.pathname}`;
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizeEmail(email), {
+        redirectTo,
+      });
+      if (error) return normalizeAuthError(error);
+      return null;
+    } catch (error) {
+      return normalizeAuthError(error);
+    }
+  },
+
+  updatePassword: async (password) => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) return normalizeAuthError(error);
+      await get().initialize();
+      return null;
+    } catch (error) {
+      return normalizeAuthError(error);
+    }
   },
 
   signOut: async () => {
@@ -299,8 +358,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
     if (error) throw new Error(error.message);
     if (row) {
-      set((s) => ({ people: [...s.people, mapPerson(row as DbPerson)].sort((a, b) => a.name.localeCompare(b.name)) }));
+      const person = mapPerson(row as DbPerson);
+      set((s) => ({ people: [...s.people, person].sort((a, b) => a.name.localeCompare(b.name)) }));
+      return person;
     }
+    throw new Error('Failed to create person.');
   },
 
   updatePerson: async (id, data) => {

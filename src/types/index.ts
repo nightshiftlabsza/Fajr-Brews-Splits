@@ -5,8 +5,7 @@ export type ThemeMode = 'light' | 'dark' | 'auto';
 // ─── Fee allocation types ─────────────────────────────────────
 export type FeeAllocationType =
   | 'fixed_shared'        // Equal split across all participants
-  | 'proportional_value'  // By each person's share of foreign list value
-  | 'per_bag';            // By bag fractions (shareGrams / gramsPerBag)
+  | 'value_based';        // By each person's share of foreign list value
 
 // ─── Payment ──────────────────────────────────────────────────
 export type PaymentStatus = 'unpaid' | 'paid' | 'partial';
@@ -164,6 +163,7 @@ export interface LotPersonBreakdown {
   gramsPerBag: number;
   lotQuantity: number;
   goodsZar: number;
+  valueBasedFeesZar: number; // Split by each person's share of foreign list value
   splitWith: string[]; // names of other people sharing this lot
 }
 
@@ -182,7 +182,6 @@ export interface PersonCalculation {
   totalPreRound: number;          // full precision
   totalFinal: number;             // rounded
   coffeeValueForeignShare: number; // 0..1 ratio
-  bagShareRatio: number;          // 0..1 ratio
   lotBreakdowns: LotPersonBreakdown[];
   feeBreakdowns: FeePersonBreakdown[];
 }

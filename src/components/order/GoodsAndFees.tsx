@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Order, Fee, FeeAllocationType } from '../../types';
 import { useAppStore } from '../../store/appStore';
 import { formatZAR } from '../../lib/formatters';
@@ -10,18 +10,13 @@ function genId() {
 const ALLOCATION_OPTIONS: { value: FeeAllocationType; label: string; description: string }[] = [
   {
     value: 'fixed_shared',
-    label: 'Fixed shared',
-    description: 'Split equally across all participants (disbursement, payment fee, admin)',
+    label: 'Fixed shared fee',
+    description: 'Split equally across all participants; charged once per person',
   },
   {
-    value: 'proportional_value',
-    label: 'Proportional by coffee value',
-    description: 'By each person\'s share of foreign list value (customs, duties, VAT)',
-  },
-  {
-    value: 'per_bag',
-    label: 'Per bag',
-    description: 'By bag fractions received (freight, packing, handling per unit)',
+    value: 'value_based',
+    label: 'Value-based fee',
+    description: 'Split by each person\'s share of original foreign list value (customs, VAT)',
   },
 ];
 
@@ -40,6 +35,10 @@ export function GoodsAndFees({ order }: Props) {
 
   const totalFees = order.fees.reduce((s, f) => s + (f.amountZar || 0), 0);
   const grandTotal = (order.goodsTotalZar || 0) + totalFees;
+
+  useEffect(() => {
+    setGoodsInput(order.goodsTotalZar > 0 ? String(order.goodsTotalZar) : '');
+  }, [order.id, order.goodsTotalZar]);
 
   function saveGoods() {
     const val = parseFloat(goodsInput);
@@ -94,12 +93,21 @@ export function GoodsAndFees({ order }: Props) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      {/* Goods total */}
-      <div>
-        <div className="section-label">Final goods amount paid (ZAR)</div>
+    <div className="wizard-step-stack">
+      <section className="wizard-panel">
+        <div className="wizard-card-header">
+          <div>
+            <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Step 3</div>
+            <h3 className="wizard-card-title">Goods and fees</h3>
+            <p className="wizard-card-copy">
+              Enter the final goods total in ZAR, then add only the supported fee types for this order.
+            </p>
+          </div>
+        </div>
+
         <div className="field">
-          <div style={{ position: 'relative', maxWidth: 300 }}>
+          <label className="field-label">Final goods amount paid (ZAR)</label>
+          <div style={{ position: 'relative', maxWidth: 320 }}>
             <span style={{
               position: 'absolute',
               left: 14,
@@ -122,15 +130,18 @@ export function GoodsAndFees({ order }: Props) {
             />
           </div>
           <span className="field-hint">
-            The actual ZAR amount invoiced for coffee goods after tax deductions and discounts.
-            Do not include shipping, duties, or other fees here — add them below as separate fee items.
+            Use the final goods total only. Keep shipping, duties, and similar charges as separate fee items below.
           </span>
         </div>
-      </div>
+      </section>
 
-      {/* Fees */}
-      <div>
-        <div className="section-label">Additional fees</div>
+      <section className="wizard-panel">
+        <div className="wizard-card-header">
+          <div>
+            <div className="wizard-card-title">Additional fees</div>
+            <p className="wizard-card-copy">Allowed fee models: fixed shared fee and value-based fee.</p>
+          </div>
+        </div>
 
         {order.fees.length === 0 && editingFeeId === null && (
           <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: 'var(--space-4)' }}>
@@ -184,22 +195,16 @@ export function GoodsAndFees({ order }: Props) {
             </button>
           )}
         </div>
-      </div>
+      </section>
 
-      {/* Totals summary */}
       {(order.goodsTotalZar > 0 || totalFees > 0) && (
-        <div style={{
-          background: 'var(--color-surface-raised)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-sm)',
-          padding: 'var(--space-4)',
-        }}>
+        <section className="wizard-panel wizard-panel-muted">
           <TotalRow label="Goods total" value={formatZAR(order.goodsTotalZar || 0)} />
           {totalFees > 0 && <TotalRow label="Fees total" value={formatZAR(totalFees)} />}
           <div style={{ borderTop: '1px solid var(--color-border)', marginTop: 'var(--space-2)', paddingTop: 'var(--space-2)' }}>
             <TotalRow label="Order total" value={formatZAR(grandTotal)} bold />
           </div>
-        </div>
+        </section>
       )}
     </div>
   );
@@ -224,9 +229,8 @@ function TotalRow({ label, value, bold = false }: { label: string; value: string
 
 function FeeRow({ fee, onEdit, onDelete }: { fee: Fee; onEdit: () => void; onDelete: () => void }) {
   const typeLabel = {
-    fixed_shared: 'Equal split',
-    proportional_value: 'By value',
-    per_bag: 'Per bag',
+    fixed_shared: 'Fixed shared',
+    value_based: 'Value-based',
   }[fee.allocationType];
 
   return (

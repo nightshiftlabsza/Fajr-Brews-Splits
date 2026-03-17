@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import type { CoffeeLot, ShareLine, Order } from '../../types';
+import type { CoffeeLot, Order, Person, ShareLine } from '../../types';
 import { remainingGrams } from '../../lib/calculations';
 import { formatGrams } from '../../lib/formatters';
+import { getInitialShareGramsForNewBuyer, getLotAssignmentMode } from '../../lib/orderWizard';
+import { PersonEditor, type PersonFormValues } from '../people/PersonEditor';
 
 function genId() {
   return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
@@ -27,10 +29,21 @@ const emptyLotForm: LotFormState = {
 };
 
 export function CoffeeLotsSection({ order }: Props) {
-  const { people, updateOrder } = useAppStore();
+  const { people, addPerson, updateOrder } = useAppStore();
   const [editingLotId, setEditingLotId] = useState<string | 'new' | null>(null);
   const [lotForm, setLotForm] = useState<LotFormState>(emptyLotForm);
   const [formError, setFormError] = useState('');
+  const [buyerModalLotId, setBuyerModalLotId] = useState<string | null>(null);
+  const [buyerError, setBuyerError] = useState('');
+  const [buyerSaving, setBuyerSaving] = useState(false);
+
+  const activeBuyerLot = buyerModalLotId
+    ? order.lots.find((lot) => lot.id === buyerModalLotId) ?? null
+    : null;
+
+  const lotCountLabel = useMemo(() => (
+    `${order.lots.length} coffee lot${order.lots.length === 1 ? '' : 's'}`
+  ), [order.lots.length]);
 
   function openNew() {
     setLotForm(emptyLotForm);
@@ -50,68 +63,142 @@ export function CoffeeLotsSection({ order }: Props) {
   }
 
   function saveLot() {
-    const gpb = parseInt(lotForm.gramsPerBag, 10);
-    const qty = parseInt(lotForm.quantity, 10);
-    const price = parseFloat(lotForm.foreignPricePerBag);
+    const gramsPerBag = parseInt(lotForm.gramsPerBag, 10);
+    const quantity = parseInt(lotForm.quantity, 10);
+    const foreignPricePerBag = parseFloat(lotForm.foreignPricePerBag);
 
     if (!lotForm.name.trim()) return setFormError('Coffee name is required.');
-    if (!Number.isInteger(gpb) || gpb < 1) return setFormError('Grams per bag must be an integer ≥ 1.');
-    if (!Number.isInteger(qty) || qty < 1) return setFormError('Quantity must be an integer ≥ 1.');
-    if (isNaN(price) || price <= 0) return setFormError('Foreign price must be > 0.');
+    if (!Number.isInteger(gramsPerBag) || gramsPerBag < 1) return setFormError('Grams per bag must be an integer >= 1.');
+    if (!Number.isInteger(quantity) || quantity < 1) return setFormError('Quantity must be an integer >= 1.');
+    if (!Number.isFinite(foreignPricePerBag) || foreignPricePerBag <= 0) return setFormError('Foreign list price per bag must be greater than zero.');
     setFormError('');
 
-    let updatedLots: CoffeeLot[];
-
+    let nextLots: CoffeeLot[];
     if (editingLotId === 'new') {
-      const newLot: CoffeeLot = {
-        id: genId(),
-        name: lotForm.name.trim(),
-        foreignPricePerBag: price,
-        gramsPerBag: gpb,
-        quantity: qty,
-        shares: [],
-      };
-      updatedLots = [...order.lots, newLot];
-    } else {
-      updatedLots = order.lots.map((l) => {
-        if (l.id !== editingLotId) return l;
-        // If grams or qty changed, clear shares (they'd be invalid)
-        const newTotal = gpb * qty;
-        const oldTotal = l.gramsPerBag * l.quantity;
-        return {
-          ...l,
+      nextLots = [
+        ...order.lots,
+        {
+          id: genId(),
           name: lotForm.name.trim(),
-          foreignPricePerBag: price,
-          gramsPerBag: gpb,
-          quantity: qty,
-          shares: newTotal !== oldTotal ? [] : l.shares,
+          foreignPricePerBag,
+          gramsPerBag,
+          quantity,
+          shares: [],
+        },
+      ];
+    } else {
+      nextLots = order.lots.map((lot) => {
+        if (lot.id !== editingLotId) return lot;
+        const totalChanged = lot.gramsPerBag * lot.quantity !== gramsPerBag * quantity;
+        return {
+          ...lot,
+          name: lotForm.name.trim(),
+          foreignPricePerBag,
+          gramsPerBag,
+          quantity,
+          shares: totalChanged ? [] : lot.shares,
         };
       });
     }
 
-    updateOrder(order.id, { lots: updatedLots });
+    void updateOrder(order.id, { lots: nextLots });
     setEditingLotId(null);
   }
 
   function deleteLot(lotId: string) {
-    updateOrder(order.id, { lots: order.lots.filter((l) => l.id !== lotId) });
-  }
-
-  function updateShares(lotId: string, shares: ShareLine[]) {
-    updateOrder(order.id, {
-      lots: order.lots.map((l) => (l.id === lotId ? { ...l, shares } : l)),
+    void updateOrder(order.id, {
+      lots: order.lots.filter((lot) => lot.id !== lotId),
     });
   }
 
+  function updateShares(lotId: string, shares: ShareLine[]) {
+    void updateOrder(order.id, {
+      lots: order.lots.map((lot) => (lot.id === lotId ? { ...lot, shares } : lot)),
+    });
+  }
+
+  async function handleCreateBuyer(values: PersonFormValues) {
+    if (!activeBuyerLot) return;
+    if (!values.name.trim()) {
+      setBuyerError('Name is required.');
+      return;
+    }
+
+    setBuyerSaving(true);
+    setBuyerError('');
+    try {
+      const person = await addPerson({
+        name: values.name.trim(),
+        phone: values.phone || undefined,
+        email: values.email || undefined,
+        note: values.note || undefined,
+      });
+
+      const freshLot = order.lots.find((lot) => lot.id === activeBuyerLot.id);
+      if (freshLot) {
+        updateShares(freshLot.id, [
+          ...freshLot.shares,
+          {
+            id: genId(),
+            personId: person.id,
+            shareGrams: getInitialShareGramsForNewBuyer(freshLot),
+          },
+        ]);
+      }
+
+      setBuyerModalLotId(null);
+    } catch (error) {
+      setBuyerError(error instanceof Error ? error.message : 'Failed to add buyer.');
+    } finally {
+      setBuyerSaving(false);
+    }
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-      {/* Lot list */}
-      {order.lots.length === 0 && (
-        <div className="empty-state" style={{ padding: 'var(--space-8)' }}>
-          <div className="empty-state-icon">☕</div>
-          <h3>No coffee lots yet</h3>
-          <p>Add the coffees included in this order.</p>
+    <div className="wizard-step-stack">
+      {buyerModalLotId && activeBuyerLot && (
+        <div className="wizard-modal-backdrop" onClick={() => setBuyerModalLotId(null)}>
+          <div
+            className="wizard-modal-sheet"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <PersonEditor
+              title="Add new buyer"
+              description={`This buyer will be added to the shared directory and inserted directly into "${activeBuyerLot.name || 'this coffee lot'}".`}
+              error={buyerError}
+              saving={buyerSaving}
+              submitLabel="Add buyer"
+              onSave={handleCreateBuyer}
+              onCancel={() => setBuyerModalLotId(null)}
+            />
+          </div>
         </div>
+      )}
+
+      <section className="wizard-panel">
+        <div className="wizard-card-header">
+          <div>
+            <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Step 2</div>
+            <h3 className="wizard-card-title">Add coffees and assign buyers</h3>
+            <p className="wizard-card-copy">
+              Add each coffee, then decide who is ordering it. Use one buyer for own bags or split grams across multiple buyers for shared bags.
+            </p>
+          </div>
+          <div className="wizard-badge wizard-badge-muted">{lotCountLabel}</div>
+        </div>
+      </section>
+
+      {order.lots.length === 0 && editingLotId !== 'new' && (
+        <section className="wizard-panel wizard-empty-panel">
+          <div className="empty-state" style={{ padding: 'var(--space-8)' }}>
+            <div className="empty-state-icon">☕</div>
+            <h3>No coffee lots yet</h3>
+            <p>Add your first coffee lot, then assign buyers inside that same lot.</p>
+            <button className="btn btn-primary" onClick={openNew}>
+              Add first coffee lot
+            </button>
+          </div>
+        </section>
       )}
 
       {order.lots.map((lot) => (
@@ -128,127 +215,144 @@ export function CoffeeLotsSection({ order }: Props) {
           onCancel={() => setEditingLotId(null)}
           onDelete={() => deleteLot(lot.id)}
           onSharesChange={(shares) => updateShares(lot.id, shares)}
+          onAddNewBuyer={() => {
+            setBuyerError('');
+            setBuyerModalLotId(lot.id);
+          }}
         />
       ))}
 
-      {/* New lot form */}
       {editingLotId === 'new' && (
-        <div className="card">
-          <div className="card-padded">
-            <div className="section-label" style={{ marginBottom: 'var(--space-4)' }}>New coffee lot</div>
-            <LotForm
-              form={lotForm}
-              error={formError}
-              onChange={setLotForm}
-              onSave={saveLot}
-              onCancel={() => setEditingLotId(null)}
-            />
-          </div>
-        </div>
+        <section className="wizard-panel">
+          <div className="section-label" style={{ marginBottom: 'var(--space-3)' }}>New coffee lot</div>
+          <LotForm
+            form={lotForm}
+            error={formError}
+            onChange={setLotForm}
+            onSave={saveLot}
+            onCancel={() => setEditingLotId(null)}
+          />
+        </section>
       )}
 
-      {editingLotId === null && (
-        <button className="btn btn-secondary" onClick={openNew}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 5v14M5 12h14"/>
-          </svg>
-          Add coffee lot
-        </button>
+      {editingLotId === null && order.lots.length > 0 && (
+        <div className="wizard-inline-actions">
+          <button className="btn btn-secondary" onClick={openNew}>
+            Add another coffee lot
+          </button>
+        </div>
       )}
     </div>
   );
 }
 
-// ─── Lot Card ─────────────────────────────────────────────────
-
 interface LotCardProps {
   lot: CoffeeLot;
-  people: import('../../types').Person[];
+  people: Person[];
   isEditing: boolean;
   lotForm: LotFormState;
   formError: string;
-  setLotForm: (f: LotFormState) => void;
+  setLotForm: (form: LotFormState) => void;
   onEdit: () => void;
   onSave: () => void;
   onCancel: () => void;
   onDelete: () => void;
   onSharesChange: (shares: ShareLine[]) => void;
+  onAddNewBuyer: () => void;
 }
 
-function LotCard({ lot, people, isEditing, lotForm, formError, setLotForm, onEdit, onSave, onCancel, onDelete, onSharesChange }: LotCardProps) {
+function LotCard({
+  lot,
+  people,
+  isEditing,
+  lotForm,
+  formError,
+  setLotForm,
+  onEdit,
+  onSave,
+  onCancel,
+  onDelete,
+  onSharesChange,
+  onAddNewBuyer,
+}: LotCardProps) {
   const totalGrams = lot.gramsPerBag * lot.quantity;
-  const rem = remainingGrams(lot);
-  const balanced = rem === 0;
+  const remainder = remainingGrams(lot);
+  const mode = getLotAssignmentMode(lot);
 
   return (
-    <div className="card">
-      <div className="card-padded" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-        {isEditing ? (
-          <>
-            <div className="section-label">Edit lot</div>
-            <LotForm form={lotForm} error={formError} onChange={setLotForm} onSave={onSave} onCancel={onCancel} />
-          </>
-        ) : (
-          <>
-            {/* Lot header */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--color-text-primary)' }}>
-                  {lot.name}
-                </div>
-                <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
-                  {lot.quantity} × {formatGrams(lot.gramsPerBag)} bag &nbsp;·&nbsp; {formatGrams(totalGrams)} total &nbsp;·&nbsp; {lot.foreignPricePerBag} /bag
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
-                <button className="btn btn-ghost btn-sm" onClick={onEdit}>Edit</button>
-                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-unpaid)' }} onClick={onDelete}>Delete</button>
-              </div>
-            </div>
-
-            {/* Shares manager */}
+    <section className="wizard-panel">
+      {isEditing ? (
+        <>
+          <div className="section-label" style={{ marginBottom: 'var(--space-3)' }}>Edit coffee lot</div>
+          <LotForm
+            form={lotForm}
+            error={formError}
+            onChange={setLotForm}
+            onSave={onSave}
+            onCancel={onCancel}
+          />
+        </>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+          <div className="wizard-card-header">
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
-                <div className="section-label" style={{ marginBottom: 0 }}>Share allocation</div>
-                <GramsBadge remaining={rem} total={totalGrams} />
-              </div>
-
-              <SharesManager
-                lot={lot}
-                people={people}
-                onChange={onSharesChange}
-              />
+              <div className="wizard-card-title">{lot.name}</div>
+              <p className="wizard-card-copy" style={{ marginTop: 'var(--space-2)' }}>
+                {lot.quantity} x {formatGrams(lot.gramsPerBag)} bag • {formatGrams(totalGrams)} total • {lot.foreignPricePerBag} list price per bag
+              </p>
             </div>
 
-            {!balanced && lot.shares.length > 0 && (
-              <div className="alert alert-warning" style={{ fontSize: '0.8125rem' }}>
-                {rem > 0 ? `${rem}g unallocated` : `${Math.abs(rem)}g over-allocated`} — shares must total exactly {formatGrams(totalGrams)}.
+            <div className="wizard-chip-row">
+              <span className={`wizard-badge ${mode === 'own' ? 'wizard-badge-accent' : mode === 'split' ? 'wizard-badge-info' : 'wizard-badge-muted'}`}>
+                {mode === 'own' ? 'Own bag' : mode === 'split' ? 'Split bag' : 'Unassigned'}
+              </span>
+              <button className="btn btn-ghost btn-sm" onClick={onEdit}>Edit</button>
+              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-unpaid)' }} onClick={onDelete}>Delete</button>
+            </div>
+          </div>
+
+          <div className="wizard-subsection">
+            <div className="wizard-subsection-header">
+              <div>
+                <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Who is ordering this?</div>
+                <p className="wizard-card-copy">
+                  Use one buyer for an own bag or split grams between multiple buyers for a shared bag.
+                </p>
               </div>
-            )}
-            {balanced && lot.shares.length > 0 && (
-              <div className="alert alert-success" style={{ fontSize: '0.8125rem' }}>
-                ✓ All {formatGrams(totalGrams)} allocated
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+              <GramsBadge remaining={remainder} total={totalGrams} />
+            </div>
+
+            <SharesManager
+              lot={lot}
+              people={people}
+              onChange={onSharesChange}
+              onAddNewBuyer={onAddNewBuyer}
+            />
+          </div>
+
+          <div className={`wizard-allocation-note ${remainder === 0 ? 'is-complete' : remainder < 0 ? 'is-error' : 'is-warning'}`}>
+            {remainder === 0
+              ? `Balanced. All ${formatGrams(totalGrams)} are assigned.`
+              : remainder > 0
+                ? `${formatGrams(remainder)} still need to be assigned.`
+                : `${formatGrams(Math.abs(remainder))} are over-assigned. Adjust buyer grams to continue.`}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
-
-// ─── Lot Form ─────────────────────────────────────────────────
 
 interface LotFormProps {
   form: LotFormState;
   error: string;
-  onChange: (f: LotFormState) => void;
+  onChange: (form: LotFormState) => void;
   onSave: () => void;
   onCancel: () => void;
 }
 
 function LotForm({ form, error, onChange, onSave, onCancel }: LotFormProps) {
-  function set(key: keyof LotFormState) {
+  function setField(key: keyof LotFormState) {
     return (e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...form, [key]: e.target.value });
   }
 
@@ -256,138 +360,185 @@ function LotForm({ form, error, onChange, onSave, onCancel }: LotFormProps) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       <div className="field">
         <label className="field-label">Coffee name</label>
-        <input className="input" value={form.name} onChange={set('name')} placeholder="e.g. Ethiopian Yirgacheffe" autoFocus />
+        <input
+          className="input"
+          value={form.name}
+          onChange={setField('name')}
+          placeholder="e.g. Ethiopian Yirgacheffe"
+          autoFocus
+        />
       </div>
-      <div className="grid-2">
+
+      <div className="wizard-card-grid">
         <div className="field">
           <label className="field-label">Foreign list price per bag</label>
-          <input className="input" type="number" value={form.foreignPricePerBag} onChange={set('foreignPricePerBag')} placeholder="e.g. 18.50" step="0.01" min="0.01" />
-          <span className="field-hint">Original currency (EUR, USD, etc.)</span>
+          <input
+            className="input"
+            type="number"
+            value={form.foreignPricePerBag}
+            onChange={setField('foreignPricePerBag')}
+            min="0.01"
+            step="0.01"
+            placeholder="18.50"
+          />
         </div>
         <div className="field">
           <label className="field-label">Grams per bag</label>
-          <input className="input" type="number" value={form.gramsPerBag} onChange={set('gramsPerBag')} placeholder="250" step="1" min="1" />
-          <span className="field-hint">Integer grams</span>
+          <input
+            className="input"
+            type="number"
+            value={form.gramsPerBag}
+            onChange={setField('gramsPerBag')}
+            min="1"
+            step="1"
+            placeholder="250"
+          />
         </div>
       </div>
-      <div className="field" style={{ maxWidth: 200 }}>
-        <label className="field-label">Quantity (bags)</label>
-        <input className="input" type="number" value={form.quantity} onChange={set('quantity')} placeholder="1" step="1" min="1" />
+
+      <div className="field" style={{ maxWidth: 220 }}>
+        <label className="field-label">Quantity</label>
+        <input
+          className="input"
+          type="number"
+          value={form.quantity}
+          onChange={setField('quantity')}
+          min="1"
+          step="1"
+          placeholder="1"
+        />
       </div>
+
       {error && <div className="alert alert-error">{error}</div>}
-      <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-        <button className="btn btn-primary" onClick={onSave}>Save lot</button>
+
+      <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+        <button className="btn btn-primary" onClick={onSave}>Save coffee lot</button>
         <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
       </div>
     </div>
   );
 }
 
-// ─── Shares Manager ───────────────────────────────────────────
-
 interface SharesManagerProps {
   lot: CoffeeLot;
-  people: import('../../types').Person[];
+  people: Person[];
   onChange: (shares: ShareLine[]) => void;
+  onAddNewBuyer: () => void;
 }
 
-function SharesManager({ lot, people, onChange }: SharesManagerProps) {
+function SharesManager({ lot, people, onChange, onAddNewBuyer }: SharesManagerProps) {
   const totalGrams = lot.gramsPerBag * lot.quantity;
   const shares = lot.shares;
 
   function addShare() {
-    const usedIds = shares.map((s) => s.personId);
-    const available = people.filter((p) => !usedIds.includes(p.id));
-    if (available.length === 0) return;
-    const rem = remainingGrams(lot);
-    const newShare: ShareLine = {
-      id: genId(),
-      personId: available[0].id,
-      shareGrams: Math.max(0, rem),
-    };
-    onChange([...shares, newShare]);
+    const usedIds = shares.map((share) => share.personId);
+    const nextPerson = people.find((person) => !usedIds.includes(person.id));
+    if (!nextPerson) return;
+    onChange([
+      ...shares,
+      {
+        id: genId(),
+        personId: nextPerson.id,
+        shareGrams: getInitialShareGramsForNewBuyer(lot),
+      },
+    ]);
   }
 
   function updateShare(shareId: string, field: 'personId' | 'shareGrams', value: string) {
-    onChange(shares.map((s) => {
-      if (s.id !== shareId) return s;
-      if (field === 'shareGrams') return { ...s, shareGrams: parseInt(value, 10) || 0 };
-      return { ...s, personId: value };
+    onChange(shares.map((share) => {
+      if (share.id !== shareId) return share;
+      if (field === 'shareGrams') {
+        return { ...share, shareGrams: parseInt(value, 10) || 0 };
+      }
+      return { ...share, personId: value };
     }));
   }
 
   function removeShare(shareId: string) {
-    onChange(shares.filter((s) => s.id !== shareId));
+    onChange(shares.filter((share) => share.id !== shareId));
   }
 
   function splitEqually() {
     if (people.length === 0) return;
-    const n = people.length;
-    const base = Math.floor(totalGrams / n);
-    const remainder = totalGrams - base * n;
-    const newShares: ShareLine[] = people.map((p, i) => ({
-      id: shares.find((s) => s.personId === p.id)?.id || genId(),
-      personId: p.id,
-      shareGrams: base + (i === 0 ? remainder : 0),
-    }));
-    onChange(newShares);
+    const count = people.length;
+    const base = Math.floor(totalGrams / count);
+    const remainder = totalGrams - base * count;
+    onChange(people.map((person, index) => ({
+      id: shares.find((share) => share.personId === person.id)?.id || genId(),
+      personId: person.id,
+      shareGrams: base + (index === 0 ? remainder : 0),
+    })));
   }
 
   function assignRemainderToLast() {
     if (shares.length === 0) return;
-    const rem = remainingGrams(lot);
-    const last = shares[shares.length - 1];
-    onChange(shares.map((s) =>
-      s.id === last.id ? { ...s, shareGrams: Math.max(0, s.shareGrams + rem) } : s
+    const remainder = remainingGrams(lot);
+    const lastShare = shares[shares.length - 1];
+    onChange(shares.map((share) =>
+      share.id === lastShare.id
+        ? { ...share, shareGrams: Math.max(0, share.shareGrams + remainder) }
+        : share
     ));
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-      {shares.map((share, idx) => (
-        <div key={share.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+      {shares.length === 0 && (
+        <div className="wizard-inline-empty">
+          <span>No buyers assigned yet.</span>
+          <span className="field-hint">Start with one buyer for an own bag or add multiple for a split bag.</span>
+        </div>
+      )}
+
+      {shares.map((share) => (
+        <div key={share.id} className="buyer-row">
           <select
             className="select"
             value={share.personId}
             onChange={(e) => updateShare(share.id, 'personId', e.target.value)}
             style={{ flex: 1 }}
           >
-            {people.map((p) => (
-              <option key={p.id} value={p.id}
-                disabled={shares.some((s) => s.id !== share.id && s.personId === p.id)}
-              >{p.name}</option>
+            {people.map((person) => (
+              <option
+                key={person.id}
+                value={person.id}
+                disabled={shares.some((candidate) => candidate.id !== share.id && candidate.personId === person.id)}
+              >
+                {person.name}
+              </option>
             ))}
           </select>
-          <input
-            className="input"
-            type="number"
-            value={share.shareGrams || ''}
-            onChange={(e) => updateShare(share.id, 'shareGrams', e.target.value)}
-            style={{ width: 70, flexShrink: 0 }}
-            min="1"
-            step="1"
-            placeholder="g"
-          />
-          <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', flexShrink: 0 }}>g</span>
-          <button
-            className="btn btn-ghost btn-icon"
-            onClick={() => removeShare(share.id)}
-            title="Remove"
-            style={{ flexShrink: 0 }}
-          >
+
+          <div className="buyer-grams-field">
+            <input
+              className="input"
+              type="number"
+              value={share.shareGrams || ''}
+              onChange={(e) => updateShare(share.id, 'shareGrams', e.target.value)}
+              min="0"
+              step="1"
+              placeholder="g"
+            />
+            <span className="buyer-grams-suffix">g</span>
+          </div>
+
+          <button className="btn btn-ghost btn-icon" onClick={() => removeShare(share.id)} title="Remove buyer">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12"/>
+              <path d="M18 6L6 18M6 6l12 12" />
             </svg>
           </button>
         </div>
       ))}
 
-      <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+      <div className="wizard-chip-row">
         {shares.length < people.length && (
           <button className="btn btn-secondary btn-sm" onClick={addShare}>
-            + Add person
+            Add buyer
           </button>
         )}
+        <button className="btn btn-ghost btn-sm" onClick={onAddNewBuyer}>
+          Add new buyer
+        </button>
         {people.length > 0 && (
           <button className="btn btn-ghost btn-sm" onClick={splitEqually}>
             Split equally
@@ -403,15 +554,16 @@ function SharesManager({ lot, people, onChange }: SharesManagerProps) {
   );
 }
 
-// ─── Grams Badge ──────────────────────────────────────────────
-
 function GramsBadge({ remaining, total }: { remaining: number; total: number }) {
-  const balanced = remaining === 0;
-  const over = remaining < 0;
+  const label = remaining === 0
+    ? `Balanced • ${formatGrams(total)}`
+    : remaining > 0
+      ? `${formatGrams(remaining)} left`
+      : `${formatGrams(Math.abs(remaining))} over`;
 
   return (
-    <span className={`grams-badge ${balanced ? 'grams-badge-ok' : over ? 'grams-badge-error' : 'grams-badge-warn'}`}>
-      {balanced ? `✓ ${formatGrams(total)}` : over ? `${formatGrams(Math.abs(remaining))} over` : `${formatGrams(remaining)} left`}
+    <span className={`grams-badge ${remaining === 0 ? 'grams-badge-ok' : remaining > 0 ? 'grams-badge-warn' : 'grams-badge-error'}`}>
+      {label}
     </span>
   );
 }

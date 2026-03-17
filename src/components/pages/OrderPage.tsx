@@ -1,37 +1,42 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAppStore, getCurrentOrder } from '../../store/appStore';
 import { OrderSetup } from '../order/OrderSetup';
 import { CoffeeLotsSection } from '../order/CoffeeLotsSection';
 import { GoodsAndFees } from '../order/GoodsAndFees';
 import { OrderSummary } from '../order/OrderSummary';
-import { allLotsBalanced } from '../../lib/calculations';
-import { todayISO, formatDateShort } from '../../lib/formatters';
+import {
+  ORDER_WIZARD_STEPS,
+  type OrderWizardStep,
+  getMaxUnlockedStepIndex,
+  getSuggestedWizardStep,
+  isStepComplete,
+  validateCoffeeStep,
+  validateGoodsStep,
+  validateSetupStep,
+} from '../../lib/orderWizard';
+import { formatDateShort, todayISO } from '../../lib/formatters';
 
-type Section = 'setup' | 'lots' | 'goods' | 'summary';
-
-interface ChevronProps { open: boolean }
-function Chevron({ open }: ChevronProps) {
-  return (
-    <svg
-      width="16" height="16" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-      style={{ transition: 'transform 200ms ease', transform: open ? 'rotate(180deg)' : 'none' }}
-    >
-      <polyline points="6 9 12 15 18 9"/>
-    </svg>
-  );
-}
+const STEP_INDEX: Record<OrderWizardStep, number> = {
+  setup: 0,
+  coffees: 1,
+  goods: 2,
+  summary: 3,
+};
 
 export function OrderPage() {
-  const { people, createOrder, setCurrentOrderId } = useAppStore();
+  const { createOrder, setCurrentOrderId } = useAppStore();
   const currentOrder = useAppStore(getCurrentOrder);
-  const [open, setOpen] = useState<Section>('setup');
+  const [currentStep, setCurrentStep] = useState<OrderWizardStep>('setup');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  function toggle(section: Section) {
-    setOpen((prev) => (prev === section ? 'setup' : section));
-  }
+  useEffect(() => {
+    if (!currentOrder) {
+      setCurrentStep('setup');
+      return;
+    }
+    setCurrentStep(getSuggestedWizardStep(currentOrder));
+  }, [currentOrder?.id]);
 
   async function handleNewOrder() {
     setCreating(true);
@@ -48,154 +53,151 @@ export function OrderPage() {
         fees: [],
         payments: {},
       });
-      if (order) setCurrentOrderId(order.id);
-    } catch (err) {
-      setCreateError(err instanceof Error ? err.message : 'Failed to create order. Please try again.');
+      if (order) {
+        setCurrentOrderId(order.id);
+        setCurrentStep('setup');
+      }
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : 'Failed to create order. Please try again.');
     } finally {
       setCreating(false);
     }
   }
 
+  const validationErrors = useMemo(() => {
+    if (!currentOrder) return [];
+    if (currentStep === 'setup') return validateSetupStep(currentOrder);
+    if (currentStep === 'coffees') return validateCoffeeStep(currentOrder);
+    if (currentStep === 'goods') return validateGoodsStep(currentOrder);
+    return [];
+  }, [currentOrder, currentStep]);
+
   if (!currentOrder) {
     return (
-      <div className="page-container">
-        <div className="empty-state" style={{ paddingTop: 'var(--space-16)' }}>
-          <div className="empty-state-icon">📋</div>
-          <h3>No active order</h3>
-          <p>Create a new order to start splitting coffee costs, or open an existing order from History.</p>
-          <button className="btn btn-primary btn-lg" onClick={handleNewOrder} disabled={creating}>
-            {creating ? <span className="spinner" style={{ width: 18, height: 18 }} /> : 'New Order'}
-          </button>
-          {createError && (
-            <div className="alert alert-warning" style={{ marginTop: 'var(--space-3)', textAlign: 'left' }}>
-              {createError}
-            </div>
-          )}
+      <div className="page-container wizard-page">
+        <div className="wizard-empty-panel">
+          <div className="empty-state" style={{ paddingTop: 'var(--space-16)' }}>
+            <div className="empty-state-icon">📋</div>
+            <h3>No active order</h3>
+            <p>Create a new order to start the guided four-step flow.</p>
+            <button className="btn btn-primary btn-lg" onClick={handleNewOrder} disabled={creating}>
+              {creating ? <span className="spinner" style={{ width: 18, height: 18 }} /> : 'New order'}
+            </button>
+            {createError && (
+              <div className="alert alert-warning" style={{ marginTop: 'var(--space-3)', textAlign: 'left' }}>
+                {createError}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
   }
 
-  const lotsOk = currentOrder.lots.length > 0 && allLotsBalanced(currentOrder.lots);
-  const goodsOk = currentOrder.goodsTotalZar > 0;
-  const setupOk = !!currentOrder.name && !!currentOrder.payerId && !!currentOrder.payerBank?.bankName;
+  const maxUnlockedStepIndex = getMaxUnlockedStepIndex(currentOrder);
+  const currentStepIndex = STEP_INDEX[currentStep];
+  const stepCompleteMap: Record<OrderWizardStep, boolean> = {
+    setup: isStepComplete(currentOrder, 'setup'),
+    coffees: isStepComplete(currentOrder, 'coffees'),
+    goods: isStepComplete(currentOrder, 'goods'),
+    summary: isStepComplete(currentOrder, 'summary'),
+  };
+
+  function goToStep(step: OrderWizardStep) {
+    if (STEP_INDEX[step] <= maxUnlockedStepIndex || step === currentStep) {
+      setCurrentStep(step);
+    }
+  }
+
+  function handleNext() {
+    if (currentStep === 'summary' || validationErrors.length > 0) return;
+    const nextStep = ORDER_WIZARD_STEPS[currentStepIndex + 1]?.id;
+    if (nextStep) setCurrentStep(nextStep);
+  }
+
+  function handleBack() {
+    const previousStep = ORDER_WIZARD_STEPS[currentStepIndex - 1]?.id;
+    if (previousStep) setCurrentStep(previousStep);
+  }
 
   return (
-    <div className="page-container">
-      {/* Order title bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-5)', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <div>
-          <h2 style={{ marginBottom: 4 }}>{currentOrder.name || 'Untitled Order'}</h2>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
-            {formatDateShort(currentOrder.orderDate)}
-            &nbsp;·&nbsp;
-            {currentOrder.lots.length} lot{currentOrder.lots.length !== 1 ? 's' : ''}
-            &nbsp;·&nbsp;
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <span className="realtime-dot" style={{ width: 6, height: 6 }} />
-              Live
-            </span>
+    <div className="page-container wizard-page">
+      <div className="wizard-shell">
+        <section className="wizard-hero">
+          <div className="wizard-hero-top">
+            <div>
+              <div className="wizard-kicker">Order creation</div>
+              <h2 className="wizard-page-title">{currentOrder.name || 'Untitled order'}</h2>
+              <p className="wizard-page-copy">
+                {formatDateShort(currentOrder.orderDate)} • move from setup into coffees, then fees, then final review.
+              </p>
+            </div>
+            <button className="btn btn-secondary btn-sm" onClick={handleNewOrder} disabled={creating}>
+              {creating ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'New order'}
+            </button>
           </div>
-        </div>
-        <button className="btn btn-secondary btn-sm" onClick={handleNewOrder} disabled={creating}>
-          New order
-        </button>
-      </div>
 
-      {/* Accordion sections */}
-      <AccordionSection
-        id="setup"
-        title="Order Setup"
-        open={open === 'setup'}
-        onToggle={() => toggle('setup')}
-        complete={setupOk}
-        badge={setupOk ? currentOrder.name : undefined}
-      >
-        <OrderSetup order={currentOrder} />
-      </AccordionSection>
+          <div className="wizard-progress">
+            {ORDER_WIZARD_STEPS.map((step, index) => {
+              const unlocked = index <= maxUnlockedStepIndex || step.id === currentStep;
+              const complete = stepCompleteMap[step.id];
+              const active = step.id === currentStep;
+              return (
+                <button
+                  key={step.id}
+                  className={`wizard-progress-step ${active ? 'is-active' : ''} ${complete ? 'is-complete' : ''}`}
+                  onClick={() => goToStep(step.id)}
+                  disabled={!unlocked}
+                >
+                  <span className="wizard-progress-index">{complete ? '✓' : index + 1}</span>
+                  <span className="wizard-progress-text">
+                    <span className="wizard-progress-label">{step.shortLabel}</span>
+                    <span className="wizard-progress-subtitle">{step.label}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
 
-      <AccordionSection
-        id="lots"
-        title="Coffee Lots"
-        open={open === 'lots'}
-        onToggle={() => toggle('lots')}
-        complete={lotsOk}
-        badge={lotsOk ? `${currentOrder.lots.length} lot${currentOrder.lots.length !== 1 ? 's' : ''} · balanced` : currentOrder.lots.length > 0 ? `${currentOrder.lots.length} lot${currentOrder.lots.length !== 1 ? 's' : ''}` : undefined}
-      >
-        <CoffeeLotsSection order={currentOrder} />
-      </AccordionSection>
-
-      <AccordionSection
-        id="goods"
-        title="Goods & Fees"
-        open={open === 'goods'}
-        onToggle={() => toggle('goods')}
-        complete={goodsOk}
-        badge={goodsOk ? `R${currentOrder.goodsTotalZar.toFixed(2)} + ${currentOrder.fees.length} fee${currentOrder.fees.length !== 1 ? 's' : ''}` : undefined}
-      >
-        <GoodsAndFees order={currentOrder} />
-      </AccordionSection>
-
-      <AccordionSection
-        id="summary"
-        title="Summary"
-        open={open === 'summary'}
-        onToggle={() => toggle('summary')}
-        complete={false}
-      >
-        <OrderSummary order={currentOrder} />
-      </AccordionSection>
-    </div>
-  );
-}
-
-// ─── Accordion Section ────────────────────────────────────────
-
-interface AccordionSectionProps {
-  id: Section;
-  title: string;
-  open: boolean;
-  onToggle: () => void;
-  complete: boolean;
-  badge?: string;
-  children: React.ReactNode;
-}
-
-function AccordionSection({ title, open, onToggle, complete, badge, children }: AccordionSectionProps) {
-  return (
-    <div className="accordion" style={{ marginBottom: 'var(--space-3)' }}>
-      <button className="accordion-trigger" onClick={onToggle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flex: 1, minWidth: 0 }}>
-          <span style={{
-            width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: complete ? 'var(--color-paid-bg)' : 'var(--color-surface-raised)',
-            color: complete ? 'var(--color-paid)' : 'var(--color-text-muted)',
-            fontSize: '0.75rem', fontWeight: 700,
-          }}>
-            {complete ? '✓' : '○'}
-          </span>
-          <span style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--color-text-primary)' }}>
-            {title}
-          </span>
-          {badge && !open && (
-            <span style={{
-              fontSize: '0.75rem', color: 'var(--color-text-muted)',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              marginLeft: 'var(--space-1)',
-            }}>
-              · {badge}
-            </span>
+        <div className="wizard-stage">
+          {currentStep === 'setup' && <OrderSetup order={currentOrder} />}
+          {currentStep === 'coffees' && <CoffeeLotsSection order={currentOrder} />}
+          {currentStep === 'goods' && <GoodsAndFees order={currentOrder} />}
+          {currentStep === 'summary' && (
+            <OrderSummary
+              order={currentOrder}
+              onJumpToStep={(step) => setCurrentStep(step)}
+            />
           )}
         </div>
-        <Chevron open={open} />
-      </button>
 
-      {open && (
-        <div className="accordion-content">
-          {children}
+        <div className="wizard-footer">
+          <div className="wizard-footer-copy">
+            {validationErrors.length > 0 ? validationErrors[0] : ORDER_WIZARD_STEPS[currentStepIndex].label}
+          </div>
+
+          <div className="wizard-footer-actions">
+            <button className="btn btn-ghost" onClick={handleBack} disabled={currentStepIndex === 0}>
+              Back
+            </button>
+
+            {currentStep !== 'summary' ? (
+              <button
+                className="btn btn-primary"
+                onClick={handleNext}
+                disabled={validationErrors.length > 0}
+              >
+                {currentStep === 'goods' ? 'Review summary' : 'Continue'}
+              </button>
+            ) : (
+              <button className="btn btn-primary" onClick={() => setCurrentStep('coffees')}>
+                Edit coffees
+              </button>
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

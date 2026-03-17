@@ -1,20 +1,14 @@
 import { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import type { Person } from '../../types';
+import { PersonEditor, type PersonFormValues } from '../people/PersonEditor';
 
-interface PersonForm {
-  name: string;
-  phone: string;
-  email: string;
-  note: string;
-}
-
-const emptyForm: PersonForm = { name: '', phone: '', email: '', note: '' };
+const emptyForm: PersonFormValues = { name: '', phone: '', email: '', note: '' };
 
 export function PeoplePage() {
   const { people, addPerson, updatePerson, deletePerson } = useAppStore();
   const [editingId, setEditingId] = useState<string | 'new' | null>(null);
-  const [form, setForm] = useState<PersonForm>(emptyForm);
+  const [form, setForm] = useState<PersonFormValues>(emptyForm);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -27,7 +21,7 @@ export function PeoplePage() {
   );
 
   function openNew() {
-    setForm(emptyForm);
+    setForm({ ...emptyForm });
     setError('');
     setEditingId('new');
   }
@@ -38,15 +32,26 @@ export function PeoplePage() {
     setEditingId(person.id);
   }
 
-  async function handleSave() {
-    if (!form.name.trim()) return setError('Name is required.');
+  async function handleSave(nextForm: PersonFormValues) {
+    setForm(nextForm);
+    if (!nextForm.name.trim()) return setError('Name is required.');
     setError('');
     setSaving(true);
     try {
       if (editingId === 'new') {
-        await addPerson({ name: form.name.trim(), phone: form.phone || undefined, email: form.email || undefined, note: form.note || undefined });
+        await addPerson({
+          name: nextForm.name.trim(),
+          phone: nextForm.phone || undefined,
+          email: nextForm.email || undefined,
+          note: nextForm.note || undefined,
+        });
       } else if (editingId) {
-        await updatePerson(editingId, { name: form.name.trim(), phone: form.phone || undefined, email: form.email || undefined, note: form.note || undefined });
+        await updatePerson(editingId, {
+          name: nextForm.name.trim(),
+          phone: nextForm.phone || undefined,
+          email: nextForm.email || undefined,
+          note: nextForm.note || undefined,
+        });
       }
       setEditingId(null);
     } catch (e) {
@@ -96,7 +101,14 @@ export function PeoplePage() {
       {editingId === 'new' && (
         <div className="card card-padded" style={{ marginBottom: 'var(--space-4)' }}>
           <div className="section-label" style={{ marginBottom: 'var(--space-4)' }}>New person</div>
-          <PersonForm form={form} error={error} saving={saving} onChange={setForm} onSave={handleSave} onCancel={() => setEditingId(null)} />
+          <PersonEditor
+            initialValues={form}
+            error={error}
+            saving={saving}
+            submitLabel="Save"
+            onSave={handleSave}
+            onCancel={() => setEditingId(null)}
+          />
         </div>
       )}
 
@@ -119,7 +131,14 @@ export function PeoplePage() {
             {editingId === person.id ? (
               <div className="card-padded">
                 <div className="section-label" style={{ marginBottom: 'var(--space-4)' }}>Edit — {person.name}</div>
-                <PersonForm form={form} error={error} saving={saving} onChange={setForm} onSave={handleSave} onCancel={() => setEditingId(null)} />
+                <PersonEditor
+                  initialValues={form}
+                  error={error}
+                  saving={saving}
+                  submitLabel="Save"
+                  onSave={handleSave}
+                  onCancel={() => setEditingId(null)}
+                />
               </div>
             ) : (
               <div className="card-padded" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
@@ -159,52 +178,6 @@ export function PeoplePage() {
             )}
           </div>
         ))}
-      </div>
-    </div>
-  );
-}
-
-interface PersonFormProps {
-  form: PersonForm;
-  error: string;
-  saving: boolean;
-  onChange: (f: PersonForm) => void;
-  onSave: () => void;
-  onCancel: () => void;
-}
-
-function PersonForm({ form, error, saving, onChange, onSave, onCancel }: PersonFormProps) {
-  function set(key: keyof PersonForm) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-      onChange({ ...form, [key]: e.target.value });
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-      <div className="grid-2">
-        <div className="field">
-          <label className="field-label">Name *</label>
-          <input className="input" value={form.name} onChange={set('name')} placeholder="Full name" autoFocus />
-        </div>
-        <div className="field">
-          <label className="field-label">Phone</label>
-          <input className="input" type="tel" value={form.phone} onChange={set('phone')} placeholder="+27 82 xxx xxxx" />
-        </div>
-      </div>
-      <div className="field">
-        <label className="field-label">Email</label>
-        <input className="input" type="email" value={form.email} onChange={set('email')} placeholder="optional" />
-      </div>
-      <div className="field">
-        <label className="field-label">Note</label>
-        <input className="input" value={form.note} onChange={set('note')} placeholder="Optional note" />
-      </div>
-      {error && <div className="alert alert-error">{error}</div>}
-      <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-        <button className="btn btn-primary" onClick={onSave} disabled={saving}>
-          {saving ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Save'}
-        </button>
-        <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
       </div>
     </div>
   );
