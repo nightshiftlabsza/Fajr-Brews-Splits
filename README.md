@@ -13,7 +13,7 @@ When your group imports specialty coffee, the roaster applies tax deductions and
 1. Takes the **final ZAR goods total** actually paid
 2. Allocates it across lots by **original foreign list-price proportions**
 3. Splits each lot's cost to members by **grams received**
-4. Allocates additional fees by one of **3 allocation types** (fixed shared / proportional by value / per bag)
+4. Allocates additional fees by one of **2 allocation types** (fixed shared / value-based)
 5. Generates **elegant per-person invoices** with split context and payment instructions
 6. Syncs **live across all members** via Supabase Realtime
 
@@ -204,11 +204,10 @@ PERSON_GOODS_ZAR = Σ(all SHARE_GOODS_ZAR for that person)
 
 | Type | Method |
 |---|---|
-| `fixed_shared` | `fee.amountZar / eligiblePeopleCount` |
-| `proportional_value` | `fee.amountZar × personValueShare` |
-| `per_bag` | `fee.amountZar × personBagFractionRatio` |
+| `fixed_shared` | `fee.amountZar / participatingPeopleCount` |
+| `value_based` | `fee.amountZar × personValueShare` |
 
-For `per_bag`: a person who takes 125g from a 250g bag counts as **0.5 bags**.
+`fixed_shared` fees are split equally across all people with > 0g in the order, and are charged once per person. `value_based` fees are split by each person's share of the total foreign list value and are shown broken down per coffee line on invoices.
 
 ### D. Rounding rule (critical)
 

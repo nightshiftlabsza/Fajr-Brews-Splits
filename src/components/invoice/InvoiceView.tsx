@@ -78,52 +78,52 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
         <div className="invoice-section">
           <div className="invoice-section-label">Coffee Shares</div>
 
-          {calc.lotBreakdowns.map((lb) => (
-            <div className="invoice-lot" key={lb.lotId}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                <div>
-                  <div className="invoice-lot-name">{lb.lotName}</div>
-                  <div className="invoice-lot-meta">
-                    {lb.shareGrams}g · from {lb.gramsPerBag}g bag
-                  </div>
-                  {lb.splitWith.length > 0 && (
-                    <div className="invoice-lot-split">
-                      Split with: {lb.splitWith.join(', ')}
+          {calc.lotBreakdowns.map((lb) => {
+            const lineTotal = lb.goodsZar + lb.valueBasedFeesZar;
+            return (
+              <div className="invoice-lot" key={lb.lotId}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                  <div>
+                    <div className="invoice-lot-name">{lb.lotName}</div>
+                    <div className="invoice-lot-meta">
+                      {lb.shareGrams}g · {lb.shareGrams >= lb.gramsPerBag ? 'own bag' : 'split bag'}
                     </div>
-                  )}
-                </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--color-text-primary)' }}>
-                    {formatZAR(lb.goodsZar)}
+                    {lb.splitWith.length > 0 && (
+                      <div className="invoice-lot-split">
+                        Split with: {lb.splitWith.join(', ')}
+                      </div>
+                    )}
+                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
+                      <span style={{ opacity: 0.8 }}>Beans: {formatZAR(lb.goodsZar)}</span>
+                      {lb.valueBasedFeesZar > 0 && (
+                        <>
+                          <span style={{ margin: '0 6px', opacity: 0.4 }}>•</span>
+                          <span style={{ opacity: 0.8 }}>Value-based import fees: {formatZAR(lb.valueBasedFeesZar)}</span>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
-                    {effectivePricePerGram(lb.goodsZar, lb.shareGrams)}
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--color-text-primary)' }}>
+                      {formatZAR(lineTotal)}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
+                      {effectivePricePerGram(lineTotal, lb.shareGrams)}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        {/* Fees breakdown */}
-        {calc.feeBreakdowns.length > 0 && (
+        {/* Fixed Shared Fees */}
+        {calc.feeBreakdowns.some(f => f.allocationType === 'fixed_shared') && (
           <div className="invoice-section">
-            <div className="invoice-section-label">Fees</div>
-            {calc.feeBreakdowns.map((fb) => (
+            <div className="invoice-section-label">Order-level Fixed Fees</div>
+            {calc.feeBreakdowns.filter(f => f.allocationType === 'fixed_shared').map((fb) => (
               <div className="invoice-total-row" key={fb.feeId}>
-                <div>
-                  <span style={{ color: 'var(--color-text-secondary)' }}>{fb.label}</span>
-                  <span style={{
-                    marginLeft: 8,
-                    fontSize: '0.6875rem',
-                    color: 'var(--color-text-muted)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                  }}>
-                    {fb.allocationType === 'fixed_shared' ? 'equal split' :
-                     fb.allocationType === 'proportional_value' ? 'by value' : 'per bag'}
-                  </span>
-                </div>
+                <div style={{ color: 'var(--color-text-secondary)' }}>{fb.label}</div>
                 <span className="amount-small">{formatZAR(fb.amountZar)}</span>
               </div>
             ))}
@@ -135,12 +135,12 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
           <div className="invoice-section-label">Summary</div>
           <div className="invoice-total-row">
             <span style={{ color: 'var(--color-text-secondary)' }}>Coffee subtotal</span>
-            <span className="amount-small">{formatZAR(calc.goodsZar)}</span>
+            <span className="amount-small">{formatZAR(calc.goodsZar + calc.feeBreakdowns.filter(f => f.allocationType === 'value_based').reduce((s, f) => s + f.amountZar, 0))}</span>
           </div>
-          {calc.feesZar > 0.001 && (
+          {calc.feeBreakdowns.some(f => f.allocationType === 'fixed_shared') && (
             <div className="invoice-total-row">
-              <span style={{ color: 'var(--color-text-secondary)' }}>Fees subtotal</span>
-              <span className="amount-small">{formatZAR(calc.feesZar)}</span>
+              <span style={{ color: 'var(--color-text-secondary)' }}>Fixed fees subtotal</span>
+              <span className="amount-small">{formatZAR(calc.feeBreakdowns.filter(f => f.allocationType === 'fixed_shared').reduce((s, f) => s + f.amountZar, 0))}</span>
             </div>
           )}
           <div className="invoice-grand-total">

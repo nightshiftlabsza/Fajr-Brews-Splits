@@ -10,16 +10,38 @@ import { PeoplePage } from './components/pages/PeoplePage';
 import { HistoryPage } from './components/pages/HistoryPage';
 import { SettingsPage } from './components/pages/SettingsPage';
 import type { AppTab } from './types';
+import { supabase } from './lib/supabase';
 
 import './styles/globals.css';
 import './styles/print.css';
 
+function isRecoveryHash(hash: string): boolean {
+  return hash.includes('type=recovery');
+}
+
 export default function App() {
   const { initialize, isInitialized, isLoading, user, membershipStatus } = useAppStore();
   const [currentTab, setCurrentTab] = useState<AppTab>('order');
+  const [authMode, setAuthMode] = useState<'default' | 'recovery'>(() => (
+    typeof window !== 'undefined' && isRecoveryHash(window.location.hash) ? 'recovery' : 'default'
+  ));
 
   useEffect(() => {
-    initialize();
+    void initialize();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setAuthMode('recovery');
+      } else if (event === 'SIGNED_OUT') {
+        setAuthMode('default');
+      }
+
+      void initialize();
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Track mediaQuery listener for cleanup
@@ -89,6 +111,17 @@ export default function App() {
         </div>
         <div className="spinner" />
       </div>
+    );
+  }
+
+  if (authMode === 'recovery') {
+    return (
+      <AuthPage
+        initialMode="recovery"
+        onRecoveryComplete={() => {
+          setAuthMode('default');
+        }}
+      />
     );
   }
 
