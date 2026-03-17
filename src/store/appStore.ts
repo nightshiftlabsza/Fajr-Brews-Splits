@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { APP_URL, RESET_PASSWORD_PATH } from '../lib/appConfig';
 import { supabase, WORKSPACE_ID } from '../lib/supabase';
 import type {
   Person,
@@ -303,9 +304,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   requestPasswordReset: async (email) => {
-    const redirectTo = typeof window === 'undefined'
-      ? undefined
-      : `${window.location.origin}${window.location.pathname}`;
+    const redirectTo = `${APP_URL}${RESET_PASSWORD_PATH}`;
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(normalizeEmail(email), {

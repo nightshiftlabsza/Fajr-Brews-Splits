@@ -8,8 +8,10 @@ import { OrderPage } from './components/pages/OrderPage';
 import { InvoicesPage } from './components/pages/InvoicesPage';
 import { PeoplePage } from './components/pages/PeoplePage';
 import { HistoryPage } from './components/pages/HistoryPage';
+import { ResetPasswordPage } from './components/pages/ResetPasswordPage';
 import { SettingsPage } from './components/pages/SettingsPage';
 import type { AppTab } from './types';
+import { HOME_PATH, RESET_PASSWORD_PATH } from './lib/appConfig';
 import { supabase } from './lib/supabase';
 
 import './styles/globals.css';
@@ -19,27 +21,80 @@ function isRecoveryHash(hash: string): boolean {
   return hash.includes('type=recovery');
 }
 
+function getCurrentPath(): string {
+  if (typeof window === 'undefined') {
+    return HOME_PATH;
+  }
+
+  return window.location.pathname || HOME_PATH;
+}
+
+function updatePath(
+  path: string,
+  options: { replace?: boolean; preserveSearch?: boolean; preserveHash?: boolean } = {},
+): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const { replace = false, preserveSearch = false, preserveHash = false } = options;
+  const nextUrl = `${path}${preserveSearch ? window.location.search : ''}${preserveHash ? window.location.hash : ''}`;
+
+  if (replace) {
+    window.history.replaceState({}, document.title, nextUrl);
+  } else {
+    window.history.pushState({}, document.title, nextUrl);
+  }
+
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
 export default function App() {
   const { initialize, isInitialized, isLoading, user, membershipStatus } = useAppStore();
   const [currentTab, setCurrentTab] = useState<AppTab>('order');
   const [authMode, setAuthMode] = useState<'default' | 'recovery'>(() => (
     typeof window !== 'undefined' && isRecoveryHash(window.location.hash) ? 'recovery' : 'default'
   ));
+  const [currentPath, setCurrentPath] = useState(getCurrentPath);
 
   useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(getCurrentPath());
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    handlePopState();
+
+    if (isRecoveryHash(window.location.hash) && window.location.pathname !== RESET_PASSWORD_PATH) {
+      updatePath(RESET_PASSWORD_PATH, {
+        replace: true,
+        preserveSearch: true,
+        preserveHash: true,
+      });
+    }
+
     void initialize();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         setAuthMode('recovery');
+        updatePath(RESET_PASSWORD_PATH, {
+          replace: true,
+          preserveSearch: true,
+          preserveHash: true,
+        });
       } else if (event === 'SIGNED_OUT') {
         setAuthMode('default');
+        if (getCurrentPath() === RESET_PASSWORD_PATH) {
+          updatePath(HOME_PATH, { replace: true });
+        }
       }
 
       void initialize();
     });
 
     return () => {
+      window.removeEventListener('popstate', handlePopState);
       subscription.unsubscribe();
     };
   }, []);
@@ -114,12 +169,12 @@ export default function App() {
     );
   }
 
-  if (authMode === 'recovery') {
+  if (authMode === 'recovery' || currentPath === RESET_PASSWORD_PATH) {
     return (
-      <AuthPage
-        initialMode="recovery"
-        onRecoveryComplete={() => {
+      <ResetPasswordPage
+        onComplete={() => {
           setAuthMode('default');
+          updatePath(HOME_PATH, { replace: true });
         }}
       />
     );
