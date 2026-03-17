@@ -97,7 +97,16 @@ code {
 
 .app-main {
   flex: 1;
-  padding-bottom: 80px; /* space for bottom nav on mobile */
+  padding-bottom: 104px; /* space for floating mobile nav */
+}
+
+.app-page {
+  display: none;
+  min-width: 0;
+}
+
+.app-page.is-active {
+  display: block;
 }
 
 @media (min-width: 768px) {
@@ -998,6 +1007,21 @@ tr:hover td {
   color: var(--color-text-muted);
 }
 
+.wizard-inline-note {
+  padding: var(--space-3) var(--space-4);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--color-surface-raised) 78%, var(--color-surface));
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 0.84rem;
+}
+
+.wizard-protection-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .wizard-inline-meta {
   display: inline-flex;
   margin-top: var(--space-1);
@@ -1181,7 +1205,7 @@ input[type=number]::-webkit-outer-spin-button {
   .wizard-footer {
     flex-direction: column;
     align-items: stretch;
-    bottom: calc(var(--space-3) + 64px);
+    bottom: calc(var(--space-3) + 84px);
   }
 
   .wizard-footer-actions {

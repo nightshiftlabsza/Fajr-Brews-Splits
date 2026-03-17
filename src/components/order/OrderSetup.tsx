@@ -1,10 +1,48 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import type { Order, PayerBank } from '../../types';
+import type { Order, PayerBank, Person } from '../../types';
 import { todayISO } from '../../lib/formatters';
 
 interface Props {
   order: Order;
+}
+
+function normalizeBank(bank?: Partial<PayerBank> | null): PayerBank {
+  return {
+    bankName: bank?.bankName || '',
+    accountNumber: bank?.accountNumber || '',
+    beneficiary: bank?.beneficiary || '',
+    branch: bank?.branch || '',
+  };
+}
+
+function banksEqual(left: PayerBank, right: PayerBank): boolean {
+  return (
+    left.bankName === right.bankName &&
+    left.accountNumber === right.accountNumber &&
+    left.beneficiary === right.beneficiary &&
+    (left.branch || '') === (right.branch || '')
+  );
+}
+
+function getIncludedPeople(order: Order, people: Person[]): Person[] {
+  const personIds = new Set<string>();
+
+  for (const lot of order.lots) {
+    for (const share of lot.shares) {
+      if (share.shareGrams > 0) {
+        personIds.add(share.personId);
+      }
+    }
+  }
+
+  if (order.payerId) {
+    personIds.add(order.payerId);
+  }
+
+  return Array.from(personIds)
+    .map((personId) => people.find((person) => person.id === personId) ?? null)
+    .filter((person): person is Person => person !== null);
 }
 
 export function OrderSetup({ order }: Props) {
@@ -13,88 +51,118 @@ export function OrderSetup({ order }: Props) {
     updateOrder,
     setOrderPin,
     clearOrderPin,
-    addOrderParticipant,
-    user,
-    workspaceMembers,
-    fetchWorkspaceMembers,
+    sessionUi,
+    setOrderProtectionOpen,
   } = useAppStore();
 
   const [name, setName] = useState(order.name);
   const [orderDate, setOrderDate] = useState(order.orderDate || todayISO());
   const [payerId, setPayerId] = useState(order.payerId || '');
-  const [bank, setBank] = useState<PayerBank>({
-    bankName: order.payerBank?.bankName || '',
-    accountNumber: order.payerBank?.accountNumber || '',
-    beneficiary: order.payerBank?.beneficiary || '',
-    branch: order.payerBank?.branch || '',
-  });
-  const [saving, setSaving] = useState(false);
-
+  const [bank, setBank] = useState<PayerBank>(normalizeBank(order.payerBank));
   const [bankOpen, setBankOpen] = useState(Boolean(
     order.payerBank?.bankName ||
     order.payerBank?.accountNumber ||
     order.payerBank?.beneficiary ||
     order.payerBank?.branch
   ));
-  const [pinOpen, setPinOpen] = useState(Boolean(order.pinRequired));
-
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinSaving, setPinSaving] = useState(false);
   const [pinError, setPinError] = useState('');
   const [pinSuccess, setPinSuccess] = useState('');
 
-  const [addUserId, setAddUserId] = useState('');
-  const [addingParticipant, setAddingParticipant] = useState(false);
-  const [participantError, setParticipantError] = useState('');
-  const [participantSuccess, setParticipantSuccess] = useState('');
+  const protectionOpen = sessionUi.orderProtectionOpen[order.id] ?? Boolean(order.pinRequired);
+  const hydrationRef = useRef(true);
+  const bankHydrationRef = useRef(true);
+
+  const includedPeople = useMemo(() => getIncludedPeople(order, people), [order, people]);
 
   useEffect(() => {
+    hydrationRef.current = true;
+    bankHydrationRef.current = true;
     setName(order.name);
     setOrderDate(order.orderDate || todayISO());
     setPayerId(order.payerId || '');
-    setBank({
-      bankName: order.payerBank?.bankName || '',
-      accountNumber: order.payerBank?.accountNumber || '',
-      beneficiary: order.payerBank?.beneficiary || '',
-      branch: order.payerBank?.branch || '',
-    });
+    setBank(normalizeBank(order.payerBank));
     setBankOpen(Boolean(
       order.payerBank?.bankName ||
       order.payerBank?.accountNumber ||
       order.payerBank?.beneficiary ||
       order.payerBank?.branch
     ));
-    setPinOpen(Boolean(order.pinRequired));
     setNewPin('');
     setConfirmPin('');
     setPinError('');
     setPinSuccess('');
-    setParticipantError('');
-    setParticipantSuccess('');
-  }, [order]);
+
+    if (sessionUi.orderProtectionOpen[order.id] === undefined) {
+      setOrderProtectionOpen(order.id, Boolean(order.pinRequired));
+    }
+  }, [order.id]);
 
   useEffect(() => {
-    void fetchWorkspaceMembers();
-  }, [fetchWorkspaceMembers]);
-
-  const save = useCallback(async (changes: Partial<Order>) => {
-    setSaving(true);
-    try {
-      await updateOrder(order.id, changes);
-    } finally {
-      setSaving(false);
+    if (hydrationRef.current) {
+      hydrationRef.current = false;
+      return;
     }
-  }, [order.id, updateOrder]);
+
+    const trimmedName = name.trim();
+    if (trimmedName === order.name) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void updateOrder(order.id, { name: trimmedName });
+    }, 450);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [name, order.id, order.name, updateOrder]);
+
+  useEffect(() => {
+    if (bankHydrationRef.current) {
+      bankHydrationRef.current = false;
+      return;
+    }
+
+    const normalizedOrderBank = normalizeBank(order.payerBank);
+    if (banksEqual(bank, normalizedOrderBank)) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void updateOrder(order.id, { payerBank: bank });
+    }, 500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [bank, order.id, order.payerBank, updateOrder]);
+
+  function flushNameSave() {
+    const trimmedName = name.trim();
+    setName(trimmedName);
+    if (trimmedName !== order.name) {
+      void updateOrder(order.id, { name: trimmedName });
+    }
+  }
+
+  function flushBankSave() {
+    const normalizedBank = normalizeBank(bank);
+    setBank(normalizedBank);
+    if (!banksEqual(normalizedBank, normalizeBank(order.payerBank))) {
+      void updateOrder(order.id, { payerBank: normalizedBank });
+    }
+  }
 
   function handleBankChange(field: keyof PayerBank, value: string) {
-    const nextBank = { ...bank, [field]: value };
-    setBank(nextBank);
+    setBank((current) => ({ ...current, [field]: value }));
   }
 
   function handlePayerChange(nextPayerId: string) {
     setPayerId(nextPayerId);
-    save({ payerId: nextPayerId });
+    void updateOrder(order.id, { payerId: nextPayerId || null });
+  }
+
+  function handleProtectionToggle() {
+    setOrderProtectionOpen(order.id, !protectionOpen);
   }
 
   async function handleSetPin() {
@@ -111,9 +179,10 @@ export function OrderSetup({ order }: Props) {
     setPinSuccess('');
     try {
       await setOrderPin(order.id, newPin);
+      setOrderProtectionOpen(order.id, true);
       setNewPin('');
       setConfirmPin('');
-      setPinSuccess('PIN set. This order now requires a PIN from history.');
+      setPinSuccess('PIN enabled for this order.');
     } catch {
       setPinError('Failed to set PIN. Please try again.');
     } finally {
@@ -122,7 +191,7 @@ export function OrderSetup({ order }: Props) {
   }
 
   async function handleClearPin() {
-    if (!confirm('Remove PIN from this order? Authorized participants will still keep access.')) return;
+    if (!confirm('Remove PIN protection from this order?')) return;
     setPinSaving(true);
     setPinError('');
     setPinSuccess('');
@@ -138,32 +207,8 @@ export function OrderSetup({ order }: Props) {
     }
   }
 
-  async function handleAddParticipant() {
-    if (!addUserId) return;
-    setAddingParticipant(true);
-    setParticipantError('');
-    setParticipantSuccess('');
-    try {
-      await addOrderParticipant(order.id, addUserId);
-      const member = workspaceMembers.find((item) => item.userId === addUserId);
-      setParticipantSuccess(`${member?.fullName || member?.email || 'Member'} can now open this order from history.`);
-      setAddUserId('');
-    } catch {
-      setParticipantError('Failed to add participant. Please try again.');
-    } finally {
-      setAddingParticipant(false);
-    }
-  }
-
   return (
     <div className="wizard-step-stack">
-      {saving && (
-        <div className="wizard-inline-status">
-          <div className="spinner" style={{ width: 12, height: 12 }} />
-          Saving changes...
-        </div>
-      )}
-
       <section className="wizard-panel">
         <div className="wizard-card-header">
           <div>
@@ -183,8 +228,8 @@ export function OrderSetup({ order }: Props) {
               className="input"
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={() => save({ name: name.trim() })}
+              onChange={(event) => setName(event.target.value)}
+              onBlur={flushNameSave}
               placeholder="e.g. March Import 2026"
             />
           </div>
@@ -196,9 +241,9 @@ export function OrderSetup({ order }: Props) {
               className="input"
               type="date"
               value={orderDate}
-              onChange={(e) => {
-                setOrderDate(e.target.value);
-                void save({ orderDate: e.target.value });
+              onChange={(event) => {
+                setOrderDate(event.target.value);
+                void updateOrder(order.id, { orderDate: event.target.value });
               }}
             />
           </div>
@@ -210,7 +255,7 @@ export function OrderSetup({ order }: Props) {
             id="payer"
             className="select"
             value={payerId}
-            onChange={(e) => handlePayerChange(e.target.value)}
+            onChange={(event) => handlePayerChange(event.target.value)}
           >
             <option value="">Select payer</option>
             {people.map((person) => (
@@ -237,8 +282,8 @@ export function OrderSetup({ order }: Props) {
             <input
               className="input"
               value={bank.bankName}
-              onChange={(e) => handleBankChange('bankName', e.target.value)}
-              onBlur={() => save({ payerBank: bank })}
+              onChange={(event) => handleBankChange('bankName', event.target.value)}
+              onBlur={flushBankSave}
               placeholder="e.g. FNB"
             />
           </div>
@@ -247,8 +292,8 @@ export function OrderSetup({ order }: Props) {
             <input
               className="input"
               value={bank.accountNumber}
-              onChange={(e) => handleBankChange('accountNumber', e.target.value)}
-              onBlur={() => save({ payerBank: bank })}
+              onChange={(event) => handleBankChange('accountNumber', event.target.value)}
+              onBlur={flushBankSave}
               placeholder="e.g. 62xxxxxxxxx"
             />
           </div>
@@ -259,8 +304,8 @@ export function OrderSetup({ order }: Props) {
             <input
               className="input"
               value={bank.beneficiary}
-              onChange={(e) => handleBankChange('beneficiary', e.target.value)}
-              onBlur={() => save({ payerBank: bank })}
+              onChange={(event) => handleBankChange('beneficiary', event.target.value)}
+              onBlur={flushBankSave}
               placeholder="Account holder name"
             />
           </div>
@@ -269,8 +314,8 @@ export function OrderSetup({ order }: Props) {
             <input
               className="input"
               value={bank.branch || ''}
-              onChange={(e) => handleBankChange('branch', e.target.value)}
-              onBlur={() => save({ payerBank: bank })}
+              onChange={(event) => handleBankChange('branch', event.target.value)}
+              onBlur={flushBankSave}
               placeholder="Optional"
             />
           </div>
@@ -278,14 +323,37 @@ export function OrderSetup({ order }: Props) {
       </CollapsiblePanel>
 
       <CollapsiblePanel
-        open={pinOpen}
-        onToggle={() => setPinOpen((current) => !current)}
-        title="PIN protection"
-        summary={order.pinRequired ? 'PIN currently enabled' : 'Optional'}
+        open={protectionOpen}
+        onToggle={handleProtectionToggle}
+        title="Order protection"
+        summary={order.pinRequired ? 'PIN required for included people' : 'Optional'}
       >
-        <p className="wizard-card-copy" style={{ marginBottom: 'var(--space-4)' }}>
-          Use a short PIN if you want another layer before an authorized participant can open the order from history.
+        <p className="wizard-card-copy">
+          If PIN protection is enabled, only people included in this order can open it, and the PIN will be required.
         </p>
+
+        <div className="wizard-inline-note">
+          <strong>Included automatically:</strong> buyers with grams in this order, plus the payer.
+        </div>
+
+        {includedPeople.length > 0 ? (
+          <div className="wizard-protection-list">
+            {includedPeople.map((person) => (
+              <span key={person.id} className="wizard-badge wizard-badge-muted">
+                {person.name}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="wizard-inline-empty">
+            <span>No one is included yet.</span>
+            <span className="field-hint">Assign buyers or choose a payer first, then protection will follow automatically.</span>
+          </div>
+        )}
+
+        <span className="field-hint">
+          Access is matched automatically using the email on each included person. People without matching app accounts will still appear in the order, but they will not be able to open a PIN-protected order yet.
+        </span>
 
         {order.pinRequired ? (
           <div className="wizard-inline-actions">
@@ -294,93 +362,49 @@ export function OrderSetup({ order }: Props) {
             </button>
           </div>
         ) : (
-          <div className="wizard-card-grid">
-            <div className="field">
-              <label className="field-label">Order PIN</label>
-              <input
-                className="input"
-                type="password"
-                inputMode="numeric"
-                maxLength={6}
-                value={newPin}
-                onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="4 to 6 digits"
-              />
+          <>
+            <div className="wizard-card-grid">
+              <div className="field">
+                <label className="field-label">Order PIN</label>
+                <input
+                  className="input"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={newPin}
+                  onChange={(event) => setNewPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="4 to 6 digits"
+                />
+              </div>
+              <div className="field">
+                <label className="field-label">Confirm PIN</label>
+                <input
+                  className="input"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={confirmPin}
+                  onChange={(event) => setConfirmPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="Repeat PIN"
+                />
+              </div>
             </div>
-            <div className="field">
-              <label className="field-label">Confirm PIN</label>
-              <input
-                className="input"
-                type="password"
-                inputMode="numeric"
-                maxLength={6}
-                value={confirmPin}
-                onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="Repeat PIN"
-              />
-            </div>
-          </div>
-        )}
 
-        {!order.pinRequired && (
-          <div className="wizard-inline-actions">
-            <button
-              className="btn btn-primary"
-              onClick={handleSetPin}
-              disabled={pinSaving || newPin.length < 4 || newPin !== confirmPin}
-            >
-              {pinSaving ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Set PIN'}
-            </button>
-          </div>
+            <div className="wizard-inline-actions">
+              <button
+                className="btn btn-primary"
+                onClick={handleSetPin}
+                disabled={pinSaving || newPin.length < 4 || newPin !== confirmPin}
+              >
+                {pinSaving ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Enable PIN protection'}
+              </button>
+            </div>
+          </>
         )}
 
         {pinError && <div className="alert alert-error">{pinError}</div>}
         {pinSuccess && <div className="alert alert-success">{pinSuccess}</div>}
       </CollapsiblePanel>
-
-      <section className="wizard-panel">
-        <div className="wizard-card-header">
-          <div>
-            <div className="wizard-card-title">Order access</div>
-            <p className="wizard-card-copy">
-              Order history access is restricted to relevant authorized users. You can add extra workspace members here without exposing fake privacy modes.
-            </p>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-          <select
-            className="select"
-            value={addUserId}
-            onChange={(e) => setAddUserId(e.target.value)}
-            style={{ flex: 1, minWidth: 220 }}
-          >
-            <option value="">Select workspace member</option>
-            {workspaceMembers
-              .filter((member) => member.userId !== user?.id)
-              .map((member) => (
-                <option key={member.userId} value={member.userId}>
-                  {member.fullName || member.email || member.userId}
-                </option>
-              ))}
-          </select>
-
-          <button
-            className="btn btn-secondary"
-            onClick={handleAddParticipant}
-            disabled={!addUserId || addingParticipant}
-          >
-            {addingParticipant ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Add access'}
-          </button>
-        </div>
-
-        <span className="field-hint">
-          Participants added here can find the order in history. PIN protection, if enabled, still applies on open.
-        </span>
-
-        {participantError && <div className="alert alert-error">{participantError}</div>}
-        {participantSuccess && <div className="alert alert-success">{participantSuccess}</div>}
-      </section>
     </div>
   );
 }

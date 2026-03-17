@@ -6,12 +6,12 @@ interface HeaderProps {
   onTabChange: (tab: AppTab) => void;
 }
 
-const TABS: { id: AppTab; label: string; icon: string }[] = [
-  { id: 'order',    label: 'Order',    icon: '📋' },
-  { id: 'invoices', label: 'Invoices', icon: '🧾' },
-  { id: 'people',   label: 'People',   icon: '👥' },
-  { id: 'history',  label: 'History',  icon: '📂' },
-  { id: 'settings', label: 'Settings', icon: '⚙️' },
+const TABS: { id: AppTab; label: string }[] = [
+  { id: 'order', label: 'Order' },
+  { id: 'invoices', label: 'Invoices' },
+  { id: 'people', label: 'People' },
+  { id: 'history', label: 'History' },
+  { id: 'settings', label: 'Settings' },
 ];
 
 export function Header({ currentTab, onTabChange }: HeaderProps) {
@@ -19,7 +19,6 @@ export function Header({ currentTab, onTabChange }: HeaderProps) {
 
   return (
     <>
-      {/* Desktop top navigation */}
       <header className="nav-top">
         <div className="nav-top-inner">
           <div className="nav-brand">
@@ -49,23 +48,21 @@ export function Header({ currentTab, onTabChange }: HeaderProps) {
         </div>
       </header>
 
-      {/* Mobile bottom navigation */}
-      <nav className="nav-bottom">
+      <nav className="nav-bottom" aria-label="Primary navigation">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             className={`nav-bottom-tab ${currentTab === tab.id ? 'active' : ''}`}
             onClick={() => onTabChange(tab.id)}
             aria-label={tab.label}
+            aria-current={currentTab === tab.id ? 'page' : undefined}
           >
-            <span className="nav-bottom-icon">{tab.icon}</span>
             <span className="nav-bottom-label">{tab.label}</span>
           </button>
         ))}
       </nav>
 
       <style>{`
-        /* ── Desktop top nav ─────────────────────────────────── */
         .nav-top {
           display: none;
           position: fixed;
@@ -80,7 +77,10 @@ export function Header({ currentTab, onTabChange }: HeaderProps) {
         }
 
         @media (min-width: 768px) {
-          .nav-top { display: flex; align-items: center; }
+          .nav-top {
+            display: flex;
+            align-items: center;
+          }
         }
 
         .nav-top-inner {
@@ -166,65 +166,74 @@ export function Header({ currentTab, onTabChange }: HeaderProps) {
           white-space: nowrap;
         }
 
-        /* ── Mobile bottom nav ───────────────────────────────── */
         .nav-bottom {
           display: flex;
           position: fixed;
-          bottom: 0;
-          left: 0;
-          right: 0;
+          left: 50%;
+          bottom: calc(12px + env(safe-area-inset-bottom, 0));
+          transform: translateX(-50%);
           z-index: 100;
-          background: var(--color-surface);
-          border-top: 1px solid var(--color-border);
-          box-shadow: 0 -4px 12px rgba(0,0,0,0.06);
-          /* Safe area for iOS */
-          padding-bottom: env(safe-area-inset-bottom, 0);
+          width: min(calc(100% - 24px), 560px);
+          padding: 8px;
+          gap: 4px;
+          background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+          border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
+          border-radius: 999px;
+          box-shadow: var(--shadow-lg);
+          backdrop-filter: blur(18px);
         }
 
         @media (min-width: 768px) {
-          .nav-bottom { display: none; }
+          .nav-bottom {
+            display: none;
+          }
         }
 
         .nav-bottom-tab {
           flex: 1;
           display: flex;
-          flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 3px;
-          padding: 8px 4px;
+          min-height: 44px;
+          padding: 10px 6px;
           border: none;
+          border-radius: 999px;
           background: transparent;
           cursor: pointer;
-          transition: background-color var(--transition-fast);
-          min-height: 56px;
+          position: relative;
+          transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
         }
 
         .nav-bottom-tab:active {
-          background: var(--color-surface-raised);
+          background: color-mix(in srgb, var(--color-surface-raised) 84%, transparent);
         }
 
-        .nav-bottom-tab.active .nav-bottom-label {
-          color: var(--color-accent);
-          font-weight: 700;
+        .nav-bottom-tab.active {
+          background: color-mix(in srgb, var(--color-surface) 96%, transparent);
+          box-shadow: var(--shadow-xs);
         }
 
-        .nav-bottom-tab.active .nav-bottom-icon {
-          filter: drop-shadow(0 0 4px color-mix(in srgb, var(--color-accent) 30%, transparent));
-        }
-
-        .nav-bottom-icon {
-          font-size: 1.25rem;
-          line-height: 1;
-          display: block;
+        .nav-bottom-tab.active::after {
+          content: '';
+          position: absolute;
+          left: 18px;
+          right: 18px;
+          bottom: 6px;
+          height: 2px;
+          border-radius: 999px;
+          background: color-mix(in srgb, var(--color-accent) 68%, transparent);
         }
 
         .nav-bottom-label {
-          font-size: 0.625rem;
-          font-weight: 600;
-          letter-spacing: 0.04em;
+          font-size: 0.72rem;
+          font-weight: 700;
+          letter-spacing: 0.12em;
           text-transform: uppercase;
           color: var(--color-text-muted);
+        }
+
+        .nav-bottom-tab.active .nav-bottom-label {
+          color: var(--color-text-primary);
         }
       `}</style>
     </>

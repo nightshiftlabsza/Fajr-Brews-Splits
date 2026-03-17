@@ -199,15 +199,21 @@ export default function App() {
       />
 
       <main className="app-main">
-        {currentTab === 'order' && <OrderPage />}
-        {currentTab === 'invoices' && (
+        <section className={`app-page ${currentTab === 'order' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'order'}>
+          <OrderPage />
+        </section>
+        <section className={`app-page ${currentTab === 'invoices' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'invoices'}>
           <InvoicesPage onNavigateToOrder={() => setCurrentTab('order')} />
-        )}
-        {currentTab === 'people' && <PeoplePage />}
-        {currentTab === 'history' && (
+        </section>
+        <section className={`app-page ${currentTab === 'people' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'people'}>
+          <PeoplePage />
+        </section>
+        <section className={`app-page ${currentTab === 'history' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'history'}>
           <HistoryPage onNavigateToOrder={() => setCurrentTab('order')} />
-        )}
-        {currentTab === 'settings' && <SettingsPage />}
+        </section>
+        <section className={`app-page ${currentTab === 'settings' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'settings'}>
+          <SettingsPage />
+        </section>
       </main>
     </div>
   );

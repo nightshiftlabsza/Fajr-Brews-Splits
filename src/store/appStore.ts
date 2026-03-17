@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { APP_URL, RESET_PASSWORD_PATH } from '../lib/appConfig';
+import type { OrderWizardStep } from '../lib/orderWizard';
 import { supabase, WORKSPACE_ID } from '../lib/supabase';
 import type {
   Person,
@@ -76,6 +77,10 @@ interface AppStore {
   isInitialized: boolean;
   isLoading: boolean;
   error: string | null;
+  sessionUi: {
+    orderWizardSteps: Record<string, OrderWizardStep>;
+    orderProtectionOpen: Record<string, boolean>;
+  };
 
   // ── Realtime channel ──────────────────────────────────────
   _realtimeChannel: RealtimeChannel | null;
@@ -98,6 +103,8 @@ interface AppStore {
   updateOrder: (id: string, data: Partial<Order>) => Promise<void>;
   deleteOrder: (id: string) => Promise<void>;
   setCurrentOrderId: (id: string | null) => void;
+  setOrderWizardStep: (orderId: string, step: OrderWizardStep) => void;
+  setOrderProtectionOpen: (orderId: string, open: boolean) => void;
 
   // ── Workspace member actions ──────────────────────────────
   fetchWorkspaceMembers: () => Promise<void>;
@@ -114,7 +121,6 @@ interface AppStore {
   verifyOrderPin: (orderId: string, pin: string) => Promise<boolean>;
   setOrderPin: (orderId: string, pin: string) => Promise<void>;
   clearOrderPin: (orderId: string) => Promise<void>;
-  addOrderParticipant: (orderId: string, userId: string) => Promise<void>;
 
   // ── Import/Export ─────────────────────────────────────────
   exportJSON: () => string;
@@ -181,6 +187,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   isInitialized: false,
   isLoading: false,
   error: null,
+  sessionUi: {
+    orderWizardSteps: {},
+    orderProtectionOpen: {},
+  },
   _realtimeChannel: null,
   unlockedOrderIds: new Set<string>(),
 
@@ -338,6 +348,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
       people: [],
       orders: [],
       currentOrderId: null,
+      sessionUi: {
+        orderWizardSteps: {},
+        orderProtectionOpen: {},
+      },
+      unlockedOrderIds: new Set<string>(),
     });
   },
 
@@ -452,7 +467,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
         : s.currentOrderId;
       if (currentOrderId) safeLocalStorage.setItem('fb_current_order_id', currentOrderId);
       else safeLocalStorage.removeItem('fb_current_order_id');
-      return { orders, currentOrderId };
+      const { [id]: _removedStep, ...orderWizardSteps } = s.sessionUi.orderWizardSteps;
+      const { [id]: _removedProtection, ...orderProtectionOpen } = s.sessionUi.orderProtectionOpen;
+      const unlockedOrderIds = new Set(s.unlockedOrderIds);
+      unlockedOrderIds.delete(id);
+      return {
+        orders,
+        currentOrderId,
+        unlockedOrderIds,
+        sessionUi: {
+          ...s.sessionUi,
+          orderWizardSteps,
+          orderProtectionOpen,
+        },
+      };
     });
   },
 
@@ -460,6 +488,30 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ currentOrderId: id });
     if (id) safeLocalStorage.setItem('fb_current_order_id', id);
     else safeLocalStorage.removeItem('fb_current_order_id');
+  },
+
+  setOrderWizardStep: (orderId, step) => {
+    set((s) => ({
+      sessionUi: {
+        ...s.sessionUi,
+        orderWizardSteps: {
+          ...s.sessionUi.orderWizardSteps,
+          [orderId]: step,
+        },
+      },
+    }));
+  },
+
+  setOrderProtectionOpen: (orderId, open) => {
+    set((s) => ({
+      sessionUi: {
+        ...s.sessionUi,
+        orderProtectionOpen: {
+          ...s.sessionUi.orderProtectionOpen,
+          [orderId]: open,
+        },
+      },
+    }));
   },
 
   // ── Workspace Members ─────────────────────────────────────
@@ -673,13 +725,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }));
   },
 
-  addOrderParticipant: async (orderId, userId) => {
-    const { error } = await supabase.rpc('add_order_participant', {
-      p_order_id: orderId,
-      p_user_id: userId,
-    });
-    if (error) throw new Error(error.message);
-  },
 
   // ── Realtime ──────────────────────────────────────────────
   _setupRealtime: (workspaceId) => {

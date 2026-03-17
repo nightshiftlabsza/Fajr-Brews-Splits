@@ -24,19 +24,21 @@ const STEP_INDEX: Record<OrderWizardStep, number> = {
 };
 
 export function OrderPage() {
-  const { createOrder, setCurrentOrderId } = useAppStore();
+  const { createOrder, setCurrentOrderId, setOrderWizardStep, sessionUi } = useAppStore();
   const currentOrder = useAppStore(getCurrentOrder);
-  const [currentStep, setCurrentStep] = useState<OrderWizardStep>('setup');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const currentStep = currentOrder
+    ? sessionUi.orderWizardSteps[currentOrder.id] ?? getSuggestedWizardStep(currentOrder)
+    : 'setup';
+  const savedStep = currentOrder ? sessionUi.orderWizardSteps[currentOrder.id] : undefined;
 
   useEffect(() => {
-    if (!currentOrder) {
-      setCurrentStep('setup');
+    if (!currentOrder || savedStep) {
       return;
     }
-    setCurrentStep(getSuggestedWizardStep(currentOrder));
-  }, [currentOrder?.id]);
+    setOrderWizardStep(currentOrder.id, getSuggestedWizardStep(currentOrder));
+  }, [currentOrder?.id, savedStep, setOrderWizardStep]);
 
   async function handleNewOrder() {
     setCreating(true);
@@ -55,7 +57,7 @@ export function OrderPage() {
       });
       if (order) {
         setCurrentOrderId(order.id);
-        setCurrentStep('setup');
+        setOrderWizardStep(order.id, 'setup');
       }
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : 'Failed to create order. Please try again.');
@@ -96,6 +98,7 @@ export function OrderPage() {
 
   const maxUnlockedStepIndex = getMaxUnlockedStepIndex(currentOrder);
   const currentStepIndex = STEP_INDEX[currentStep];
+  const orderId = currentOrder.id;
   const stepCompleteMap: Record<OrderWizardStep, boolean> = {
     setup: isStepComplete(currentOrder, 'setup'),
     coffees: isStepComplete(currentOrder, 'coffees'),
@@ -105,19 +108,19 @@ export function OrderPage() {
 
   function goToStep(step: OrderWizardStep) {
     if (STEP_INDEX[step] <= maxUnlockedStepIndex || step === currentStep) {
-      setCurrentStep(step);
+      setOrderWizardStep(orderId, step);
     }
   }
 
   function handleNext() {
     if (currentStep === 'summary' || validationErrors.length > 0) return;
     const nextStep = ORDER_WIZARD_STEPS[currentStepIndex + 1]?.id;
-    if (nextStep) setCurrentStep(nextStep);
+    if (nextStep) setOrderWizardStep(orderId, nextStep);
   }
 
   function handleBack() {
     const previousStep = ORDER_WIZARD_STEPS[currentStepIndex - 1]?.id;
-    if (previousStep) setCurrentStep(previousStep);
+    if (previousStep) setOrderWizardStep(orderId, previousStep);
   }
 
   return (
@@ -167,7 +170,7 @@ export function OrderPage() {
           {currentStep === 'summary' && (
             <OrderSummary
               order={currentOrder}
-              onJumpToStep={(step) => setCurrentStep(step)}
+              onJumpToStep={(step) => setOrderWizardStep(orderId, step)}
             />
           )}
         </div>
@@ -191,7 +194,7 @@ export function OrderPage() {
                 {currentStep === 'goods' ? 'Review summary' : 'Continue'}
               </button>
             ) : (
-              <button className="btn btn-primary" onClick={() => setCurrentStep('coffees')}>
+              <button className="btn btn-primary" onClick={() => setOrderWizardStep(orderId, 'coffees')}>
                 Edit coffees
               </button>
             )}
