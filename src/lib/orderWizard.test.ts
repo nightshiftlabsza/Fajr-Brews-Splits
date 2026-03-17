@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { Order } from '../types';
+import type { BagAllocationDraft } from './orderWizard';
+import type { CoffeeLot, Order } from '../types';
 import {
+  collapseBagDraftsToShares,
+  expandLotToBagDrafts,
   getInitialShareGramsForNewBuyer,
   getLotAssignmentMode,
+  getLotBagStatus,
   getSuggestedWizardStep,
   isStepComplete,
+  validateBagDrafts,
   validateCoffeeStep,
   validateGoodsStep,
   validateSetupStep,
@@ -45,6 +50,21 @@ const baseOrder: Order = {
   createdAt: '2026-03-17T00:00:00.000Z',
   updatedAt: '2026-03-17T00:00:00.000Z',
 };
+
+function makeLot(overrides: Partial<CoffeeLot> = {}): CoffeeLot {
+  return {
+    id: 'lot-1',
+    name: 'Kenya AA',
+    foreignPricePerBag: 18.5,
+    gramsPerBag: 250,
+    quantity: 2,
+    shares: [
+      { id: 'share-1', personId: 'person-1', shareGrams: 250 },
+      { id: 'share-2', personId: 'person-2', shareGrams: 250 },
+    ],
+    ...overrides,
+  };
+}
 
 describe('orderWizard helpers', () => {
   it('requires only setup essentials in step 1', () => {
@@ -112,5 +132,188 @@ describe('orderWizard helpers', () => {
     expect(getSuggestedWizardStep({ ...baseOrder, goodsTotalZar: 0 })).toBe('goods');
     expect(getSuggestedWizardStep({ ...baseOrder, lots: [] })).toBe('coffees');
     expect(getSuggestedWizardStep({ ...baseOrder, payerId: null })).toBe('setup');
+  });
+});
+
+describe('bag-draft serialization helpers', () => {
+  it('round-trips two full bags with one buyer per bag', () => {
+    const lot = makeLot();
+    const bags = expandLotToBagDrafts(lot);
+
+    expect(bags).toHaveLength(2);
+    expect(bags[0].mode).toBe('single');
+    expect(bags[0].participants[0]).toMatchObject({ personId: 'person-1', shareGrams: 250 });
+    expect(bags[1].mode).toBe('single');
+    expect(bags[1].participants[0]).toMatchObject({ personId: 'person-2', shareGrams: 250 });
+
+    expect(collapseBagDraftsToShares(bags)).toEqual(lot.shares);
+  });
+
+  it('round-trips one full bag plus one split bag', () => {
+    const lot = makeLot({
+      shares: [
+        { id: 'share-1', personId: 'person-1', shareGrams: 250 },
+        { id: 'share-2', personId: 'person-2', shareGrams: 125 },
+        { id: 'share-3', personId: 'person-3', shareGrams: 125 },
+      ],
+    });
+
+    const bags = expandLotToBagDrafts(lot);
+
+    expect(bags[0].mode).toBe('single');
+    expect(bags[1].mode).toBe('split');
+    expect(bags[1].participants.map((participant) => participant.personId)).toEqual(['person-2', 'person-3']);
+    expect(bags[1].participants.map((participant) => participant.shareGrams)).toEqual([125, 125]);
+
+    expect(collapseBagDraftsToShares(bags)).toEqual(lot.shares);
+  });
+
+  it('round-trips arbitrary serialized shares across bag boundaries', () => {
+    const lot = makeLot({
+      shares: [
+        { id: 'share-1', personId: 'person-1', shareGrams: 300 },
+        { id: 'share-2', personId: 'person-2', shareGrams: 200 },
+      ],
+    });
+
+    const bags = expandLotToBagDrafts(lot);
+
+    expect(bags[0].mode).toBe('single');
+    expect(bags[0].participants[0]).toMatchObject({ personId: 'person-1', shareGrams: 250 });
+    expect(bags[1].mode).toBe('split');
+    expect(bags[1].participants.map((participant) => participant.personId)).toEqual(['person-1', 'person-2']);
+    expect(bags[1].participants.map((participant) => participant.shareGrams)).toEqual([50, 200]);
+
+    expect(collapseBagDraftsToShares(bags)).toEqual(lot.shares);
+  });
+
+  it('preserves repeated split patterns through share serialization', () => {
+    const bags: BagAllocationDraft[] = [
+      {
+        id: 'bag-0',
+        bagIndex: 0,
+        mode: 'split',
+        participants: [
+          { id: 'bp-1', personId: 'person-1', shareGrams: 125, sourceShareId: 'share-1' },
+          { id: 'bp-2', personId: 'person-2', shareGrams: 125, sourceShareId: 'share-2' },
+        ],
+      },
+      {
+        id: 'bag-1',
+        bagIndex: 1,
+        mode: 'split',
+        participants: [
+          { id: 'bp-3', personId: 'person-1', shareGrams: 125, sourceShareId: 'share-1' },
+          { id: 'bp-4', personId: 'person-2', shareGrams: 125, sourceShareId: 'share-2' },
+        ],
+      },
+    ];
+
+    const shares = collapseBagDraftsToShares(bags);
+    expect(shares).toEqual([
+      { id: 'share-1', personId: 'person-1', shareGrams: 250 },
+      { id: 'share-2', personId: 'person-2', shareGrams: 250 },
+    ]);
+
+    const reexpanded = expandLotToBagDrafts(makeLot({ shares }));
+    expect(reexpanded.map((bag) => bag.mode)).toEqual(['single', 'single']);
+    expect(reexpanded[0].participants[0].personId).toBe('person-1');
+    expect(reexpanded[1].participants[0].personId).toBe('person-2');
+  });
+
+  it('preserves assigned bags and appends empty bags when quantity increases', () => {
+    const lot = makeLot({
+      quantity: 3,
+    });
+
+    const bags = expandLotToBagDrafts(lot);
+    expect(bags).toHaveLength(3);
+    expect(bags[0].participants[0].personId).toBe('person-1');
+    expect(bags[1].participants[0].personId).toBe('person-2');
+    expect(bags[2].participants).toEqual([]);
+
+    const status = getLotBagStatus(bags, 250);
+    expect(status.label).toBe('1 bag still needs a buyer');
+  });
+});
+
+describe('bag-draft validation', () => {
+  it('rejects an unassigned single-owner bag', () => {
+    const bags: BagAllocationDraft[] = [
+      { id: 'bag-0', bagIndex: 0, mode: 'single', participants: [] },
+    ];
+
+    expect(validateBagDrafts(bags, 250)).toEqual([
+      'Bag 1: buyer is required.',
+    ]);
+  });
+
+  it('rejects an under-assigned split bag', () => {
+    const bags: BagAllocationDraft[] = [
+      {
+        id: 'bag-0',
+        bagIndex: 0,
+        mode: 'split',
+        participants: [
+          { id: 'bp-1', personId: 'person-1', shareGrams: 100, sourceShareId: 'share-1' },
+          { id: 'bp-2', personId: 'person-2', shareGrams: 100, sourceShareId: 'share-2' },
+        ],
+      },
+    ];
+
+    expect(validateBagDrafts(bags, 250)).toEqual([
+      'Bag 1: shared bag grams must total exactly 250g.',
+    ]);
+  });
+
+  it('rejects an over-assigned split bag', () => {
+    const bags: BagAllocationDraft[] = [
+      {
+        id: 'bag-0',
+        bagIndex: 0,
+        mode: 'split',
+        participants: [
+          { id: 'bp-1', personId: 'person-1', shareGrams: 150, sourceShareId: 'share-1' },
+          { id: 'bp-2', personId: 'person-2', shareGrams: 150, sourceShareId: 'share-2' },
+        ],
+      },
+    ];
+
+    expect(validateBagDrafts(bags, 250)).toEqual([
+      'Bag 1: shared bag grams must total exactly 250g.',
+    ]);
+  });
+
+  it('passes a fully assigned bag set and keeps coffee-step validation green after serialization', () => {
+    const bags: BagAllocationDraft[] = [
+      {
+        id: 'bag-0',
+        bagIndex: 0,
+        mode: 'single',
+        participants: [{ id: 'bp-1', personId: 'person-1', shareGrams: 250, sourceShareId: 'share-1' }],
+      },
+      {
+        id: 'bag-1',
+        bagIndex: 1,
+        mode: 'split',
+        participants: [
+          { id: 'bp-2', personId: 'person-2', shareGrams: 125, sourceShareId: 'share-2' },
+          { id: 'bp-3', personId: 'person-3', shareGrams: 125, sourceShareId: 'share-3' },
+        ],
+      },
+    ];
+
+    expect(validateBagDrafts(bags, 250)).toEqual([]);
+
+    const order: Order = {
+      ...baseOrder,
+      lots: [
+        makeLot({
+          shares: collapseBagDraftsToShares(bags),
+        }),
+      ],
+    };
+    expect(validateCoffeeStep(order)).toEqual([]);
+    expect(isStepComplete(order, 'coffees')).toBe(true);
   });
 });

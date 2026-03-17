@@ -504,6 +504,10 @@ tr:hover td {
   border-radius: var(--radius-full);
 }
 
+.grams-badge.is-compact {
+  white-space: nowrap;
+}
+
 .grams-badge-ok      { background: var(--color-paid-bg);    color: var(--color-paid); }
 .grams-badge-warn    { background: var(--color-partial-bg); color: var(--color-partial); }
 .grams-badge-error   { background: var(--color-unpaid-bg);  color: var(--color-unpaid); }
@@ -1014,6 +1018,65 @@ tr:hover td {
   border: 1px solid var(--color-border);
   color: var(--color-text-secondary);
   font-size: 0.84rem;
+}
+
+.bag-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.bag-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-radius: 18px;
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-surface-raised));
+}
+
+.bag-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.bag-card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.bag-card-meta {
+  margin-top: var(--space-1);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.bag-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.bag-split-note.is-complete {
+  background: var(--color-paid-bg);
+  color: var(--color-paid);
+  border-color: color-mix(in srgb, var(--color-paid) 24%, transparent);
+}
+
+.bag-split-note.is-warning {
+  background: var(--color-partial-bg);
+  color: var(--color-partial);
+  border-color: color-mix(in srgb, var(--color-partial) 24%, transparent);
+}
+
+.bag-split-note.is-error {
+  background: var(--color-unpaid-bg);
+  color: var(--color-unpaid);
+  border-color: color-mix(in srgb, var(--color-unpaid) 24%, transparent);
 }
 
 .wizard-protection-list {
