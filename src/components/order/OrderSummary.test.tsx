@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Order, Person } from '../../types';
+import { OrderSummary } from './OrderSummary';
 
 const mockStoreState = {
   people: [] as Person[],
@@ -20,12 +21,6 @@ vi.mock('../../store/appStore', () => ({
     },
   ),
 }));
-
-vi.mock('./SettlementPacks', () => ({
-  SettlementPacks: () => <div data-testid="settlement-packs">Settlement packs mounted</div>,
-}));
-
-import { OrderSummary } from './OrderSummary';
 
 const people: Person[] = [
   {
@@ -84,8 +79,8 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
   };
 }
 
-function clickButtonByText(container: HTMLElement, label: string) {
-  const button = Array.from(container.querySelectorAll('button')).find((candidate) => candidate.textContent?.trim() === label);
+function clickButtonByText(container: HTMLElement, label: string, index = 0) {
+  const button = Array.from(container.querySelectorAll('button')).filter((candidate) => candidate.textContent?.trim() === label)[index];
   if (!button) {
     throw new Error(`Could not find button with label "${label}".`);
   }
@@ -118,7 +113,7 @@ describe('OrderSummary', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the settlement action hub inside the summary step', () => {
+  it('renders the summary step as the three-zone settlement hub', () => {
     act(() => {
       root.render(
         <OrderSummary
@@ -129,9 +124,63 @@ describe('OrderSummary', () => {
       );
     });
 
-    expect(container.textContent).toContain('Summary');
-    expect(container.textContent).toContain('Settlement packs mounted');
+    expect(container.textContent).toContain('Order overview');
+    expect(container.textContent).toContain('People settlement');
+    expect(container.textContent).toContain('Finalize order');
     expect(container.textContent).toContain('Save to Past Orders');
+    expect(container.textContent).not.toContain('Payment state');
+    expect(container.textContent).not.toContain('Invoices and sharing');
+    expect(container.textContent).toContain('Download PDF');
+    expect(container.textContent).toContain('WhatsApp');
+    expect(container.textContent).toContain('Email');
+    expect(container.textContent).toContain('Copy payment summary');
+  });
+
+  it('keeps invoice previews collapsed by default and reveals them when expanded', () => {
+    act(() => {
+      root.render(
+        <OrderSummary
+          order={makeOrder()}
+          onJumpToStep={() => undefined}
+          onFinalize={() => undefined}
+        />,
+      );
+    });
+
+    expect(container.textContent).not.toContain('Payment Instructions');
+
+    clickButtonByText(container, 'View details');
+
+    expect(container.textContent).toContain('Payment Instructions');
+  });
+
+  it('updates payment status from the per-person settlement row', async () => {
+    act(() => {
+      root.render(
+        <OrderSummary
+          order={makeOrder()}
+          onJumpToStep={() => undefined}
+          onFinalize={() => undefined}
+        />,
+      );
+    });
+
+    clickButtonByText(container, 'View details');
+    clickButtonByText(container, 'Paid');
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockStoreState.updateOrder).toHaveBeenCalledWith('order-1', {
+      payments: {
+        'person-2': {
+          status: 'paid',
+          amountPaid: 150,
+          datePaid: '2026-03-18',
+        },
+      },
+    });
   });
 
   it('finalizes the order into Past Orders and advances to the next active order', async () => {

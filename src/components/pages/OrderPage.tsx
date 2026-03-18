@@ -100,7 +100,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
       <div className="page-container wizard-page">
         <div className="wizard-empty-panel">
           <div className="empty-state" style={{ paddingTop: 'var(--space-16)' }}>
-            <div className="empty-state-icon">📋</div>
+            <div className="empty-state-icon">[ ]</div>
             <h3>No active order</h3>
             <p>Create a new order to start the guided four-step flow.</p>
             <button className="btn btn-primary btn-lg" onClick={handleNewOrder} disabled={creating}>
@@ -159,10 +159,32 @@ export function OrderPage({ onNavigateToHistory }: Props) {
     if (previousStep) setOrderWizardStep(orderId, previousStep);
   }
 
+  const showSummaryChrome = currentStep === 'summary';
+
   return (
     <div className="page-container wizard-page">
       <div className="wizard-shell">
-        {activeOrders.length > 1 && (
+        {showSummaryChrome ? (
+          <section className="wizard-panel wizard-panel-muted order-summary-switcher">
+            <div className="order-summary-switcher-title">
+              {activeOrders.length > 1 ? 'Active orders' : 'Order tools'}
+            </div>
+            <div className="wizard-chip-row">
+              {activeOrders.length > 1 && activeOrders.map((order) => (
+                <button
+                  key={order.id}
+                  className={`btn btn-sm ${currentOrder.id === order.id ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setCurrentOrderId(order.id)}
+                >
+                  {order.name || 'Untitled order'}
+                </button>
+              ))}
+              <button className="btn btn-ghost btn-sm" onClick={handleNewOrder} disabled={creating}>
+                {creating ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'New order'}
+              </button>
+            </div>
+          </section>
+        ) : activeOrders.length > 1 ? (
           <section className="wizard-panel wizard-panel-muted">
             <div className="wizard-card-header">
               <div>
@@ -175,7 +197,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
               {activeOrders.map((order) => (
                 <button
                   key={order.id}
-                  className={`btn btn-sm ${currentOrder?.id === order.id ? 'btn-primary' : 'btn-secondary'}`}
+                  className={`btn btn-sm ${currentOrder.id === order.id ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => setCurrentOrderId(order.id)}
                 >
                   {order.name || 'Untitled order'}
@@ -183,44 +205,46 @@ export function OrderPage({ onNavigateToHistory }: Props) {
               ))}
             </div>
           </section>
-        )}
+        ) : null}
 
-        <section className="wizard-hero">
-          <div className="wizard-hero-top">
-            <div>
-              <div className="wizard-kicker">Order creation</div>
-              <h2 className="wizard-page-title">{currentOrder.name || 'Untitled order'}</h2>
-              <p className="wizard-page-copy">
-                {formatDateShort(currentOrder.orderDate)} • move from setup into coffees, then fees, then final review.
-              </p>
+        {!showSummaryChrome && (
+          <section className="wizard-hero">
+            <div className="wizard-hero-top">
+              <div>
+                <div className="wizard-kicker">Order creation</div>
+                <h2 className="wizard-page-title">{currentOrder.name || 'Untitled order'}</h2>
+                <p className="wizard-page-copy">
+                  {formatDateShort(currentOrder.orderDate)} - move from setup into coffees, then fees, then final review.
+                </p>
+              </div>
+              <button className="btn btn-secondary btn-sm" onClick={handleNewOrder} disabled={creating}>
+                {creating ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'New order'}
+              </button>
             </div>
-            <button className="btn btn-secondary btn-sm" onClick={handleNewOrder} disabled={creating}>
-              {creating ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'New order'}
-            </button>
-          </div>
 
-          <div className="wizard-progress">
-            {ORDER_WIZARD_STEPS.map((step, index) => {
-              const unlocked = index <= maxUnlockedStepIndex || step.id === currentStep;
-              const complete = stepCompleteMap[step.id];
-              const active = step.id === currentStep;
-              return (
-                <button
-                  key={step.id}
-                  className={`wizard-progress-step ${active ? 'is-active' : ''} ${complete ? 'is-complete' : ''}`}
-                  onClick={() => goToStep(step.id)}
-                  disabled={!unlocked}
-                >
-                  <span className="wizard-progress-index">{complete ? '✓' : index + 1}</span>
-                  <span className="wizard-progress-text">
-                    <span className="wizard-progress-label">{step.shortLabel}</span>
-                    <span className="wizard-progress-subtitle">{step.label}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
+            <div className="wizard-progress">
+              {ORDER_WIZARD_STEPS.map((step, index) => {
+                const unlocked = index <= maxUnlockedStepIndex || step.id === currentStep;
+                const complete = stepCompleteMap[step.id];
+                const active = step.id === currentStep;
+                return (
+                  <button
+                    key={step.id}
+                    className={`wizard-progress-step ${active ? 'is-active' : ''} ${complete ? 'is-complete' : ''}`}
+                    onClick={() => goToStep(step.id)}
+                    disabled={!unlocked}
+                  >
+                    <span className="wizard-progress-index">{complete ? 'v' : index + 1}</span>
+                    <span className="wizard-progress-text">
+                      <span className="wizard-progress-label">{step.shortLabel}</span>
+                      <span className="wizard-progress-subtitle">{step.label}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         <div className="wizard-stage">
           {currentStep === 'setup' && <OrderSetup order={currentOrder} registerCommit={(commit) => { commitStepRef.current = commit; }} />}
@@ -235,17 +259,17 @@ export function OrderPage({ onNavigateToHistory }: Props) {
           )}
         </div>
 
-        <div className="wizard-footer">
-          <div className="wizard-footer-copy">
-            {validationErrors.length > 0 ? validationErrors[0] : ORDER_WIZARD_STEPS[currentStepIndex].label}
-          </div>
+        {!showSummaryChrome && (
+          <div className="wizard-footer">
+            <div className="wizard-footer-copy">
+              {validationErrors.length > 0 ? validationErrors[0] : ORDER_WIZARD_STEPS[currentStepIndex].label}
+            </div>
 
-          <div className="wizard-footer-actions">
-            <button className="btn btn-ghost" onClick={handleBack} disabled={currentStepIndex === 0}>
-              Back
-            </button>
+            <div className="wizard-footer-actions">
+              <button className="btn btn-ghost" onClick={handleBack} disabled={currentStepIndex === 0}>
+                Back
+              </button>
 
-            {currentStep !== 'summary' ? (
               <button
                 className="btn btn-primary"
                 onClick={handleNext}
@@ -253,13 +277,9 @@ export function OrderPage({ onNavigateToHistory }: Props) {
               >
                 {currentStep === 'goods' ? 'Review summary' : 'Continue'}
               </button>
-            ) : (
-              <button className="btn btn-primary" onClick={() => setOrderWizardStep(orderId, 'coffees')}>
-                Edit coffees
-              </button>
-            )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -1314,11 +1314,137 @@ tr:hover td {
   font-variant-numeric: tabular-nums;
 }
 
+.order-summary-overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.order-summary-overview-top {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.order-summary-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.summary-status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.summary-status-pill.is-ready {
+  background: color-mix(in srgb, var(--color-accent-light) 60%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-accent) 24%, var(--color-border));
+  color: var(--color-text-primary);
+}
+
+.summary-status-pill.is-active {
+  background: color-mix(in srgb, var(--color-warning-bg) 72%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-warning) 24%, var(--color-border));
+  color: var(--color-warning);
+}
+
+.summary-status-pill.is-complete {
+  background: var(--color-paid-bg);
+  border-color: color-mix(in srgb, var(--color-paid) 24%, var(--color-border));
+  color: var(--color-paid);
+}
+
+.summary-progress-compact {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.summary-progress-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-bg));
+}
+
+.summary-progress-item.is-complete {
+  border-color: color-mix(in srgb, var(--color-paid) 18%, var(--color-border));
+  background: color-mix(in srgb, var(--color-paid-bg) 72%, var(--color-surface));
+}
+
+.summary-progress-item.is-active {
+  border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent-light) 54%, var(--color-surface));
+}
+
+.summary-progress-index {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+}
+
+.summary-progress-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.order-summary-metrics {
+  gap: var(--space-3);
+}
+
+.order-summary-note {
+  margin-top: calc(var(--space-2) * -1);
+}
+
 .summary-payment-card {
   padding: var(--space-4);
   border-radius: 18px;
   border: 1px solid var(--color-border);
   background: color-mix(in srgb, var(--color-surface) 96%, var(--color-bg));
+}
+
+.settlement-payment-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.settlement-payment-grid {
+  margin-top: 0;
+}
+
+.settlement-payment-note {
+  padding: var(--space-4);
+  border-radius: 16px;
+  border: 1px dashed var(--color-border);
+  background: color-mix(in srgb, var(--color-surface-raised) 75%, var(--color-surface));
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
 }
 
 .settlement-pack-list {
@@ -1350,6 +1476,10 @@ tr:hover td {
   flex-wrap: wrap;
 }
 
+.settlement-pack-primary {
+  min-width: 0;
+}
+
 .settlement-pack-name {
   display: flex;
   align-items: center;
@@ -1374,16 +1504,23 @@ tr:hover td {
 }
 
 .settlement-pack-total {
-  font-size: 1rem;
+  font-size: 1.125rem;
   font-weight: 700;
   color: var(--color-text-primary);
   font-variant-numeric: tabular-nums;
 }
 
+.settlement-pack-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
 .settlement-pack-actions {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+  flex: 1;
 }
 
 .settlement-pack-actions .invoice-actions {
@@ -1395,6 +1532,57 @@ tr:hover td {
 .settlement-pack-preview {
   border-top: 1px solid var(--color-border);
   padding-top: var(--space-4);
+}
+
+.settlement-pack-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.95fr) minmax(0, 1.4fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.settlement-pack-detail-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.settlement-pack-detail-header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.settlement-pack-detail-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.settlement-pack-detail-copy {
+  margin-top: 4px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.order-summary-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.order-summary-switcher-title {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.order-finalize-panel .wizard-card-header {
+  margin-bottom: var(--space-2);
 }
 
 .wizard-footer {
@@ -1434,13 +1622,20 @@ input[type=number]::-webkit-outer-spin-button {
   .wizard-progress {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .summary-progress-compact,
+  .settlement-pack-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 768px) {
   .wizard-card-grid,
   .wizard-summary-grid,
   .coffee-lot-summary-grid,
-  .buyer-row {
+  .buyer-row,
+  .summary-progress-compact,
+  .settlement-pack-detail-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1467,6 +1662,12 @@ input[type=number]::-webkit-outer-spin-button {
 
   .settlement-pack-topline {
     justify-content: flex-start;
+  }
+
+  .order-summary-overview-top,
+  .settlement-pack-toolbar,
+  .settlement-pack-detail-header {
+    align-items: stretch;
   }
 
   .wizard-modal-sheet {
