@@ -129,15 +129,19 @@ describe('calculate() — updated fee model scenario', () => {
     expect(feeIds).toContain(FEE_CUSTOMS);
   });
 
-  it('Person A lot breakdowns should contain value-based fee distribution', () => {
+  it('Person A lot breakdowns should contain fee distribution that reconciles to their person-level fees', () => {
     const aCalc = result.personCalcs[PERSON_A];
-    // Total value based fees for A = 500 * (A share of value)
-    // A total foreign = 18*250/250*1 + 28*250/500*1 = 18 + 14 = 32
-    // Total foreign = 64
-    // A value share = 32/64 = 0.5
-    // A total value-based fee = 0.5 * 500 = 250
-    const sumLotFees = aCalc.lotBreakdowns.reduce((s, lb) => s + lb.valueBasedFeesZar, 0);
-    expect(sumLotFees).toBeCloseTo(250, 4);
+    const sumLotFees = aCalc.lotBreakdowns.reduce((sum, lb) => sum + lb.feesZar, 0);
+    expect(sumLotFees).toBeCloseTo(aCalc.feesZar, 6);
+    expect(aCalc.lotBreakdowns.reduce((sum, lb) => sum + lb.totalZar, 0)).toBeCloseTo(aCalc.totalPreRound, 6);
+  });
+
+  it('distributes all fees down to coffee totals without breaking order reconciliation', () => {
+    expect(result.lotCalcs).toHaveLength(2);
+    expect(result.lotCalcs.reduce((sum, lot) => sum + lot.goodsZar, 0)).toBeCloseTo(result.totalGoodsZar, 6);
+    expect(result.lotCalcs.reduce((sum, lot) => sum + lot.feesZar, 0)).toBeCloseTo(result.totalFeesZar, 6);
+    expect(result.lotCalcs.reduce((sum, lot) => sum + lot.totalZar, 0)).toBeCloseTo(result.totalOrderZar, 6);
+    expect(result.lotCalcs.every((lot) => lot.totalZar === lot.goodsZar + lot.feesZar)).toBe(true);
   });
 
   it('sum of all totalFinal values should equal goodsTotal + all fees = R1800', () => {

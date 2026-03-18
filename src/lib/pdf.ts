@@ -85,6 +85,7 @@ export async function generateInvoicePDF(
 
   let y = 20;
   const pageW = 210;
+  const roundingAdjustment = calc.totalFinal - calc.totalPreRound;
 
   // ── Header ────────────────────────────────────────────────
   setFill(doc, ACCENT);
@@ -150,11 +151,15 @@ export async function generateInvoicePDF(
     }
     y += 5;
 
-    // Amount and per-gram
+    setTextColor(doc, MID);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text(`Beans ${formatZAR(lb.goodsZar)}${lb.feesZar > 0 ? `  •  Fees ${formatZAR(lb.feesZar)}` : ''}`, 24, y);
+
     setTextColor(doc, DARK);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
-    doc.text(formatZAR(lb.goodsZar), 186, y - 1, { align: 'right' });
+    doc.text(formatZAR(lb.totalZar), 186, y, { align: 'right' });
 
     y += 5;
 
@@ -166,13 +171,13 @@ export async function generateInvoicePDF(
 
   // ── Fees Summary ──────────────────────────────────────────
   if (calc.feeBreakdowns.length > 0) {
-    y = sectionHeader(doc, 'Fees', y);
+    y = sectionHeader(doc, 'Included Allocated Fees', y);
 
     for (const fb of calc.feeBreakdowns) {
       setTextColor(doc, MID);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
-      doc.text(fb.label, 24, y);
+      doc.text(`${fb.label} (${fb.allocationType === 'value_based' ? 'value-based' : 'shared'})`, 24, y);
       setTextColor(doc, DARK);
       doc.text(formatZAR(fb.amountZar), 186, y, { align: 'right' });
       y += 5.5;
@@ -186,9 +191,9 @@ export async function generateInvoicePDF(
 
   y = sectionHeader(doc, 'Summary', y);
 
-  y = row(doc, 'Coffee subtotal', formatZAR(calc.goodsZar), y);
-  if (calc.feesZar > 0) {
-    y = row(doc, 'Fees subtotal', formatZAR(calc.feesZar), y);
+  y = row(doc, 'Coffee + allocated fees', formatZAR(calc.totalPreRound), y);
+  if (Math.abs(roundingAdjustment) > 0.001) {
+    y = row(doc, 'Rounding adjustment', formatZAR(roundingAdjustment), y);
   }
 
   y += 2;

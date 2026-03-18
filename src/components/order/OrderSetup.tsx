@@ -383,7 +383,7 @@ export function OrderSetup({ order, registerCommit }: Props) {
         )}
 
         <span className="field-hint">
-          Access is matched automatically using the email on each included person. People without matching app accounts will still appear in the order, but they will not be able to open a PIN-protected order yet.
+          Access is matched automatically using saved email, phone, or a cautious confirmed name match on each included person. People without matching app accounts will still appear in the order, but they will not be able to open a PIN-protected order yet.
         </span>
 
         {order.pinRequired ? (

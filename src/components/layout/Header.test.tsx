@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockStoreState = {
   user: { email: 'owner@example.com' },
+  signOut: vi.fn(),
 };
 
 vi.mock('../../store/appStore', () => ({
@@ -31,6 +32,7 @@ describe('Header navigation', () => {
     });
     container.remove();
     vi.clearAllMocks();
+    mockStoreState.signOut = vi.fn();
   });
 
   it('shows Orders and Past Orders without a separate invoice tab', () => {
@@ -45,5 +47,27 @@ describe('Header navigation', () => {
     expect(labels).toContain('Order');
     expect(labels).toContain('Past Orders');
     expect(labels).not.toContain('Invoices');
+  });
+
+  it('opens the profile menu in the top-right and signs out from there', async () => {
+    act(() => {
+      root.render(<Header currentTab="order" onTabChange={() => undefined} />);
+    });
+
+    const trigger = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('owner@example.com'));
+    expect(trigger).toBeTruthy();
+
+    act(() => {
+      trigger!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const logoutButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Logout');
+    expect(logoutButton).toBeTruthy();
+
+    act(() => {
+      logoutButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(mockStoreState.signOut).toHaveBeenCalledTimes(1);
   });
 });

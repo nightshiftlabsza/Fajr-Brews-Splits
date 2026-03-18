@@ -120,6 +120,7 @@ interface AppStore {
   setCurrentOrderId: (id: string | null) => void;
   setOrderWizardStep: (orderId: string, step: OrderWizardStep) => void;
   setOrderProtectionOpen: (orderId: string, open: boolean) => void;
+  flushOrderWrites: (orderId: string) => Promise<void>;
 
   // ── Workspace member actions ──────────────────────────────
   fetchWorkspaceMembers: () => Promise<void>;
@@ -706,6 +707,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   // ── Workspace Members ─────────────────────────────────────
+  flushOrderWrites: async (orderId) => {
+    await (orderWriteChains.get(orderId) ?? Promise.resolve());
+  },
+
   fetchWorkspaceMembers: async () => {
     const { data, error } = await supabase
       .from('workspace_members')

@@ -11,6 +11,7 @@ const mockStoreState = {
   orders: [] as Order[],
   updateOrder: vi.fn(),
   setCurrentOrderId: vi.fn(),
+  flushOrderWrites: vi.fn(),
 };
 
 vi.mock('../../store/appStore', () => ({
@@ -103,6 +104,7 @@ describe('OrderSummary', () => {
     mockStoreState.orders = [makeOrder(), makeOrder({ id: 'order-2', name: 'April Drop' })];
     mockStoreState.updateOrder = vi.fn().mockResolvedValue(undefined);
     mockStoreState.setCurrentOrderId = vi.fn();
+    mockStoreState.flushOrderWrites = vi.fn().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -202,6 +204,7 @@ describe('OrderSummary', () => {
     });
 
     expect(mockStoreState.updateOrder).toHaveBeenCalledWith('order-1', { isArchived: true });
+    expect(mockStoreState.flushOrderWrites).toHaveBeenCalledWith('order-1');
     expect(mockStoreState.setCurrentOrderId).toHaveBeenCalledWith('order-2');
     expect(onFinalize).toHaveBeenCalledTimes(1);
   });

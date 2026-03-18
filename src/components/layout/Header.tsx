@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import type { AppTab } from '../../types';
 
@@ -20,8 +21,31 @@ const PARTICIPANT_TABS: { id: AppTab; label: string }[] = [
 ];
 
 export function Header({ currentTab, onTabChange, participantOnly = false }: HeaderProps) {
-  const { user } = useAppStore();
+  const { user, signOut } = useAppStore();
   const tabs = participantOnly ? PARTICIPANT_TABS : FULL_TABS;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const userInitials = useMemo(() => {
+    const email = user?.email?.trim();
+    if (!email) return 'FB';
+    return email.slice(0, 2).toUpperCase();
+  }, [user?.email]);
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, []);
+
+  async function handleSignOut() {
+    setMenuOpen(false);
+    await signOut();
+  }
 
   return (
     <>
@@ -47,9 +71,29 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
             ))}
           </nav>
 
-          <div className="nav-user">
+          <div className="nav-user" ref={menuRef}>
             <div className="realtime-dot" title="Realtime sync active" />
-            <span className="nav-user-email">{user?.email}</span>
+            <button
+              type="button"
+              className={`nav-user-trigger ${menuOpen ? 'is-open' : ''}`}
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+            >
+              <span className="nav-user-avatar" aria-hidden="true">{userInitials}</span>
+              <span className="nav-user-email">{user?.email}</span>
+              <span className="nav-user-caret" aria-hidden="true">▾</span>
+            </button>
+
+            {menuOpen && (
+              <div className="nav-user-menu" role="menu">
+                <div className="nav-user-menu-label">Signed in as</div>
+                <div className="nav-user-menu-email">{user?.email}</div>
+                <button type="button" className="nav-user-menu-action" onClick={() => void handleSignOut()}>
+                  Logout
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -161,6 +205,41 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
           align-items: center;
           gap: var(--space-2);
           flex-shrink: 0;
+          position: relative;
+        }
+
+        .nav-user-trigger {
+          display: inline-flex;
+          align-items: center;
+          gap: var(--space-2);
+          min-height: 40px;
+          padding: 6px 10px 6px 8px;
+          border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
+          border-radius: 999px;
+          background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+          cursor: pointer;
+          transition: border-color var(--transition-fast), background-color var(--transition-fast), box-shadow var(--transition-fast);
+        }
+
+        .nav-user-trigger:hover,
+        .nav-user-trigger.is-open {
+          border-color: color-mix(in srgb, var(--color-accent) 24%, var(--color-border));
+          background: var(--color-surface-raised);
+          box-shadow: var(--shadow-xs);
+        }
+
+        .nav-user-avatar {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          border-radius: 999px;
+          background: color-mix(in srgb, var(--color-accent) 16%, white);
+          color: var(--color-accent);
+          font-size: 0.6875rem;
+          font-weight: 800;
+          letter-spacing: 0.08em;
         }
 
         .nav-user-email {
@@ -170,6 +249,60 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+        }
+
+        .nav-user-caret {
+          color: var(--color-text-muted);
+          font-size: 0.75rem;
+        }
+
+        .nav-user-menu {
+          position: absolute;
+          top: calc(100% + 10px);
+          right: 0;
+          min-width: 220px;
+          padding: 10px;
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-md);
+          background: var(--color-surface);
+          box-shadow: var(--shadow-lg);
+        }
+
+        .nav-user-menu-label {
+          font-size: 0.6875rem;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--color-text-muted);
+        }
+
+        .nav-user-menu-email {
+          margin-top: 6px;
+          margin-bottom: 10px;
+          font-size: 0.875rem;
+          font-weight: 600;
+          color: var(--color-text-primary);
+          word-break: break-word;
+        }
+
+        .nav-user-menu-action {
+          width: 100%;
+          min-height: 40px;
+          padding: 10px 12px;
+          border: none;
+          border-radius: var(--radius-sm);
+          background: color-mix(in srgb, var(--color-surface-raised) 92%, transparent);
+          color: var(--color-text-primary);
+          font-size: 0.875rem;
+          font-weight: 600;
+          text-align: left;
+          cursor: pointer;
+          transition: background-color var(--transition-fast), color var(--transition-fast);
+        }
+
+        .nav-user-menu-action:hover {
+          background: color-mix(in srgb, var(--color-accent-light) 88%, white);
+          color: var(--color-accent);
         }
 
         .nav-bottom {

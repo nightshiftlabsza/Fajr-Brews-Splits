@@ -186,8 +186,21 @@ export interface LotPersonBreakdown {
   gramsPerBag: number;
   lotQuantity: number;
   goodsZar: number;
-  valueBasedFeesZar: number; // Split by each person's share of foreign list value
+  feesZar: number;
+  totalZar: number;
   splitWith: string[]; // names of other people sharing this specific bag
+}
+
+export interface LotCalculation {
+  lotId: string;
+  lotName: string;
+  quantity: number;
+  gramsPerBag: number;
+  totalGrams: number;
+  goodsZar: number;
+  feesZar: number;
+  totalZar: number;
+  finalZarPerBag: number;
 }
 
 export interface FeePersonBreakdown {
@@ -217,6 +230,7 @@ export interface CalculationResult {
   totalFeesZar: number;
   roundingAbsorbed: number; // positive = payer paid more, negative = payer paid less
   lotGoodsZar: Record<string, number>; // lotId → allocated ZAR amount
+  lotCalcs: LotCalculation[];
   isValid: boolean;
   validationErrors: string[];
 }

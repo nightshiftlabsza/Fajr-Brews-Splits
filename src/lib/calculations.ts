@@ -6,6 +6,7 @@ import type {
   CalculationResult,
   LotPersonBreakdown,
   FeePersonBreakdown,
+  LotCalculation,
 } from '../types';
 import { expandLotToBagDrafts } from './orderWizard';
 
@@ -80,6 +81,7 @@ export function calculate(
       totalFeesZar: 0,
       roundingAbsorbed: 0,
       lotGoodsZar: {},
+      lotCalcs: [],
       isValid: false,
       validationErrors,
     };
@@ -162,7 +164,8 @@ export function calculate(
           gramsPerBag: lot.gramsPerBag,
           lotQuantity: lot.quantity,
           goodsZar: shareGoodsZar,
-          valueBasedFeesZar: 0, // will be updated below
+          feesZar: 0,
+          totalZar: shareGoodsZar,
           splitWith: otherSharers,
         });
       }
@@ -190,9 +193,6 @@ export function calculate(
   const personFeeBreakdowns: Record<string, FeePersonBreakdown[]> = {};
   for (const pid of personIds) personFeeBreakdowns[pid] = [];
 
-  // Track total value-based fee amount to distribute to lots
-  let totalValueBasedFeesZarAcrossOrder = 0;
-
   for (const fee of order.fees) {
     const feeBreakdownForLater: Record<string, number> = {};
 
@@ -204,7 +204,6 @@ export function calculate(
         feeBreakdownForLater[pid] = perPerson;
       }
     } else if (fee.allocationType === 'value_based') {
-      totalValueBasedFeesZarAcrossOrder += fee.amountZar;
       for (const pid of personIds) {
         const share = coffeeValueForeignShare[pid] * fee.amountZar;
         personFees[pid] += share;
@@ -226,24 +225,75 @@ export function calculate(
     }
   }
 
-  // Distribute value-based fees to person lot breakdowns
+  // Distribute each person's already-allocated fees down to their coffee lines.
+  // This keeps line items reconciling to person totals without changing the
+  // existing order-level fee models.
   for (const pid of personIds) {
-    const pValueShare = coffeeValueForeignShare[pid];
-    if (pValueShare === 0 || totalValueBasedFeesZarAcrossOrder === 0) continue;
+    const lineItems = personLotBreakdowns[pid];
+    if (lineItems.length === 0 || personGoods[pid] <= 0) {
+      continue;
+    }
 
-    for (const lb of personLotBreakdowns[pid]) {
-      const lot = order.lots.find(l => l.id === lb.lotId);
-      if (!lot) continue;
+    for (const feeBreakdown of personFeeBreakdowns[pid]) {
+      for (const lb of lineItems) {
+        const lineShare = lb.goodsZar / personGoods[pid];
+        const lineFee = lineShare * feeBreakdown.amountZar;
+        lb.feesZar += lineFee;
+      }
+    }
 
-      const lotTotalGrams = lot.gramsPerBag * lot.quantity;
-      const lotTotalForeign = lot.foreignPricePerBag * lot.quantity;
-      const totalOrderForeign = order.lots.reduce((s, l) => s + l.foreignPricePerBag * l.quantity, 0);
-
-      const shareForeign = (lb.shareGrams / lotTotalGrams) * lotTotalForeign;
-      const shareValueBasedFee = (shareForeign / totalOrderForeign) * totalValueBasedFeesZarAcrossOrder;
-      lb.valueBasedFeesZar = shareValueBasedFee;
+    for (const lb of lineItems) {
+      lb.totalZar = lb.goodsZar + lb.feesZar;
     }
   }
+
+  const lotCalcMap = new Map<string, LotCalculation>();
+  for (const lot of order.lots) {
+    lotCalcMap.set(lot.id, {
+      lotId: lot.id,
+      lotName: lot.name,
+      quantity: lot.quantity,
+      gramsPerBag: lot.gramsPerBag,
+      totalGrams: lot.gramsPerBag * lot.quantity,
+      goodsZar: 0,
+      feesZar: 0,
+      totalZar: 0,
+      finalZarPerBag: 0,
+    });
+  }
+
+  for (const pid of personIds) {
+    for (const lb of personLotBreakdowns[pid]) {
+      const lotCalc = lotCalcMap.get(lb.lotId);
+      if (!lotCalc) continue;
+      lotCalc.goodsZar += lb.goodsZar;
+      lotCalc.feesZar += lb.feesZar;
+      lotCalc.totalZar += lb.totalZar;
+    }
+  }
+
+  const lotCalcs = order.lots
+    .map((lot) => {
+      const lotCalc = lotCalcMap.get(lot.id);
+      if (!lotCalc) {
+        return {
+          lotId: lot.id,
+          lotName: lot.name,
+          quantity: lot.quantity,
+          gramsPerBag: lot.gramsPerBag,
+          totalGrams: lot.gramsPerBag * lot.quantity,
+          goodsZar: 0,
+          feesZar: 0,
+          totalZar: 0,
+          finalZarPerBag: 0,
+        };
+      }
+
+      return {
+        ...lotCalc,
+        finalZarPerBag: lot.quantity > 0 ? lotCalc.totalZar / lot.quantity : 0,
+      };
+    });
 
   // ── F. Totals pre-round (full precision) ──────────────────────
   const personTotalsPreRound: Record<string, number> = {};
@@ -309,6 +359,7 @@ export function calculate(
     totalFeesZar,
     roundingAbsorbed,
     lotGoodsZar,
+    lotCalcs,
     isValid: true,
     validationErrors: [],
   };

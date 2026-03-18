@@ -6,6 +6,7 @@ import { formatZAR } from '../../lib/formatters';
 import { ORDER_WIZARD_STEPS, type OrderWizardStep } from '../../lib/orderWizard';
 import { getNextActiveOrderId } from '../../lib/orderLifecycle';
 import { SettlementPacks } from './SettlementPacks';
+import { CoffeeCostSummary } from './CoffeeCostSummary';
 
 interface Props {
   order: Order;
@@ -14,7 +15,7 @@ interface Props {
 }
 
 export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
-  const { people, orders, updateOrder, setCurrentOrderId } = useAppStore();
+  const { people, orders, updateOrder, setCurrentOrderId, flushOrderWrites } = useAppStore();
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
 
@@ -47,7 +48,18 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
     setFinalizing(true);
     setFinalizeError(null);
     try {
+      await flushOrderWrites(order.id);
+
+      const latestOrder = useAppStore.getState().orders.find((candidate) => candidate.id === order.id) ?? order;
+      const latestPersonNames = Object.fromEntries(useAppStore.getState().people.map((person) => [person.id, person.name]));
+      const latestResult = calculate(latestOrder, latestPersonNames);
+
+      if (!latestResult.isValid) {
+        throw new Error(latestResult.validationErrors[0] ?? 'This order still has unsaved or incomplete data.');
+      }
+
       await updateOrder(order.id, { isArchived: true });
+      await flushOrderWrites(order.id);
       const nextActiveOrderId = getNextActiveOrderId(useAppStore.getState().orders, order.id);
       setCurrentOrderId(nextActiveOrderId);
       onFinalize();
@@ -108,6 +120,11 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
         )}
       </section>
 
+      <CoffeeCostSummary
+        result={result}
+        description="Each coffee total includes its allocated share of the order fees, so the per-bag cost reconciles to the saved settlement."
+      />
+
       <SettlementPacks
         order={order}
         people={people}
@@ -121,7 +138,7 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
           <div>
             <div className="wizard-card-title">Finalize order</div>
             <p className="wizard-card-copy">
-              Save this order into Past Orders when the settlement is ready to leave the active workspace.
+              Save the latest order state first, then move it into Past Orders as a completed record.
             </p>
           </div>
         </div>

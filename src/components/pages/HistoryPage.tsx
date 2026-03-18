@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import type { Order } from '../../types';
 import { formatDateShort, formatZAR, todayISO } from '../../lib/formatters';
 import { calculate } from '../../lib/calculations';
 import { getActiveOrders, getPastOrders } from '../../lib/orderLifecycle';
+import { getPastOrderSummary } from '../../lib/pastOrderSummary';
 import { SettlementPacks } from '../order/SettlementPacks';
+import { CoffeeCostSummary } from '../order/CoffeeCostSummary';
 
 interface Props {
   onNavigateToOrder: () => void;
@@ -13,7 +15,7 @@ interface Props {
 
 export function HistoryPage({ onNavigateToOrder, participantOnly = false }: Props) {
   const {
-    orders, people, deleteOrder, createOrder,
+    orders, people, deleteOrder, createOrder, updateOrder, setCurrentOrderId, setOrderWizardStep,
     exportJSON, importJSON, setLastExportDate,
     verifyOrderPin, unlockedOrderIds,
   } = useAppStore();
@@ -25,14 +27,18 @@ export function HistoryPage({ onNavigateToOrder, participantOnly = false }: Prop
   const [pinVerifying, setPinVerifying] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
-  const personNames = Object.fromEntries(people.map((p) => [p.id, p.name]));
+  const personNames = useMemo(
+    () => Object.fromEntries(people.map((person) => [person.id, person.name])),
+    [people],
+  );
   const activeOrders = getActiveOrders(orders);
   const pastOrders = getPastOrders(orders);
   const pinOrder = pinOrderId ? pastOrders.find((order) => order.id === pinOrderId) ?? null : null;
   const selectedOrder = selectedOrderId ? pastOrders.find((order) => order.id === selectedOrderId) ?? null : null;
+  const selectedOrderSummary = selectedOrder ? getPastOrderSummary(selectedOrder, personNames) : null;
   const selectedOrderResult = selectedOrder ? calculate(selectedOrder, personNames) : null;
 
-  async function handleReview(order: Order) {
+  async function handleOpenOrder(order: Order) {
     if (order.pinRequired && !unlockedOrderIds.has(order.id)) {
       setPinOrderId(order.id);
       setPin('');
@@ -40,7 +46,9 @@ export function HistoryPage({ onNavigateToOrder, participantOnly = false }: Prop
       setPinAttempts(0);
       return;
     }
-    setSelectedOrderId((current) => (current === order.id ? null : order.id));
+
+    setSelectedOrderId(order.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   async function handlePinSubmit() {
@@ -50,8 +58,10 @@ export function HistoryPage({ onNavigateToOrder, participantOnly = false }: Prop
       setPinError('PIN must be 4-6 digits.');
       return;
     }
+
     setPinVerifying(true);
     setPinError('');
+
     try {
       const ok = await verifyOrderPin(pinOrderId, pin);
       if (ok) {
@@ -60,11 +70,11 @@ export function HistoryPage({ onNavigateToOrder, participantOnly = false }: Prop
       } else {
         const nextAttempts = pinAttempts + 1;
         setPinAttempts(nextAttempts);
-        if (nextAttempts >= 5) {
-          setPinError('Too many incorrect attempts. Please try again later.');
-        } else {
-          setPinError(`Incorrect PIN. ${5 - nextAttempts} attempt${5 - nextAttempts === 1 ? '' : 's'} remaining.`);
-        }
+        setPinError(
+          nextAttempts >= 5
+            ? 'Too many incorrect attempts. Please try again later.'
+            : `Incorrect PIN. ${5 - nextAttempts} attempt${5 - nextAttempts === 1 ? '' : 's'} remaining.`,
+        );
         setPin('');
       }
     } catch {
@@ -82,9 +92,18 @@ export function HistoryPage({ onNavigateToOrder, participantOnly = false }: Prop
       payments: {},
       pinRequired: false,
     });
+
     if (newOrder) {
       onNavigateToOrder();
     }
+  }
+
+  async function handleEdit(order: Order) {
+    await updateOrder(order.id, { isArchived: false });
+    setCurrentOrderId(order.id);
+    setOrderWizardStep(order.id, 'summary');
+    setSelectedOrderId(null);
+    onNavigateToOrder();
   }
 
   async function handleDelete(order: Order) {
@@ -97,10 +116,10 @@ export function HistoryPage({ onNavigateToOrder, participantOnly = false }: Prop
     const json = exportJSON();
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `fajr-brews-backup-${todayISO()}.json`;
-    a.click();
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `fajr-brews-backup-${todayISO()}.json`;
+    anchor.click();
     URL.revokeObjectURL(url);
     setLastExportDate(new Date().toISOString());
   }
@@ -109,8 +128,8 @@ export function HistoryPage({ onNavigateToOrder, participantOnly = false }: Prop
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json,application/json';
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
+    input.onchange = async (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
       if (!file) return;
       const text = await file.text();
       try {
@@ -139,9 +158,10 @@ export function HistoryPage({ onNavigateToOrder, participantOnly = false }: Prop
                 Enter PIN
               </div>
               <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
-                "{pinOrder.name}" requires a PIN to review.
+                "{pinOrder.name}" requires a PIN to view.
               </div>
             </div>
+
             <div className="field" style={{ marginBottom: 'var(--space-4)' }}>
               <input
                 className="input"
@@ -150,18 +170,20 @@ export function HistoryPage({ onNavigateToOrder, participantOnly = false }: Prop
                 pattern="[0-9]*"
                 placeholder="Enter 4-6 digit PIN"
                 value={pin}
-                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                onKeyDown={(e) => e.key === 'Enter' && !pinVerifying && pinAttempts < 5 && handlePinSubmit()}
+                onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                onKeyDown={(event) => event.key === 'Enter' && !pinVerifying && pinAttempts < 5 && handlePinSubmit()}
                 autoFocus
                 style={{ textAlign: 'center', fontSize: '1.25rem', letterSpacing: '0.3em' }}
                 disabled={pinAttempts >= 5 || pinVerifying}
               />
             </div>
+
             {pinError && (
               <div className="alert alert-error" style={{ marginBottom: 'var(--space-4)', fontSize: '0.8125rem' }}>
                 {pinError}
               </div>
             )}
+
             <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
               <button
                 className="btn btn-primary"
@@ -171,10 +193,7 @@ export function HistoryPage({ onNavigateToOrder, participantOnly = false }: Prop
               >
                 {pinVerifying ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Unlock'}
               </button>
-              <button
-                className="btn btn-ghost"
-                onClick={() => setPinOrderId(null)}
-              >
+              <button className="btn btn-ghost" onClick={() => setPinOrderId(null)}>
                 Cancel
               </button>
             </div>
@@ -187,10 +206,11 @@ export function HistoryPage({ onNavigateToOrder, participantOnly = false }: Prop
           <h2 style={{ marginBottom: 4 }}>{participantOnly ? 'My Orders' : 'Past Orders'}</h2>
           <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
             {participantOnly
-              ? 'Orders you were part of appear here automatically, including ones created before your account existed.'
-              : 'Finalized orders live here with their full settlement details intact.'}
+              ? 'Saved orders you were part of stay here as finished records.'
+              : 'Finalized orders stay here as saved records with their settlement history intact.'}
           </p>
         </div>
+
         {!participantOnly && (
           <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
             <button className="btn btn-secondary btn-sm" onClick={handleExport}>
@@ -205,32 +225,115 @@ export function HistoryPage({ onNavigateToOrder, participantOnly = false }: Prop
         )}
       </div>
 
+      {selectedOrder && selectedOrderSummary && (
+        <div style={{ marginBottom: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          <section className="wizard-panel">
+            <div className="wizard-card-header" style={{ alignItems: 'flex-start', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+              <div>
+                <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Saved order</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                  <div className="wizard-card-title">{selectedOrder.name}</div>
+                  <span className="wizard-badge wizard-badge-accent">Finalized</span>
+                </div>
+                <p className="wizard-card-copy" style={{ marginTop: 'var(--space-2)' }}>
+                  Finalized on {formatDateShort(selectedOrder.orderDate)}.
+                </p>
+              </div>
+
+              <div className="wizard-chip-row">
+                <button className="btn btn-secondary btn-sm" onClick={() => setSelectedOrderId(null)}>
+                  Back to archive
+                </button>
+                {!participantOnly && (
+                  <button className="btn btn-primary btn-sm" onClick={() => void handleEdit(selectedOrder)}>
+                    Edit order
+                  </button>
+                )}
+                {!participantOnly && (
+                  <button className="btn btn-ghost btn-sm" onClick={() => void handleDuplicate(selectedOrder)}>
+                    Duplicate as copy
+                  </button>
+                )}
+                {!participantOnly && (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ color: 'var(--color-unpaid)' }}
+                    onClick={() => void handleDelete(selectedOrder)}
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="wizard-summary-grid">
+              <SummaryMetric label="Participants" value={String(selectedOrderSummary.participantCount)} />
+              <SummaryMetric label="Coffee lots" value={String(selectedOrderSummary.lotCount)} />
+              <SummaryMetric label="Grand total" value={formatZAR(selectedOrderSummary.totalZar)} emphasize />
+              <SummaryMetric
+                label="Payments"
+                value={`${selectedOrderSummary.paidCount}/${selectedOrderSummary.participantCount || 0} paid`}
+              />
+            </div>
+
+            {!selectedOrderSummary.isValid && (
+              <div className="alert alert-warning" style={{ marginTop: 'var(--space-4)' }}>
+                This saved order is missing some finalized detail fields, so the archive is showing the best available snapshot.
+              </div>
+            )}
+
+            {!participantOnly && (
+              <div className="wizard-inline-note" style={{ marginTop: 'var(--space-4)' }}>
+                Edit order reopens this same saved order in Active Orders. Save it back to Past Orders again when the changes are complete.
+              </div>
+            )}
+          </section>
+
+          {selectedOrderResult?.isValid && (
+            <>
+              <CoffeeCostSummary
+                result={selectedOrderResult}
+                title="Saved coffee totals"
+                description="Each coffee keeps its fee-inclusive final cost, including the per-bag amount saved with this order."
+              />
+              <SettlementPacks
+                order={selectedOrder}
+                people={people}
+                result={selectedOrderResult}
+                title="Saved order details"
+                description="Review the full settlement, payment state, and invoice/share actions exactly as saved."
+              />
+            </>
+          )}
+        </div>
+      )}
+
       {participantOnly && activeOrders.length > 0 && (
         <section style={{ marginBottom: 'var(--space-6)' }}>
           <div style={{ marginBottom: 'var(--space-3)' }}>
             <div className="section-label" style={{ marginBottom: 4 }}>Active Orders</div>
             <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
-              These orders are still in progress, and your participation is already recognized.
+              Orders you are already included in, before they move into the saved archive.
             </p>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             {activeOrders.map((order) => {
-              const result = calculate(order, personNames);
-              const participantCount = result.personIds.length;
+              const summary = getPastOrderSummary(order, personNames);
 
               return (
                 <div key={order.id} className="card">
                   <div className="card-padded" style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
                     <div>
-                      <div style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{order.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                        <div style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{order.name}</div>
+                        <span className="wizard-badge wizard-badge-info">In progress</span>
+                      </div>
                       <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
-                        {formatDateShort(order.orderDate)} · {participantCount} participant{participantCount !== 1 ? 's' : ''}
+                        {formatDateShort(order.orderDate)} · {summary.participantCount} participant{summary.participantCount !== 1 ? 's' : ''} · {summary.lotCount} lot{summary.lotCount !== 1 ? 's' : ''}
                       </div>
                     </div>
-                    <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', alignSelf: 'center' }}>
-                      Still in progress
-                    </div>
+                    <div style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{formatZAR(summary.totalZar)}</div>
                   </div>
                 </div>
               );
@@ -243,17 +346,15 @@ export function HistoryPage({ onNavigateToOrder, participantOnly = false }: Prop
         <div className="empty-state">
           <div className="empty-state-icon">📂</div>
           <h3>No past orders yet</h3>
-          <p>{participantOnly ? 'Older finalized orders will appear here when you were included in them.' : 'Finalize an order from the Summary step and it will land here.'}</p>
+          <p>{participantOnly ? 'Completed orders you were included in will appear here automatically.' : 'Finalize an order and it will appear here as a saved record.'}</p>
         </div>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
         {pastOrders.map((order) => {
+          const summary = getPastOrderSummary(order, personNames);
           const isSelected = selectedOrderId === order.id;
           const isLocked = order.pinRequired && !unlockedOrderIds.has(order.id);
-          const result = calculate(order, personNames);
-          const participantCount = result.personIds.length;
-          const paidCount = result.personIds.filter((pid) => order.payments[pid]?.status === 'paid').length;
 
           return (
             <div
@@ -261,97 +362,69 @@ export function HistoryPage({ onNavigateToOrder, participantOnly = false }: Prop
               className="card"
               style={isSelected ? { borderColor: 'var(--color-accent)', boxShadow: '0 0 0 2px color-mix(in srgb, var(--color-accent) 15%, transparent)' } : {}}
             >
-              <div className="card-padded">
-                <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 4 }}>
-                      <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {order.name}
+              <button
+                type="button"
+                onClick={() => void handleOpenOrder(order)}
+                style={{
+                  width: '100%',
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                }}
+              >
+                <div className="card-padded">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap', marginBottom: 6 }}>
+                        <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--color-text-primary)' }}>
+                          {order.name}
+                        </div>
+                        <span className="wizard-badge wizard-badge-accent">Finalized</span>
+                        {isLocked && <span title="PIN protected" style={{ fontSize: '0.875rem' }}>🔒</span>}
                       </div>
-                      {isLocked && (
-                        <span title="PIN protected" style={{ fontSize: '0.875rem', flexShrink: 0 }}>🔒</span>
-                      )}
-                      {isSelected && (
-                        <span style={{
-                          fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.1em',
-                          textTransform: 'uppercase', color: 'var(--color-accent)',
-                          background: 'var(--color-accent-light)', padding: '2px 8px', borderRadius: 'var(--radius-full)',
-                          flexShrink: 0,
-                        }}>
-                          Reviewing
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
-                      {formatDateShort(order.orderDate)} · {participantCount} participant{participantCount !== 1 ? 's' : ''} · {order.lots.length} lot{order.lots.length !== 1 ? 's' : ''}
-                    </div>
-                    {result.isValid && !isLocked && (
-                      <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', marginTop: 4 }}>
-                        {formatZAR(result.totalOrderZar)} total · <span style={{ color: paidCount === participantCount && participantCount > 0 ? 'var(--color-paid)' : 'var(--color-text-muted)' }}>{paidCount}/{participantCount} paid</span>
-                      </div>
-                    )}
-                    {isLocked && (
-                      <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 4, fontStyle: 'italic' }}>
-                        Enter PIN to review details
-                      </div>
-                    )}
-                  </div>
 
-                  <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0, flexWrap: 'wrap' }}>
-                    <button className="btn btn-primary btn-sm" onClick={() => handleReview(order)}>
-                      {isLocked ? '🔒 Unlock' : isSelected ? 'Hide details' : 'Review settlement'}
-                    </button>
-                    {!participantOnly && (
-                      <button className="btn btn-secondary btn-sm" onClick={() => handleDuplicate(order)}>
-                        Reopen as copy
-                      </button>
-                    )}
-                    {!participantOnly && (
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        style={{ color: 'var(--color-unpaid)' }}
-                        onClick={() => handleDelete(order)}
-                      >
-                        Delete
-                      </button>
-                    )}
+                      <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+                        {formatDateShort(order.orderDate)} · {summary.participantCount} participant{summary.participantCount !== 1 ? 's' : ''} · {summary.lotCount} lot{summary.lotCount !== 1 ? 's' : ''}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap', marginTop: 'var(--space-3)', fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
+                        <span><strong>{formatZAR(summary.totalZar)}</strong> total</span>
+                        <span>{summary.paidCount}/{summary.participantCount} paid</span>
+                        {summary.partialCount > 0 && <span>{summary.partialCount} partial</span>}
+                        {!summary.isValid && <span style={{ color: 'var(--color-warning)' }}>Needs review</span>}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', fontWeight: 700, color: 'var(--color-accent)' }}>
+                      View order
+                    </div>
                   </div>
                 </div>
-              </div>
+              </button>
+
+              {!participantOnly && (
+                <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', padding: '0 var(--space-4) var(--space-4)' }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => void handleEdit(order)}>
+                    Edit order
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => void handleDuplicate(order)}>
+                    Duplicate as copy
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ color: 'var(--color-unpaid)' }}
+                    onClick={() => void handleDelete(order)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}
       </div>
-
-      {selectedOrder && selectedOrderResult?.isValid && (
-        <div style={{ marginTop: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          <section className="wizard-panel">
-            <div className="wizard-card-header">
-              <div>
-                <div className="wizard-card-title">{selectedOrder.name}</div>
-                <p className="wizard-card-copy">
-                  Finalized on {formatDateShort(selectedOrder.orderDate)} · {formatZAR(selectedOrderResult.totalOrderZar)} total
-                </p>
-              </div>
-            </div>
-
-            <div className="wizard-summary-grid">
-              <SummaryMetric label="Goods subtotal" value={formatZAR(selectedOrderResult.totalGoodsZar)} />
-              <SummaryMetric label="Fees subtotal" value={formatZAR(selectedOrderResult.totalFeesZar)} />
-              <SummaryMetric label="Grand total" value={formatZAR(selectedOrderResult.totalOrderZar)} emphasize />
-              <SummaryMetric label="People charged" value={String(selectedOrderResult.personIds.length)} />
-            </div>
-          </section>
-
-          <SettlementPacks
-            order={selectedOrder}
-            people={people}
-            result={selectedOrderResult}
-            title="Past order settlement"
-            description="Download the PDFs again or resend a payment request without pulling this order back into the active workflow."
-          />
-        </div>
-      )}
     </div>
   );
 }
