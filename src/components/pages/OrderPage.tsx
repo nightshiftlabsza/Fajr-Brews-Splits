@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useAppStore, getCurrentOrder } from '../../store/appStore';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAppStore } from '../../store/appStore';
 import { OrderSetup } from '../order/OrderSetup';
 import { CoffeeLotsSection } from '../order/CoffeeLotsSection';
 import { GoodsAndFees } from '../order/GoodsAndFees';
 import { OrderSummary } from '../order/OrderSummary';
+import { getActiveOrders, getPreferredActiveOrderId } from '../../lib/orderLifecycle';
 import {
   ORDER_WIZARD_STEPS,
   type OrderWizardStep,
@@ -23,11 +24,20 @@ const STEP_INDEX: Record<OrderWizardStep, number> = {
   summary: 3,
 };
 
-export function OrderPage() {
-  const { createOrder, setCurrentOrderId, setOrderWizardStep, sessionUi } = useAppStore();
-  const currentOrder = useAppStore(getCurrentOrder);
+interface Props {
+  onNavigateToHistory: () => void;
+}
+
+export function OrderPage({ onNavigateToHistory }: Props) {
+  const { orders, currentOrderId, createOrder, setCurrentOrderId, setOrderWizardStep, sessionUi } = useAppStore();
+  const activeOrders = useMemo(() => getActiveOrders(orders), [orders]);
+  const currentOrder = useMemo(
+    () => activeOrders.find((order) => order.id === currentOrderId) ?? activeOrders[0] ?? null,
+    [activeOrders, currentOrderId],
+  );
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const commitStepRef = useRef<(() => Promise<void>) | null>(null);
   const currentStep = currentOrder
     ? sessionUi.orderWizardSteps[currentOrder.id] ?? getSuggestedWizardStep(currentOrder)
     : 'setup';
@@ -39,6 +49,13 @@ export function OrderPage() {
     }
     setOrderWizardStep(currentOrder.id, getSuggestedWizardStep(currentOrder));
   }, [currentOrder?.id, savedStep, setOrderWizardStep]);
+
+  useEffect(() => {
+    const preferredOrderId = getPreferredActiveOrderId(orders, currentOrderId);
+    if (preferredOrderId !== currentOrderId) {
+      setCurrentOrderId(preferredOrderId);
+    }
+  }, [orders, currentOrderId, setCurrentOrderId]);
 
   async function handleNewOrder() {
     setCreating(true);
@@ -66,12 +83,16 @@ export function OrderPage() {
     }
   }
 
-  const validationErrors = useMemo(() => {
-    if (!currentOrder) return [];
-    if (currentStep === 'setup') return validateSetupStep(currentOrder);
-    if (currentStep === 'coffees') return validateCoffeeStep(currentOrder);
-    if (currentStep === 'goods') return validateGoodsStep(currentOrder);
+  function getStepErrors(order: typeof currentOrder, step: OrderWizardStep): string[] {
+    if (!order) return [];
+    if (step === 'setup') return validateSetupStep(order);
+    if (step === 'coffees') return validateCoffeeStep(order);
+    if (step === 'goods') return validateGoodsStep(order);
     return [];
+  }
+
+  const validationErrors = useMemo(() => {
+    return getStepErrors(currentOrder, currentStep);
   }, [currentOrder, currentStep]);
 
   if (!currentOrder) {
@@ -106,19 +127,34 @@ export function OrderPage() {
     summary: isStepComplete(currentOrder, 'summary'),
   };
 
-  function goToStep(step: OrderWizardStep) {
+  async function flushCurrentStep() {
+    if (commitStepRef.current) {
+      await commitStepRef.current();
+    }
+  }
+
+  async function goToStep(step: OrderWizardStep) {
     if (STEP_INDEX[step] <= maxUnlockedStepIndex || step === currentStep) {
+      if (step !== currentStep) {
+        await flushCurrentStep();
+      }
       setOrderWizardStep(orderId, step);
     }
   }
 
-  function handleNext() {
-    if (currentStep === 'summary' || validationErrors.length > 0) return;
+  async function handleNext() {
+    if (currentStep === 'summary') return;
+    await flushCurrentStep();
+    const { orders: latestOrders, currentOrderId: latestCurrentOrderId } = useAppStore.getState();
+    const freshOrder = getActiveOrders(latestOrders).find((order) => order.id === latestCurrentOrderId) ?? getActiveOrders(latestOrders)[0] ?? null;
+    const freshErrors = getStepErrors(freshOrder, currentStep);
+    if (freshErrors.length > 0) return;
     const nextStep = ORDER_WIZARD_STEPS[currentStepIndex + 1]?.id;
     if (nextStep) setOrderWizardStep(orderId, nextStep);
   }
 
-  function handleBack() {
+  async function handleBack() {
+    await flushCurrentStep();
     const previousStep = ORDER_WIZARD_STEPS[currentStepIndex - 1]?.id;
     if (previousStep) setOrderWizardStep(orderId, previousStep);
   }
@@ -126,6 +162,29 @@ export function OrderPage() {
   return (
     <div className="page-container wizard-page">
       <div className="wizard-shell">
+        {activeOrders.length > 1 && (
+          <section className="wizard-panel wizard-panel-muted">
+            <div className="wizard-card-header">
+              <div>
+                <div className="wizard-card-title">Active orders</div>
+                <p className="wizard-card-copy">Switch between draft and in-progress orders without leaving the workbench.</p>
+              </div>
+            </div>
+
+            <div className="wizard-chip-row" style={{ marginTop: 'var(--space-4)' }}>
+              {activeOrders.map((order) => (
+                <button
+                  key={order.id}
+                  className={`btn btn-sm ${currentOrder?.id === order.id ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setCurrentOrderId(order.id)}
+                >
+                  {order.name || 'Untitled order'}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className="wizard-hero">
           <div className="wizard-hero-top">
             <div>
@@ -164,13 +223,14 @@ export function OrderPage() {
         </section>
 
         <div className="wizard-stage">
-          {currentStep === 'setup' && <OrderSetup order={currentOrder} />}
+          {currentStep === 'setup' && <OrderSetup order={currentOrder} registerCommit={(commit) => { commitStepRef.current = commit; }} />}
           {currentStep === 'coffees' && <CoffeeLotsSection order={currentOrder} />}
-          {currentStep === 'goods' && <GoodsAndFees order={currentOrder} />}
+          {currentStep === 'goods' && <GoodsAndFees order={currentOrder} registerCommit={(commit) => { commitStepRef.current = commit; }} />}
           {currentStep === 'summary' && (
             <OrderSummary
               order={currentOrder}
               onJumpToStep={(step) => setOrderWizardStep(orderId, step)}
+              onFinalize={onNavigateToHistory}
             />
           )}
         </div>

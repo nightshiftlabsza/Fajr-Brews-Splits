@@ -8,9 +8,8 @@ interface HeaderProps {
 
 const TABS: { id: AppTab; label: string }[] = [
   { id: 'order', label: 'Order' },
-  { id: 'invoices', label: 'Invoices' },
   { id: 'people', label: 'People' },
-  { id: 'history', label: 'History' },
+  { id: 'history', label: 'Past Orders' },
   { id: 'settings', label: 'Settings' },
 ];
 

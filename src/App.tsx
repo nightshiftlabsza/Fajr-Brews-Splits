@@ -5,7 +5,6 @@ import { AuthPage } from './components/auth/AuthPage';
 import { PendingAccess } from './components/auth/PendingAccess';
 import { Header } from './components/layout/Header';
 import { OrderPage } from './components/pages/OrderPage';
-import { InvoicesPage } from './components/pages/InvoicesPage';
 import { PeoplePage } from './components/pages/PeoplePage';
 import { HistoryPage } from './components/pages/HistoryPage';
 import { ResetPasswordPage } from './components/pages/ResetPasswordPage';
@@ -49,6 +48,10 @@ function updatePath(
   window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
+export function getAuthReinitializeOptions(isInitialized: boolean): { silent?: boolean } {
+  return isInitialized ? { silent: true } : {};
+}
+
 export default function App() {
   const { initialize, isInitialized, isLoading, user, membershipStatus } = useAppStore();
   const [currentTab, setCurrentTab] = useState<AppTab>('order');
@@ -90,7 +93,7 @@ export default function App() {
         }
       }
 
-      void initialize();
+      void initialize(getAuthReinitializeOptions(useAppStore.getState().isInitialized));
     });
 
     return () => {
@@ -200,10 +203,7 @@ export default function App() {
 
       <main className="app-main">
         <section className={`app-page ${currentTab === 'order' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'order'}>
-          <OrderPage />
-        </section>
-        <section className={`app-page ${currentTab === 'invoices' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'invoices'}>
-          <InvoicesPage onNavigateToOrder={() => setCurrentTab('order')} />
+          <OrderPage onNavigateToHistory={() => setCurrentTab('history')} />
         </section>
         <section className={`app-page ${currentTab === 'people' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'people'}>
           <PeoplePage />

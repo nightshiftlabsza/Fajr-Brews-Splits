@@ -62,7 +62,7 @@ export function InvoiceActions({ order, person, payer, calc }: Props) {
             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
           </svg>
         )}
-        PDF
+        Download PDF
       </button>
 
       <button className="btn btn-secondary btn-sm" onClick={handleCopy} disabled={copying}>
@@ -73,7 +73,7 @@ export function InvoiceActions({ order, person, payer, calc }: Props) {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
             </svg>
-            Copy
+            Copy payment summary
           </>
         )}
       </button>

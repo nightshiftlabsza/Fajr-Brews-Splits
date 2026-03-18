@@ -76,13 +76,6 @@ export function formatGrams(grams: number): string {
   return `${grams}g`;
 }
 
-// ─── Effective price per gram ─────────────────────────────────
-
-export function effectivePricePerGram(totalZar: number, grams: number): string {
-  if (!grams) return '';
-  return formatZAR(totalZar / grams) + '/g';
-}
-
 // ─── PDF-safe filename ────────────────────────────────────────
 
 export function pdfFilename(orderName: string, personName: string): string {

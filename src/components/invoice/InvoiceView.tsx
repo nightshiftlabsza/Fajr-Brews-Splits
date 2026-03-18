@@ -1,5 +1,5 @@
 import type { Order, Person, PersonCalculation } from '../../types';
-import { formatZAR, formatDate, resolveReference, effectivePricePerGram } from '../../lib/formatters';
+import { formatZAR, formatDate, resolveReference } from '../../lib/formatters';
 
 interface Props {
   order: Order;
@@ -81,12 +81,12 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
           {calc.lotBreakdowns.map((lb) => {
             const lineTotal = lb.goodsZar + lb.valueBasedFeesZar;
             return (
-              <div className="invoice-lot" key={lb.lotId}>
+              <div className="invoice-lot" key={lb.id}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                   <div>
                     <div className="invoice-lot-name">{lb.lotName}</div>
                     <div className="invoice-lot-meta">
-                      {lb.shareGrams}g · {lb.shareGrams >= lb.gramsPerBag ? 'own bag' : 'split bag'}
+                      Bag {lb.bagIndex + 1} · {lb.shareGrams}g · {lb.bagMode === 'split' ? 'split bag' : 'own bag'}
                     </div>
                     {lb.splitWith.length > 0 && (
                       <div className="invoice-lot-split">
@@ -106,9 +106,6 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--color-text-primary)' }}>
                       {formatZAR(lineTotal)}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
-                      {effectivePricePerGram(lineTotal, lb.shareGrams)}
                     </div>
                   </div>
                 </div>

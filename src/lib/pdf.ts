@@ -1,5 +1,5 @@
 import type { Order, Person, PersonCalculation } from '../types';
-import { formatZAR, formatDate, resolveReference, effectivePricePerGram, pdfFilename } from './formatters';
+import { formatZAR, formatDate, resolveReference, pdfFilename } from './formatters';
 
 // Dynamic import to keep initial bundle smaller
 async function getJsPDF() {
@@ -141,7 +141,7 @@ export async function generateInvoicePDF(
     setTextColor(doc, MID);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
-    const gramsLine = `${lb.shareGrams}g · from ${lb.gramsPerBag}g bag`;
+    const gramsLine = `Bag ${lb.bagIndex + 1} · ${lb.shareGrams}g · ${lb.bagMode === 'split' ? 'split bag' : 'own bag'}`;
     doc.text(gramsLine, 24, y);
 
     if (lb.splitWith.length > 0) {
@@ -156,13 +156,6 @@ export async function generateInvoicePDF(
     doc.setFontSize(9);
     doc.text(formatZAR(lb.goodsZar), 186, y - 1, { align: 'right' });
 
-    setTextColor(doc, MID);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    const epg = effectivePricePerGram(lb.goodsZar, lb.shareGrams);
-    if (epg) {
-      doc.text(`Effective price: ${epg}`, 24, y);
-    }
     y += 5;
 
     hLine(doc, y, 24, 186);

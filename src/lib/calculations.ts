@@ -7,6 +7,7 @@ import type {
   LotPersonBreakdown,
   FeePersonBreakdown,
 } from '../types';
+import { expandLotToBagDrafts } from './orderWizard';
 
 // ─── Validation ───────────────────────────────────────────────
 
@@ -100,8 +101,12 @@ export function calculate(
   // ── B. Collect all participating person IDs ──────────────────
   const personIdSet = new Set<string>();
   for (const lot of order.lots) {
-    for (const share of lot.shares) {
-      if (share.shareGrams > 0) personIdSet.add(share.personId);
+    for (const bag of expandLotToBagDrafts(lot)) {
+      for (const participant of bag.participants) {
+        if (participant.personId.trim() && participant.shareGrams > 0) {
+          personIdSet.add(participant.personId);
+        }
+      }
     }
   }
   const personIds = Array.from(personIdSet);
@@ -123,35 +128,44 @@ export function calculate(
     const lotTotalGrams = lot.gramsPerBag * lot.quantity;
     const lotTotalForeign = lot.foreignPricePerBag * lot.quantity;
     const lotGoodsZarForThisLot = lotGoodsZar[lot.id];
+    const lotBags = expandLotToBagDrafts(lot);
 
-    for (const share of lot.shares) {
-      const pid = share.personId;
-      if (!personIds.includes(pid)) continue;
+    for (const bag of lotBags) {
+      const bagSplitWith = bag.participants
+        .filter((participant) => participant.personId.trim().length > 0 && participant.shareGrams > 0)
+        .map((participant) => participant.personId);
 
-      // B. Goods ZAR for this share
-      const shareGoodsZar = (share.shareGrams / lotTotalGrams) * lotGoodsZarForThisLot;
-      personGoods[pid] += shareGoodsZar;
-      personTotalGrams[pid] += share.shareGrams;
+      for (const participant of bag.participants) {
+        const pid = participant.personId;
+        if (!pid || participant.shareGrams <= 0 || !personIds.includes(pid)) continue;
 
-      // C. Coffee value foreign (for value_based fees)
-      const shareForeign = (share.shareGrams / lotTotalGrams) * lotTotalForeign;
-      personCoffeeValueForeign[pid] += shareForeign;
+        // B. Goods ZAR for this share
+        const shareGoodsZar = (participant.shareGrams / lotTotalGrams) * lotGoodsZarForThisLot;
+        personGoods[pid] += shareGoodsZar;
+        personTotalGrams[pid] += participant.shareGrams;
 
-      // Build lot breakdown for invoices
-      const otherSharers = lot.shares
-        .filter((s) => s.personId !== pid && s.shareGrams > 0)
-        .map((s) => personNames[s.personId] || 'Unknown');
+        // C. Coffee value foreign (for value_based fees)
+        const shareForeign = (participant.shareGrams / lotTotalGrams) * lotTotalForeign;
+        personCoffeeValueForeign[pid] += shareForeign;
 
-      personLotBreakdowns[pid].push({
-        lotId: lot.id,
-        lotName: lot.name,
-        shareGrams: share.shareGrams,
-        gramsPerBag: lot.gramsPerBag,
-        lotQuantity: lot.quantity,
-        goodsZar: shareGoodsZar,
-        valueBasedFeesZar: 0, // will be updated below
-        splitWith: otherSharers,
-      });
+        const otherSharers = bagSplitWith
+          .filter((participantId) => participantId !== pid)
+          .map((participantId) => personNames[participantId] || 'Unknown');
+
+        personLotBreakdowns[pid].push({
+          id: `${lot.id}-${bag.bagIndex}-${participant.id}`,
+          lotId: lot.id,
+          lotName: lot.name,
+          bagIndex: bag.bagIndex,
+          bagMode: bag.mode,
+          shareGrams: participant.shareGrams,
+          gramsPerBag: lot.gramsPerBag,
+          lotQuantity: lot.quantity,
+          goodsZar: shareGoodsZar,
+          valueBasedFeesZar: 0, // will be updated below
+          splitWith: otherSharers,
+        });
+      }
     }
   }
 

@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import type { Order, PayerBank, Person } from '../../types';
 import { todayISO } from '../../lib/formatters';
+import { dedupePeopleById } from '../../lib/storeState';
 
 interface Props {
   order: Order;
+  registerCommit?: (commit: (() => Promise<void>) | null) => void;
 }
 
 function normalizeBank(bank?: Partial<PayerBank> | null): PayerBank {
@@ -45,7 +47,7 @@ function getIncludedPeople(order: Order, people: Person[]): Person[] {
     .filter((person): person is Person => person !== null);
 }
 
-export function OrderSetup({ order }: Props) {
+export function OrderSetup({ order, registerCommit }: Props) {
   const {
     people,
     updateOrder,
@@ -76,6 +78,7 @@ export function OrderSetup({ order }: Props) {
   const bankHydrationRef = useRef(true);
 
   const includedPeople = useMemo(() => getIncludedPeople(order, people), [order, people]);
+  const canonicalPeople = useMemo(() => dedupePeopleById(people), [people]);
 
   useEffect(() => {
     hydrationRef.current = true;
@@ -152,6 +155,37 @@ export function OrderSetup({ order }: Props) {
     }
   }
 
+  async function flushPendingSetupChanges() {
+    const updates: Partial<Order> = {};
+    const trimmedName = name.trim();
+    const normalizedBank = normalizeBank(bank);
+
+    if (trimmedName !== order.name) {
+      updates.name = trimmedName;
+    }
+    if (orderDate !== order.orderDate) {
+      updates.orderDate = orderDate;
+    }
+    if ((payerId || null) !== order.payerId) {
+      updates.payerId = payerId || null;
+    }
+    if (!banksEqual(normalizedBank, normalizeBank(order.payerBank))) {
+      updates.payerBank = normalizedBank;
+    }
+
+    setName(trimmedName);
+    setBank(normalizedBank);
+
+    if (Object.keys(updates).length > 0) {
+      await updateOrder(order.id, updates);
+    }
+  }
+
+  useEffect(() => {
+    registerCommit?.(flushPendingSetupChanges);
+    return () => registerCommit?.(null);
+  }, [registerCommit, flushPendingSetupChanges]);
+
   function handleBankChange(field: keyof PayerBank, value: string) {
     setBank((current) => ({ ...current, [field]: value }));
   }
@@ -214,9 +248,6 @@ export function OrderSetup({ order }: Props) {
           <div>
             <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Step 1</div>
             <h3 className="wizard-card-title">Setup details</h3>
-            <p className="wizard-card-copy">
-              Keep this light. Set the basics, then move straight into coffee lots and buyer assignment.
-            </p>
           </div>
         </div>
 
@@ -258,7 +289,7 @@ export function OrderSetup({ order }: Props) {
             onChange={(event) => handlePayerChange(event.target.value)}
           >
             <option value="">Select payer</option>
-            {people.map((person) => (
+            {canonicalPeople.map((person) => (
               <option key={person.id} value={person.id}>
                 {person.name}
               </option>
@@ -274,7 +305,7 @@ export function OrderSetup({ order }: Props) {
         open={bankOpen}
         onToggle={() => setBankOpen((current) => !current)}
         title="Bank details"
-        summary={bankOpen ? 'Optional payment details for invoices' : 'Optional'}
+        summary={bankOpen ? 'Optional payment details for settlement requests' : 'Optional'}
       >
         <div className="wizard-card-grid">
           <div className="field">

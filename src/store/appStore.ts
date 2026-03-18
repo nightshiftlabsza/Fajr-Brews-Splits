@@ -3,6 +3,14 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { APP_URL, RESET_PASSWORD_PATH } from '../lib/appConfig';
 import type { OrderWizardStep } from '../lib/orderWizard';
 import { supabase, WORKSPACE_ID } from '../lib/supabase';
+import {
+  dedupePeopleById,
+  mergeOrderPatch,
+  sortPeopleByName,
+  upsertOrderById,
+  upsertPersonById,
+} from '../lib/storeState';
+import { getNextActiveOrderId, getPreferredActiveOrderId } from '../lib/orderLifecycle';
 import type {
   Person,
   Order,
@@ -86,7 +94,7 @@ interface AppStore {
   _realtimeChannel: RealtimeChannel | null;
 
   // ── Auth Actions ──────────────────────────────────────────
-  initialize: () => Promise<void>;
+  initialize: (options?: { silent?: boolean }) => Promise<void>;
   signIn: (email: string, password: string) => Promise<string | null>;
   signUp: (email: string, password: string, fullName: string) => Promise<string | null>;
   requestPasswordReset: (email: string) => Promise<string | null>;
@@ -166,6 +174,9 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+const orderWriteChains = new Map<string, Promise<void>>();
+const optimisticOrderSnapshots = new Map<string, Order>();
+
 // ─── Computed getter ─────────────────────────────────────────
 
 export const getCurrentOrder = (state: AppStore): Order | null => {
@@ -195,8 +206,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
   unlockedOrderIds: new Set<string>(),
 
   // ── Initialize ────────────────────────────────────────────
-  initialize: async () => {
-    set({ isLoading: true, error: null });
+  initialize: async (options) => {
+    const silent = options?.silent ?? false;
+    const shouldBlock = !silent || !get().isInitialized;
+
+    if (shouldBlock) {
+      set({ isLoading: true, error: null });
+    } else {
+      set({ error: null });
+    }
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -247,7 +265,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           .order('order_date', { ascending: false }),
       ]);
 
-      const people = (peopleRows as DbPerson[] | null ?? []).map(mapPerson);
+      const people = sortPeopleByName(dedupePeopleById((peopleRows as DbPerson[] | null ?? []).map(mapPerson)));
       const orders = (orderRows as DbOrder[] | null ?? []).map(mapOrder);
 
       await get()._loadSettings(session.user.id);
@@ -262,11 +280,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
       // Validate saved currentOrderId against fetched orders (Bug 4B)
       const savedId = safeLocalStorage.getItem('fb_current_order_id');
-      const currentOrderId = orders.find((o) => o.id === savedId)
-        ? savedId
-        : (orders[0]?.id ?? null);
+      const currentOrderId = getPreferredActiveOrderId(orders, savedId);
       if (currentOrderId && currentOrderId !== savedId) {
         safeLocalStorage.setItem('fb_current_order_id', currentOrderId);
+      } else if (!currentOrderId) {
+        safeLocalStorage.removeItem('fb_current_order_id');
       }
 
       set({
@@ -340,6 +358,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   signOut: async () => {
     get()._teardownRealtime();
+    orderWriteChains.clear();
+    optimisticOrderSnapshots.clear();
     await supabase.auth.signOut();
     set({
       user: null,
@@ -373,7 +393,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (error) throw new Error(error.message);
     if (row) {
       const person = mapPerson(row as DbPerson);
-      set((s) => ({ people: [...s.people, person].sort((a, b) => a.name.localeCompare(b.name)) }));
+      set((s) => ({ people: upsertPersonById(s.people, person) }));
       return person;
     }
     throw new Error('Failed to create person.');
@@ -391,9 +411,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
       .eq('id', id);
 
     if (error) throw new Error(error.message);
-    set((s) => ({
-      people: s.people.map((p) => (p.id === id ? { ...p, ...data } : p)),
-    }));
+    set((s) => {
+      const current = s.people.find((person) => person.id === id);
+      if (!current) {
+        return { people: s.people };
+      }
+
+      return {
+        people: upsertPersonById(s.people, { ...current, ...data }),
+      };
+    });
   },
 
   deletePerson: async (id) => {
@@ -428,7 +455,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (error) throw new Error(error.message);
     if (row) {
       const order = mapOrder(row as DbOrder);
-      set((s) => ({ orders: [order, ...s.orders], currentOrderId: order.id }));
+      set((s) => ({ orders: upsertOrderById(s.orders, order), currentOrderId: order.id }));
       safeLocalStorage.setItem('fb_current_order_id', order.id);
       return order;
     }
@@ -436,6 +463,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   updateOrder: async (id, data) => {
+    const currentOrder = get().orders.find((order) => order.id === id);
+    if (!currentOrder) {
+      return;
+    }
+
+    const optimisticOrder = mergeOrderPatch(currentOrder, data);
+    optimisticOrderSnapshots.set(id, optimisticOrder);
+    set((s) => ({
+      orders: s.orders.map((order) => (order.id === id ? optimisticOrder : order)),
+    }));
+
     const dbData: Record<string, unknown> = {};
     if (data.name !== undefined) dbData.name = data.name;
     if (data.orderDate !== undefined) dbData.order_date = data.orderDate;
@@ -449,21 +487,33 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (data.payments !== undefined) dbData.payments = data.payments;
     if (data.isArchived !== undefined) dbData.is_archived = data.isArchived;
 
-    const { error } = await supabase.from('orders').update(dbData).eq('id', id);
-    if (error) throw new Error(error.message);
+    const previousChain = orderWriteChains.get(id) ?? Promise.resolve();
+    const nextChain = previousChain
+      .catch(() => undefined)
+      .then(async () => {
+        const { error } = await supabase.from('orders').update(dbData).eq('id', id);
+        if (error) throw new Error(error.message);
+      })
+      .finally(() => {
+        if (orderWriteChains.get(id) === nextChain) {
+          orderWriteChains.delete(id);
+          optimisticOrderSnapshots.delete(id);
+        }
+      });
 
-    set((s) => ({
-      orders: s.orders.map((o) => (o.id === id ? { ...o, ...data } : o)),
-    }));
+    orderWriteChains.set(id, nextChain);
+    await nextChain;
   },
 
   deleteOrder: async (id) => {
     const { error } = await supabase.from('orders').delete().eq('id', id);
     if (error) throw new Error(error.message);
+    orderWriteChains.delete(id);
+    optimisticOrderSnapshots.delete(id);
     set((s) => {
       const orders = s.orders.filter((o) => o.id !== id);
       const currentOrderId = s.currentOrderId === id
-        ? (orders[0]?.id ?? null)
+        ? getNextActiveOrderId(orders)
         : s.currentOrderId;
       if (currentOrderId) safeLocalStorage.setItem('fb_current_order_id', currentOrderId);
       else safeLocalStorage.removeItem('fb_current_order_id');
@@ -738,19 +788,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
         { event: '*', schema: 'public', table: 'people', filter: `workspace_id=eq.${workspaceId}` },
         (payload) => {
           try {
-            const { eventType, new: newRow, old: oldRow } = payload;
-            if (eventType === 'INSERT') {
-              const person = mapPerson(newRow as DbPerson);
-              set((s) => ({
-                people: [...s.people.filter((p) => p.id !== person.id), person]
-                  .sort((a, b) => a.name.localeCompare(b.name)),
-              }));
-            } else if (eventType === 'UPDATE') {
-              const person = mapPerson(newRow as DbPerson);
-              set((s) => ({ people: s.people.map((p) => (p.id === person.id ? person : p)) }));
-            } else if (eventType === 'DELETE') {
-              set((s) => ({ people: s.people.filter((p) => p.id !== (oldRow as DbPerson).id) }));
-            }
+              const { eventType, new: newRow, old: oldRow } = payload;
+              if (eventType === 'INSERT') {
+                const person = mapPerson(newRow as DbPerson);
+                set((s) => ({
+                  people: upsertPersonById(s.people, person),
+                }));
+              } else if (eventType === 'UPDATE') {
+                const person = mapPerson(newRow as DbPerson);
+                set((s) => ({ people: upsertPersonById(s.people, person) }));
+              } else if (eventType === 'DELETE') {
+                set((s) => ({ people: s.people.filter((p) => p.id !== (oldRow as DbPerson).id) }));
+              }
           } catch (err) {
             console.error('Realtime people error:', err);
           }
@@ -761,18 +810,23 @@ export const useAppStore = create<AppStore>((set, get) => ({
         { event: '*', schema: 'public', table: 'orders', filter: `workspace_id=eq.${workspaceId}` },
         (payload) => {
           try {
-            const { eventType, new: newRow, old: oldRow } = payload;
-            if (eventType === 'INSERT') {
-              const order = mapOrder(newRow as DbOrder);
-              set((s) => ({
-                orders: [order, ...s.orders.filter((o) => o.id !== order.id)],
-              }));
-            } else if (eventType === 'UPDATE') {
-              const order = mapOrder(newRow as DbOrder);
-              set((s) => ({ orders: s.orders.map((o) => (o.id === order.id ? order : o)) }));
-            } else if (eventType === 'DELETE') {
-              set((s) => ({ orders: s.orders.filter((o) => o.id !== (oldRow as DbOrder).id) }));
-            }
+              const { eventType, new: newRow, old: oldRow } = payload;
+              if (eventType === 'INSERT') {
+                const order = mapOrder(newRow as DbOrder);
+                const nextOrder = optimisticOrderSnapshots.get(order.id) ?? order;
+                set((s) => ({
+                  orders: upsertOrderById(s.orders, nextOrder),
+                }));
+              } else if (eventType === 'UPDATE') {
+                const order = mapOrder(newRow as DbOrder);
+                const nextOrder = optimisticOrderSnapshots.get(order.id) ?? order;
+                set((s) => ({ orders: upsertOrderById(s.orders, nextOrder) }));
+              } else if (eventType === 'DELETE') {
+                const deletedOrderId = (oldRow as DbOrder).id;
+                optimisticOrderSnapshots.delete(deletedOrderId);
+                orderWriteChains.delete(deletedOrderId);
+                set((s) => ({ orders: s.orders.filter((o) => o.id !== deletedOrderId) }));
+              }
           } catch (err) {
             console.error('Realtime orders error:', err);
           }

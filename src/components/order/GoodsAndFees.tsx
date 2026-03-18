@@ -22,9 +22,10 @@ const ALLOCATION_OPTIONS: { value: FeeAllocationType; label: string; description
 
 interface Props {
   order: Order;
+  registerCommit?: (commit: (() => Promise<void>) | null) => void;
 }
 
-export function GoodsAndFees({ order }: Props) {
+export function GoodsAndFees({ order, registerCommit }: Props) {
   const { updateOrder } = useAppStore();
   const [goodsInput, setGoodsInput] = useState(order.goodsTotalZar > 0 ? String(order.goodsTotalZar) : '');
   const [editingFeeId, setEditingFeeId] = useState<string | 'new' | null>(null);
@@ -40,10 +41,30 @@ export function GoodsAndFees({ order }: Props) {
     setGoodsInput(order.goodsTotalZar > 0 ? String(order.goodsTotalZar) : '');
   }, [order.id, order.goodsTotalZar]);
 
+  useEffect(() => {
+    registerCommit?.(flushGoodsSave);
+    return () => registerCommit?.(null);
+  }, [registerCommit, goodsInput, order.id, order.goodsTotalZar]);
+
   function saveGoods() {
     const val = parseFloat(goodsInput);
     if (!isNaN(val) && val > 0) {
-      updateOrder(order.id, { goodsTotalZar: val });
+      void updateOrder(order.id, { goodsTotalZar: val });
+      return;
+    }
+    if (!goodsInput.trim() && order.goodsTotalZar !== 0) {
+      void updateOrder(order.id, { goodsTotalZar: 0 });
+    }
+  }
+
+  async function flushGoodsSave() {
+    const val = parseFloat(goodsInput);
+    if (!isNaN(val) && val > 0 && val !== order.goodsTotalZar) {
+      await updateOrder(order.id, { goodsTotalZar: val });
+      return;
+    }
+    if (!goodsInput.trim() && order.goodsTotalZar !== 0) {
+      await updateOrder(order.id, { goodsTotalZar: 0 });
     }
   }
 
@@ -84,12 +105,12 @@ export function GoodsAndFees({ order }: Props) {
       );
     }
 
-    updateOrder(order.id, { fees: updatedFees });
+    void updateOrder(order.id, { fees: updatedFees });
     setEditingFeeId(null);
   }
 
   function deleteFee(feeId: string) {
-    updateOrder(order.id, { fees: order.fees.filter((f) => f.id !== feeId) });
+    void updateOrder(order.id, { fees: order.fees.filter((f) => f.id !== feeId) });
   }
 
   return (

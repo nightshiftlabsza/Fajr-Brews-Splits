@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import type { CoffeeLot, Order, Person } from '../../types';
 import { formatGrams } from '../../lib/formatters';
+import { getCanonicalPeopleOptions } from '../../lib/peopleOptions';
 import {
-  collapseBagDraftsToShares,
   expandLotToBagDrafts,
   getLotBagStatus,
+  serializeBagDrafts,
   type BagAllocationDraft,
   type BagParticipantDraft,
 } from '../../lib/orderWizard';
@@ -39,8 +40,9 @@ function isBagValid(bag: BagAllocationDraft, gramsPerBag: number): boolean {
   }
 
   const allocated = getBagAllocatedGrams(bag);
+  const validParticipants = bag.participants.filter((participant) => participant.personId.trim().length > 0 && participant.shareGrams > 0).length;
   return (
-    bag.participants.length > 0 &&
+    validParticipants >= 2 &&
     bag.participants.every((participant) => participant.personId.trim().length > 0 && Number.isInteger(participant.shareGrams) && participant.shareGrams > 0) &&
     allocated === gramsPerBag
   );
@@ -54,6 +56,7 @@ function copyBagDraft(bag: BagAllocationDraft, bagIndex = bag.bagIndex): BagAllo
     participants: bag.participants.map((participant) => ({
       ...participant,
       id: genId(),
+      sourceShareId: genId(),
     })),
   };
 }
@@ -80,27 +83,11 @@ function orderPeopleForBag(
   bags: BagAllocationDraft[],
   recentBuyerIds: string[],
 ): Person[] {
-  const lotOrder = Array.from(
-    new Set(
-      bags.flatMap((bag) => bag.participants.map((participant) => participant.personId).filter(Boolean))
-    )
+  return getCanonicalPeopleOptions(
+    people,
+    bags.flatMap((bag) => bag.participants.map((participant) => participant.personId).filter(Boolean)),
+    recentBuyerIds,
   );
-  const lotRank = new Map(lotOrder.map((personId, index) => [personId, index]));
-  const recentRank = new Map(recentBuyerIds.map((personId, index) => [personId, index]));
-
-  return [...people].sort((a, b) => {
-    const aLot = lotRank.has(a.id) ? 0 : 1;
-    const bLot = lotRank.has(b.id) ? 0 : 1;
-    if (aLot !== bLot) return aLot - bLot;
-    if (aLot === 0) return (lotRank.get(a.id) ?? 0) - (lotRank.get(b.id) ?? 0);
-
-    const aRecent = recentRank.has(a.id) ? 0 : 1;
-    const bRecent = recentRank.has(b.id) ? 0 : 1;
-    if (aRecent !== bRecent) return aRecent - bRecent;
-    if (aRecent === 0) return (recentRank.get(a.id) ?? 0) - (recentRank.get(b.id) ?? 0);
-
-    return a.name.localeCompare(b.name);
-  });
 }
 
 function getBagTone(bag: BagAllocationDraft, gramsPerBag: number): { label: string; tone: 'complete' | 'warning' | 'info' } {
@@ -121,13 +108,20 @@ function getSplitBagNote(bag: BagAllocationDraft, gramsPerBag: number): { tone: 
   const delta = gramsPerBag - allocated;
 
   if (
-    bag.participants.length > 0 &&
+    bag.participants.filter((participant) => participant.personId.trim().length > 0 && participant.shareGrams > 0).length >= 2 &&
     bag.participants.every((participant) => participant.personId.trim().length > 0 && participant.shareGrams > 0) &&
     delta === 0
   ) {
     return {
       tone: 'complete',
       label: `Shared bag balanced at ${formatGrams(gramsPerBag)}.`,
+    };
+  }
+
+  if (bag.participants.filter((participant) => participant.personId.trim().length > 0 && participant.shareGrams > 0).length < 2) {
+    return {
+      tone: 'warning',
+      label: 'Add at least two buyers before this bag counts as shared.',
     };
   }
 
@@ -160,6 +154,13 @@ interface LotFormState {
   quantity: string;
 }
 
+interface LotSummaryState {
+  buyerSummary: string;
+  statusLabel: string;
+  statusDetail: string;
+  statusTone: 'complete' | 'warning' | 'error' | 'info';
+}
+
 const emptyLotForm: LotFormState = {
   name: '',
   foreignPricePerBag: '',
@@ -167,15 +168,69 @@ const emptyLotForm: LotFormState = {
   quantity: '1',
 };
 
+function pluralize(count: number, singular: string, plural = `${singular}s`): string {
+  return count === 1 ? singular : plural;
+}
+
+function summarizeNames(names: string[], limit = 3): string {
+  if (names.length === 0) return 'No buyers assigned yet';
+  if (names.length <= limit) return names.join(', ');
+  return `${names.slice(0, limit).join(', ')} +${names.length - limit} more`;
+}
+
+function getPreferredExpandedLotId(lots: CoffeeLot[]): string | null {
+  const firstIncomplete = lots.find((lot) => getLotBagStatus(expandLotToBagDrafts(lot), lot.gramsPerBag).tone !== 'complete');
+  return firstIncomplete?.id ?? lots[lots.length - 1]?.id ?? null;
+}
+
+function getLotSummaryState(lot: CoffeeLot, bags: BagAllocationDraft[], people: Person[], bagStatus: ReturnType<typeof getLotBagStatus>): LotSummaryState {
+  const buyerNames = Array.from(
+    new Set(
+      bags.flatMap((bag) => bag.participants)
+        .filter((participant) => participant.personId.trim() && participant.shareGrams > 0)
+        .map((participant) => people.find((person) => person.id === participant.personId)?.name || 'Unknown'),
+    ),
+  );
+  const splitBagCount = bags.filter((bag) => bag.mode === 'split').length;
+
+  if (bagStatus.tone !== 'complete') {
+    return {
+      buyerSummary: summarizeNames(buyerNames),
+      statusLabel: 'Needs attention',
+      statusDetail: bagStatus.label,
+      statusTone: bagStatus.tone,
+    };
+  }
+
+  const statusLabel = splitBagCount > 0
+    ? `${bagStatus.assignedBags} bags assigned · ${splitBagCount} ${pluralize(splitBagCount, 'split bag')}`
+    : `${bagStatus.assignedBags} ${pluralize(bagStatus.assignedBags, 'bag')} assigned`;
+
+  return {
+    buyerSummary: summarizeNames(buyerNames),
+    statusLabel,
+    statusDetail: splitBagCount > 0 ? 'Shared bags are preserved bag-by-bag.' : 'All bags are fully assigned.',
+    statusTone: splitBagCount > 0 ? 'info' : 'complete',
+  };
+}
+
 export function CoffeeLotsSection({ order }: Props) {
   const { people, addPerson, updateOrder } = useAppStore();
   const [editingLotId, setEditingLotId] = useState<string | 'new' | null>(null);
+  const [expandedLotId, setExpandedLotId] = useState<string | null>(() => getPreferredExpandedLotId(order.lots));
   const [lotForm, setLotForm] = useState<LotFormState>(emptyLotForm);
   const [formError, setFormError] = useState('');
   const [buyerModalTarget, setBuyerModalTarget] = useState<BuyerModalTarget | null>(null);
   const [buyerError, setBuyerError] = useState('');
   const [buyerSaving, setBuyerSaving] = useState(false);
   const [recentBuyerIds, setRecentBuyerIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (editingLotId === 'new') return;
+    if (expandedLotId === null) return;
+    if (expandedLotId && order.lots.some((lot) => lot.id === expandedLotId)) return;
+    setExpandedLotId(getPreferredExpandedLotId(order.lots));
+  }, [editingLotId, expandedLotId, order.lots]);
 
   const activeBuyerLot = buyerModalTarget
     ? order.lots.find((lot) => lot.id === buyerModalTarget.lotId) ?? null
@@ -197,6 +252,7 @@ export function CoffeeLotsSection({ order }: Props) {
   function openNew() {
     setLotForm(emptyLotForm);
     setFormError('');
+    setExpandedLotId(null);
     setEditingLotId('new');
   }
 
@@ -208,6 +264,7 @@ export function CoffeeLotsSection({ order }: Props) {
       quantity: String(lot.quantity),
     });
     setFormError('');
+    setExpandedLotId(lot.id);
     setEditingLotId(lot.id);
   }
 
@@ -222,11 +279,12 @@ export function CoffeeLotsSection({ order }: Props) {
     if (!Number.isFinite(foreignPricePerBag) || foreignPricePerBag <= 0) return setFormError('Foreign list price per bag must be greater than zero.');
 
     if (editingLotId === 'new') {
+      const newLotId = genId();
       void updateOrder(order.id, {
         lots: [
           ...order.lots,
           {
-            id: genId(),
+            id: newLotId,
             name: lotForm.name.trim(),
             foreignPricePerBag,
             gramsPerBag,
@@ -235,6 +293,7 @@ export function CoffeeLotsSection({ order }: Props) {
           },
         ],
       });
+      setExpandedLotId(newLotId);
       setEditingLotId(null);
       setFormError('');
       return;
@@ -247,6 +306,7 @@ export function CoffeeLotsSection({ order }: Props) {
     }
 
     let nextShares = existingLot.shares;
+    let nextBagAllocations = existingLot.bagAllocations;
 
     if (existingLot.gramsPerBag !== gramsPerBag) {
       if (
@@ -256,6 +316,7 @@ export function CoffeeLotsSection({ order }: Props) {
         return;
       }
       nextShares = [];
+      nextBagAllocations = [];
     } else if (quantity < existingLot.quantity) {
       const existingBags = expandLotToBagDrafts(existingLot);
       const removedBags = existingBags.slice(quantity);
@@ -268,7 +329,9 @@ export function CoffeeLotsSection({ order }: Props) {
         return;
       }
 
-      nextShares = collapseBagDraftsToShares(existingBags.slice(0, quantity));
+      const serialized = serializeBagDrafts(existingBags.slice(0, quantity));
+      nextShares = serialized.shares;
+      nextBagAllocations = serialized.bagAllocations;
     }
 
     void updateOrder(order.id, {
@@ -280,23 +343,39 @@ export function CoffeeLotsSection({ order }: Props) {
             gramsPerBag,
             quantity,
             shares: nextShares,
+            bagAllocations: nextBagAllocations,
           }
         : lot)),
     });
+    setExpandedLotId(existingLot.id);
     setEditingLotId(null);
     setFormError('');
   }
 
   function deleteLot(lotId: string) {
+    const remainingLots = order.lots.filter((lot) => lot.id !== lotId);
     void updateOrder(order.id, {
-      lots: order.lots.filter((lot) => lot.id !== lotId),
+      lots: remainingLots,
     });
+    if (editingLotId === lotId) {
+      setEditingLotId(null);
+    }
+    if (expandedLotId === lotId) {
+      setExpandedLotId(getPreferredExpandedLotId(remainingLots));
+    }
   }
 
   function updateShares(lotId: string, bags: BagAllocationDraft[], touchedPersonIds: string[] = []) {
     touchedPersonIds.forEach(rememberBuyer);
+    const serialized = serializeBagDrafts(bags);
     void updateOrder(order.id, {
-      lots: order.lots.map((lot) => (lot.id === lotId ? { ...lot, shares: collapseBagDraftsToShares(bags) } : lot)),
+      lots: order.lots.map((lot) => (lot.id === lotId
+        ? {
+            ...lot,
+            shares: serialized.shares,
+            bagAllocations: serialized.bagAllocations,
+          }
+        : lot)),
     });
   }
 
@@ -394,9 +473,15 @@ export function CoffeeLotsSection({ order }: Props) {
           people={people}
           recentBuyerIds={recentBuyerIds}
           isEditing={editingLotId === lot.id}
+          isExpanded={expandedLotId === lot.id}
           lotForm={lotForm}
           formError={formError}
           setLotForm={setLotForm}
+          onExpand={() => {
+            setExpandedLotId(lot.id);
+            setEditingLotId(null);
+          }}
+          onCollapse={() => setExpandedLotId((current) => (current === lot.id ? null : current))}
           onEdit={() => openEdit(lot)}
           onSave={saveLot}
           onCancel={() => setEditingLotId(null)}
@@ -438,9 +523,12 @@ interface LotCardProps {
   people: Person[];
   recentBuyerIds: string[];
   isEditing: boolean;
+  isExpanded: boolean;
   lotForm: LotFormState;
   formError: string;
   setLotForm: (form: LotFormState) => void;
+  onExpand: () => void;
+  onCollapse: () => void;
   onEdit: () => void;
   onSave: () => void;
   onCancel: () => void;
@@ -454,9 +542,12 @@ function LotCard({
   people,
   recentBuyerIds,
   isEditing,
+  isExpanded,
   lotForm,
   formError,
   setLotForm,
+  onExpand,
+  onCollapse,
   onEdit,
   onSave,
   onCancel,
@@ -478,6 +569,7 @@ function LotCard({
     : includesSplitBag
       ? 'Shared bags'
       : 'Assigned';
+  const summaryState = useMemo(() => getLotSummaryState(lot, bags, people, bagStatus), [bagStatus, bags, lot, people]);
 
   return (
     <section className="wizard-panel">
@@ -492,6 +584,42 @@ function LotCard({
             onCancel={onCancel}
           />
         </>
+      ) : !isExpanded ? (
+        <div className="coffee-lot-collapsed" data-lot-state="collapsed">
+          <button className="coffee-lot-summary-trigger" onClick={onExpand}>
+            <div className="coffee-lot-summary-main">
+              <div className="coffee-lot-summary-top">
+                <div>
+                  <div className="wizard-card-title">{lot.name}</div>
+                  <p className="wizard-card-copy coffee-lot-summary-copy">
+                    {lot.quantity} x {formatGrams(lot.gramsPerBag)} bag · {formatGrams(totalGrams)} total
+                  </p>
+                </div>
+                <StatusBadge tone={summaryState.statusTone} label={summaryState.statusLabel} compact />
+              </div>
+
+              <div className="coffee-lot-summary-grid">
+                <div className="coffee-lot-summary-item">
+                  <span className="coffee-lot-summary-label">Buyers</span>
+                  <strong>{summaryState.buyerSummary}</strong>
+                </div>
+                <div className="coffee-lot-summary-item">
+                  <span className="coffee-lot-summary-label">Status</span>
+                  <strong>{summaryState.statusLabel}</strong>
+                  <span>{summaryState.statusDetail}</span>
+                </div>
+              </div>
+            </div>
+
+            <span className="coffee-lot-summary-chevron" aria-hidden="true">⌄</span>
+          </button>
+
+          <div className="coffee-lot-summary-actions">
+            <button className="btn btn-ghost btn-sm" onClick={onExpand}>Expand</button>
+            <button className="btn btn-ghost btn-sm" onClick={onEdit}>Edit</button>
+            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-unpaid)' }} onClick={onDelete}>Delete</button>
+          </div>
+        </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
           <div className="wizard-card-header">
@@ -506,6 +634,7 @@ function LotCard({
               <span className={`wizard-badge ${badgeClass}`}>
                 {badgeLabel}
               </span>
+              <button className="btn btn-ghost btn-sm" onClick={onCollapse}>Collapse</button>
               <button className="btn btn-ghost btn-sm" onClick={onEdit}>Edit</button>
               <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-unpaid)' }} onClick={onDelete}>Delete</button>
             </div>
@@ -637,7 +766,7 @@ interface BagAssignmentCardProps {
   onAddNewBuyer: () => void;
 }
 
-function BagAssignmentCard({
+export function BagAssignmentCard({
   bag,
   bags,
   bagIndex,
@@ -671,7 +800,7 @@ function BagAssignmentCard({
       mode: 'split',
       participants: bag.participants.length > 0
         ? bag.participants
-        : [createParticipant('', gramsPerBag)],
+        : [createParticipant('', 0)],
     });
   }
 

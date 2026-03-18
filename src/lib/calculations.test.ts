@@ -156,6 +156,157 @@ describe('calculate() — updated fee model scenario', () => {
   });
 });
 
+describe('calculate() - bag-level split context', () => {
+  function makeBagLevelOrder(lots: Order['lots']): Order {
+    return {
+      ...testOrder,
+      goodsTotalZar: 600,
+      lots,
+      fees: [],
+      payerId: PERSON_A,
+    };
+  }
+
+  it('does not mark two full bags in the same lot as split', () => {
+    const order = makeBagLevelOrder([
+      {
+        id: 'lot-full',
+        name: 'Kenya AA',
+        foreignPricePerBag: 18,
+        gramsPerBag: 250,
+        quantity: 2,
+        shares: [
+          { id: 'share-a-0', personId: PERSON_A, shareGrams: 250, bagIndex: 0 },
+          { id: 'share-b-1', personId: PERSON_B, shareGrams: 250, bagIndex: 1 },
+        ],
+        bagAllocations: [
+          {
+            id: 'bag-0',
+            bagIndex: 0,
+            mode: 'single',
+            participants: [{ id: 'bp-a-0', personId: PERSON_A, shareGrams: 250, sourceShareId: 'share-a-0' }],
+          },
+          {
+            id: 'bag-1',
+            bagIndex: 1,
+            mode: 'single',
+            participants: [{ id: 'bp-b-1', personId: PERSON_B, shareGrams: 250, sourceShareId: 'share-b-1' }],
+          },
+        ],
+      },
+    ]);
+
+    const result = calculate(order, personNames);
+
+    expect(result.isValid).toBe(true);
+    expect(result.personCalcs[PERSON_A].lotBreakdowns).toHaveLength(1);
+    expect(result.personCalcs[PERSON_A].lotBreakdowns[0].bagMode).toBe('single');
+    expect(result.personCalcs[PERSON_A].lotBreakdowns[0].splitWith).toEqual([]);
+    expect(result.personCalcs[PERSON_B].lotBreakdowns[0].splitWith).toEqual([]);
+  });
+
+  it('only marks the bag that was actually split', () => {
+    const order = makeBagLevelOrder([
+      {
+        id: 'lot-mixed',
+        name: 'Colombian Huila',
+        foreignPricePerBag: 19,
+        gramsPerBag: 250,
+        quantity: 2,
+        shares: [
+          { id: 'share-a-0', personId: PERSON_A, shareGrams: 250, bagIndex: 0 },
+          { id: 'share-b-1', personId: PERSON_B, shareGrams: 125, bagIndex: 1 },
+          { id: 'share-c-1', personId: PERSON_C, shareGrams: 125, bagIndex: 1 },
+        ],
+        bagAllocations: [
+          {
+            id: 'bag-0',
+            bagIndex: 0,
+            mode: 'single',
+            participants: [{ id: 'bp-a-0', personId: PERSON_A, shareGrams: 250, sourceShareId: 'share-a-0' }],
+          },
+          {
+            id: 'bag-1',
+            bagIndex: 1,
+            mode: 'split',
+            participants: [
+              { id: 'bp-b-1', personId: PERSON_B, shareGrams: 125, sourceShareId: 'share-b-1' },
+              { id: 'bp-c-1', personId: PERSON_C, shareGrams: 125, sourceShareId: 'share-c-1' },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    const result = calculate(order, personNames);
+
+    expect(result.personCalcs[PERSON_A].lotBreakdowns[0].splitWith).toEqual([]);
+    expect(result.personCalcs[PERSON_A].lotBreakdowns[0].bagMode).toBe('single');
+    expect(result.personCalcs[PERSON_B].lotBreakdowns[0].bagMode).toBe('split');
+    expect(result.personCalcs[PERSON_B].lotBreakdowns[0].splitWith).toEqual(['Person C']);
+    expect(result.personCalcs[PERSON_C].lotBreakdowns[0].splitWith).toEqual(['Person B']);
+  });
+
+  it('keeps split context separate when lots share the same coffee name', () => {
+    const order = makeBagLevelOrder([
+      {
+        id: 'lot-full',
+        name: 'Kenya AA',
+        foreignPricePerBag: 18,
+        gramsPerBag: 250,
+        quantity: 2,
+        shares: [
+          { id: 'share-a-0', personId: PERSON_A, shareGrams: 250, bagIndex: 0 },
+          { id: 'share-b-1', personId: PERSON_B, shareGrams: 250, bagIndex: 1 },
+        ],
+        bagAllocations: [
+          {
+            id: 'bag-full-0',
+            bagIndex: 0,
+            mode: 'single',
+            participants: [{ id: 'bp-a-full', personId: PERSON_A, shareGrams: 250, sourceShareId: 'share-a-0' }],
+          },
+          {
+            id: 'bag-full-1',
+            bagIndex: 1,
+            mode: 'single',
+            participants: [{ id: 'bp-b-full', personId: PERSON_B, shareGrams: 250, sourceShareId: 'share-b-1' }],
+          },
+        ],
+      },
+      {
+        id: 'lot-split',
+        name: 'Kenya AA',
+        foreignPricePerBag: 18,
+        gramsPerBag: 250,
+        quantity: 1,
+        shares: [
+          { id: 'share-a-split', personId: PERSON_A, shareGrams: 125, bagIndex: 0 },
+          { id: 'share-c-split', personId: PERSON_C, shareGrams: 125, bagIndex: 0 },
+        ],
+        bagAllocations: [
+          {
+            id: 'bag-split-0',
+            bagIndex: 0,
+            mode: 'split',
+            participants: [
+              { id: 'bp-a-split', personId: PERSON_A, shareGrams: 125, sourceShareId: 'share-a-split' },
+              { id: 'bp-c-split', personId: PERSON_C, shareGrams: 125, sourceShareId: 'share-c-split' },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    const result = calculate(order, personNames);
+    const aBreakdowns = result.personCalcs[PERSON_A].lotBreakdowns;
+
+    expect(aBreakdowns).toHaveLength(2);
+    expect(aBreakdowns.find((breakdown) => breakdown.lotId === 'lot-full')?.splitWith).toEqual([]);
+    expect(aBreakdowns.find((breakdown) => breakdown.lotId === 'lot-split')?.splitWith).toEqual(['Person C']);
+  });
+});
+
 describe('calculate() — fixed_shared fee guard: zero eligible people', () => {
   it('should return isValid=false when there are no lots', () => {
     const emptyOrder: Order = {

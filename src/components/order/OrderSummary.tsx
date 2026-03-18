@@ -1,16 +1,22 @@
+import { useState } from 'react';
 import type { Order, PaymentRecord, PaymentStatus } from '../../types';
 import { useAppStore } from '../../store/appStore';
 import { calculate } from '../../lib/calculations';
 import { formatZAR, todayISO } from '../../lib/formatters';
 import type { OrderWizardStep } from '../../lib/orderWizard';
+import { getNextActiveOrderId } from '../../lib/orderLifecycle';
+import { SettlementPacks } from './SettlementPacks';
 
 interface Props {
   order: Order;
   onJumpToStep: (step: Extract<OrderWizardStep, 'setup' | 'coffees' | 'goods'>) => void;
+  onFinalize: () => void;
 }
 
-export function OrderSummary({ order, onJumpToStep }: Props) {
-  const { people, updateOrder } = useAppStore();
+export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
+  const { people, orders, updateOrder, setCurrentOrderId } = useAppStore();
+  const [finalizing, setFinalizing] = useState(false);
+  const [finalizeError, setFinalizeError] = useState<string | null>(null);
 
   const personNames = Object.fromEntries(people.map((person) => [person.id, person.name]));
   const result = calculate(order, personNames);
@@ -37,7 +43,23 @@ export function OrderSummary({ order, onJumpToStep }: Props) {
     });
   }
 
+  async function handleFinalizeOrder() {
+    setFinalizing(true);
+    setFinalizeError(null);
+    try {
+      await updateOrder(order.id, { isArchived: true });
+      const nextActiveOrderId = getNextActiveOrderId(useAppStore.getState().orders, order.id);
+      setCurrentOrderId(nextActiveOrderId);
+      onFinalize();
+    } catch (error) {
+      setFinalizeError(error instanceof Error ? error.message : 'Failed to finalize this order. Please try again.');
+    } finally {
+      setFinalizing(false);
+    }
+  }
+
   const payer = people.find((person) => person.id === order.payerId);
+  const activeOrderCount = orders.filter((candidate) => !candidate.isArchived && candidate.id !== order.id).length;
 
   return (
     <div className="wizard-step-stack">
@@ -47,7 +69,7 @@ export function OrderSummary({ order, onJumpToStep }: Props) {
             <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Step 4</div>
             <h3 className="wizard-card-title">Summary</h3>
             <p className="wizard-card-copy">
-              Review the order totals, fee split, and payment status. Jump back into earlier steps any time.
+              Review the final settlement, send payment requests, and save this order into Past Orders when it is ready.
             </p>
           </div>
         </div>
@@ -77,7 +99,7 @@ export function OrderSummary({ order, onJumpToStep }: Props) {
         <div className="wizard-card-header">
           <div>
             <div className="wizard-card-title">Totals per person</div>
-            <p className="wizard-card-copy">Elegant invoice-style review of what each person owes.</p>
+            <p className="wizard-card-copy">A calm final check of who received what and what each person owes.</p>
           </div>
         </div>
 
@@ -141,6 +163,41 @@ export function OrderSummary({ order, onJumpToStep }: Props) {
               />
             );
           })}
+        </div>
+      </section>
+
+      <SettlementPacks
+        order={order}
+        people={people}
+        result={result}
+      />
+
+      <section className="wizard-panel">
+        <div className="wizard-card-header">
+          <div>
+            <div className="wizard-card-title">Complete this order</div>
+            <p className="wizard-card-copy">
+              Save this finished order into Past Orders. It stays fully intact, but it leaves the active drafting workspace.
+            </p>
+          </div>
+        </div>
+
+        <div className="wizard-inline-note">
+          {activeOrderCount > 0
+            ? `Finalizing now will move this order to Past Orders and return you to your remaining ${activeOrderCount} active ${activeOrderCount === 1 ? 'order' : 'orders'}.`
+            : 'Finalizing now will move this order to Past Orders and clear it from the active drafting workspace.'}
+        </div>
+
+        {finalizeError && (
+          <div className="alert alert-error" style={{ marginTop: 'var(--space-4)' }}>
+            {finalizeError}
+          </div>
+        )}
+
+        <div className="wizard-inline-actions" style={{ marginTop: 'var(--space-4)' }}>
+          <button className="btn btn-primary" onClick={handleFinalizeOrder} disabled={finalizing}>
+            {finalizing ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Save to Past Orders'}
+          </button>
         </div>
       </section>
     </div>

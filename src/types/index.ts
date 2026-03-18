@@ -33,6 +33,21 @@ export interface ShareLine {
   id: string;
   personId: string;
   shareGrams: number; // must be integer >= 1
+  bagIndex?: number;
+}
+
+export interface LotBagParticipant {
+  id: string;
+  personId: string;
+  shareGrams: number;
+  sourceShareId: string;
+}
+
+export interface LotBagAllocation {
+  id: string;
+  bagIndex: number;
+  mode: 'single' | 'split';
+  participants: LotBagParticipant[];
 }
 
 export interface CoffeeLot {
@@ -42,6 +57,7 @@ export interface CoffeeLot {
   gramsPerBag: number;        // integer >= 1
   quantity: number;           // integer >= 1
   shares: ShareLine[];
+  bagAllocations?: LotBagAllocation[];
 }
 
 // ─── Fees ─────────────────────────────────────────────────────
@@ -157,14 +173,17 @@ export interface DbUserSettings {
 
 // ─── Calculation Results ─────────────────────────────────────
 export interface LotPersonBreakdown {
+  id: string;
   lotId: string;
   lotName: string;
+  bagIndex: number;
+  bagMode: 'single' | 'split';
   shareGrams: number;
   gramsPerBag: number;
   lotQuantity: number;
   goodsZar: number;
   valueBasedFeesZar: number; // Split by each person's share of foreign list value
-  splitWith: string[]; // names of other people sharing this lot
+  splitWith: string[]; // names of other people sharing this specific bag
 }
 
 export interface FeePersonBreakdown {
@@ -226,4 +245,4 @@ export interface AuthUser {
 }
 
 // ─── App Tab Navigation ───────────────────────────────────────
-export type AppTab = 'order' | 'invoices' | 'people' | 'history' | 'settings';
+export type AppTab = 'order' | 'people' | 'history' | 'settings';
