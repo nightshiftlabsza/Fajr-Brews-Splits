@@ -17,12 +17,15 @@ import type {
   AppSettings,
   Theme,
   ThemeMode,
-  MembershipStatus,
+  AccessStatus,
   AuthUser,
   WorkspaceMember,
   DbPerson,
   DbOrder,
   DbWorkspaceMember,
+  PersonLinkResolution,
+  PersonLinkCandidate,
+  PersonMatchReason,
 } from '../types';
 
 // ─── Mappers (DB row → App type) ─────────────────────────────
@@ -69,8 +72,10 @@ function mapOrder(row: DbOrder & { pin_required?: boolean }): Order {
 interface AppStore {
   // ── Auth ──────────────────────────────────────────────────
   user: AuthUser | null;
-  membershipStatus: MembershipStatus;
+  accessStatus: AccessStatus;
   memberRole: 'owner' | 'admin' | 'member' | null;
+  linkedPersonId: string | null;
+  linkResolution: PersonLinkResolution;
   workspaceMembers: WorkspaceMember[];
 
   // ── Data ──────────────────────────────────────────────────
@@ -96,10 +101,12 @@ interface AppStore {
   // ── Auth Actions ──────────────────────────────────────────
   initialize: (options?: { silent?: boolean }) => Promise<void>;
   signIn: (email: string, password: string) => Promise<string | null>;
-  signUp: (email: string, password: string, fullName: string) => Promise<string | null>;
+  signUp: (email: string, password: string, fullName: string, phone?: string) => Promise<string | null>;
   requestPasswordReset: (email: string) => Promise<string | null>;
   updatePassword: (password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
+  confirmPersonLink: (personId: string) => Promise<string | null>;
+  dismissLinkResolution: () => void;
 
   // ── People Actions ────────────────────────────────────────
   addPerson: (data: Omit<Person, 'id' | 'workspaceId' | 'createdAt' | 'updatedAt'>) => Promise<Person>;
@@ -174,6 +181,82 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function normalizePhone(phone?: string): string | undefined {
+  const trimmed = phone?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+const defaultLinkResolution: PersonLinkResolution = {
+  status: 'idle',
+  linkedPersonId: null,
+  matchedBy: null,
+  person: null,
+  candidates: [],
+};
+
+function mapLinkCandidate(value: unknown): PersonLinkCandidate | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const row = value as Record<string, unknown>;
+  const personId = typeof row.personId === 'string' ? row.personId : null;
+  const name = typeof row.name === 'string' ? row.name : null;
+  const matchReason = row.matchReason;
+
+  if (
+    !personId ||
+    !name ||
+    (matchReason !== 'email' && matchReason !== 'phone' && matchReason !== 'name')
+  ) {
+    return null;
+  }
+
+  return {
+    personId,
+    workspaceId: typeof row.workspaceId === 'string' ? row.workspaceId : undefined,
+    name,
+    email: typeof row.email === 'string' ? row.email : undefined,
+    phone: typeof row.phone === 'string' ? row.phone : undefined,
+    matchReason,
+  };
+}
+
+function mapLinkResolution(payload: unknown): PersonLinkResolution {
+  if (!payload || typeof payload !== 'object') {
+    return defaultLinkResolution;
+  }
+
+  const row = payload as Record<string, unknown>;
+  const candidates = Array.isArray(row.candidates)
+    ? row.candidates.map(mapLinkCandidate).filter((candidate): candidate is PersonLinkCandidate => candidate !== null)
+    : [];
+  const person = mapLinkCandidate(row.person);
+  const status = row.status;
+  const matchedBy = row.matchedBy;
+
+  return {
+    status:
+      status === 'linked' ||
+      status === 'auto-linked' ||
+      status === 'needs-confirmation' ||
+      status === 'ambiguous' ||
+      status === 'none'
+        ? status
+        : 'idle',
+    linkedPersonId: typeof row.linkedPersonId === 'string' ? row.linkedPersonId : null,
+    matchedBy:
+      matchedBy === 'email' ||
+      matchedBy === 'phone' ||
+      matchedBy === 'name' ||
+      matchedBy === 'manual'
+        ? (matchedBy as PersonMatchReason)
+        : null,
+    person,
+    candidates,
+  };
+}
+
 const orderWriteChains = new Map<string, Promise<void>>();
 const optimisticOrderSnapshots = new Map<string, Order>();
 
@@ -188,8 +271,10 @@ export const getCurrentOrder = (state: AppStore): Order | null => {
 
 export const useAppStore = create<AppStore>((set, get) => ({
   user: null,
-  membershipStatus: 'checking',
+  accessStatus: 'checking',
   memberRole: null,
+  linkedPersonId: null,
+  linkResolution: defaultLinkResolution,
   workspaceMembers: [],
   people: [],
   orders: [],
@@ -220,7 +305,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session?.user) {
-        set({ user: null, membershipStatus: 'none', isInitialized: true, isLoading: false });
+        set({
+          user: null,
+          accessStatus: 'none',
+          memberRole: null,
+          linkedPersonId: null,
+          linkResolution: defaultLinkResolution,
+          people: [],
+          orders: [],
+          currentOrderId: null,
+          isInitialized: true,
+          isLoading: false,
+        });
         return;
       }
 
@@ -228,42 +324,52 @@ export const useAppStore = create<AppStore>((set, get) => ({
         id: session.user.id,
         email: session.user.email ?? '',
         fullName: session.user.user_metadata?.full_name,
+        phone: session.user.user_metadata?.phone,
       };
 
-      // Check workspace membership
-      const { data: memberRow, error: memberErr } = await supabase
-        .from('workspace_members')
-        .select('role')
-        .eq('workspace_id', WORKSPACE_ID)
-        .eq('user_id', session.user.id)
-        .single();
+      const [{ data: memberRow, error: memberErr }, { data: linkPayload, error: linkErr }] = await Promise.all([
+        supabase
+          .from('workspace_members')
+          .select('role')
+          .eq('workspace_id', WORKSPACE_ID)
+          .eq('user_id', session.user.id)
+          .maybeSingle(),
+        supabase.rpc('resolve_my_person_link'),
+      ]);
 
-      if (memberErr || !memberRow) {
-        set({
-          user,
-          membershipStatus: 'none',
-          isInitialized: true,
-          isLoading: false,
-        });
-        return;
+      if (memberErr) {
+        throw new Error(memberErr.message);
       }
 
-      // Setup Realtime before fetch so no events are missed during the fetch window
-      get()._setupRealtime(WORKSPACE_ID);
+      if (linkErr) {
+        throw new Error(linkErr.message);
+      }
 
-      // Fetch data
-      const [{ data: peopleRows }, { data: orderRows }] = await Promise.all([
-        supabase
-          .from('people')
-          .select('*')
-          .eq('workspace_id', WORKSPACE_ID)
-          .order('name'),
-        supabase
-          .from('orders')
-          .select('*')
-          .eq('workspace_id', WORKSPACE_ID)
-          .order('order_date', { ascending: false }),
-      ]);
+      const linkResolution = mapLinkResolution(linkPayload);
+      const linkedPersonId = linkResolution.linkedPersonId ?? linkResolution.person?.personId ?? null;
+      const hasWorkspaceAccess = Boolean(memberRow) || Boolean(linkedPersonId);
+
+      if (hasWorkspaceAccess) {
+        // Setup Realtime before fetch so no events are missed during the fetch window
+        get()._setupRealtime(WORKSPACE_ID);
+      } else {
+        get()._teardownRealtime();
+      }
+
+      const [{ data: peopleRows }, { data: orderRows }] = hasWorkspaceAccess
+        ? await Promise.all([
+          supabase
+            .from('people')
+            .select('*')
+            .eq('workspace_id', WORKSPACE_ID)
+            .order('name'),
+          supabase
+            .from('orders')
+            .select('*')
+            .eq('workspace_id', WORKSPACE_ID)
+            .order('order_date', { ascending: false }),
+        ])
+        : [{ data: [] }, { data: [] }];
 
       const people = sortPeopleByName(dedupePeopleById((peopleRows as DbPerson[] | null ?? []).map(mapPerson)));
       const orders = (orderRows as DbOrder[] | null ?? []).map(mapOrder);
@@ -289,8 +395,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
       set({
         user,
-        membershipStatus: 'member',
-        memberRole: memberRow.role,
+        accessStatus: memberRow ? 'member' : linkedPersonId ? 'participant' : 'none',
+        memberRole: memberRow?.role ?? null,
+        linkedPersonId,
+        linkResolution,
         people,
         orders,
         currentOrderId,
@@ -317,12 +425,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
-  signUp: async (email, password, fullName) => {
+  signUp: async (email, password, fullName, phone) => {
     try {
       const { error } = await supabase.auth.signUp({
         email: normalizeEmail(email),
         password,
-        options: { data: { full_name: fullName.trim() } },
+        options: {
+          data: {
+            full_name: fullName.trim(),
+            ...(normalizePhone(phone) ? { phone: normalizePhone(phone) } : {}),
+          },
+        },
       });
       if (error) return normalizeAuthError(error);
       return null;
@@ -363,8 +476,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
     await supabase.auth.signOut();
     set({
       user: null,
-      membershipStatus: 'none',
+      accessStatus: 'none',
       memberRole: null,
+      linkedPersonId: null,
+      linkResolution: defaultLinkResolution,
       people: [],
       orders: [],
       currentOrderId: null,
@@ -374,6 +489,32 @@ export const useAppStore = create<AppStore>((set, get) => ({
       },
       unlockedOrderIds: new Set<string>(),
     });
+  },
+
+  confirmPersonLink: async (personId) => {
+    try {
+      const { error } = await supabase.rpc('confirm_my_person_link', {
+        p_person_id: personId,
+      });
+
+      if (error) {
+        return error.message;
+      }
+
+      await get().initialize({ silent: true });
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  },
+
+  dismissLinkResolution: () => {
+    set((state) => ({
+      linkResolution: {
+        ...state.linkResolution,
+        status: state.linkResolution.linkedPersonId ? 'linked' : 'idle',
+      },
+    }));
   },
 
   // ── People ────────────────────────────────────────────────

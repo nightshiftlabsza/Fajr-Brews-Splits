@@ -15,6 +15,7 @@ export function AuthPage({ initialMode = 'login', onRecoveryComplete }: AuthPage
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
@@ -38,7 +39,7 @@ export function AuthPage({ initialMode = 'login', onRecoveryComplete }: AuthPage
         const err = await signIn(email, password);
         if (err) setError(err);
       } else if (mode === 'signup') {
-        const err = await signUp(email, password, fullName);
+        const err = await signUp(email, password, fullName, phone);
         if (err) {
           setError(err);
         } else {
@@ -93,8 +94,8 @@ export function AuthPage({ initialMode = 'login', onRecoveryComplete }: AuthPage
           <div className="alert alert-success" style={{ marginBottom: 0 }}>
             <strong>Account created.</strong>
             <br />
-            Check your email to confirm your address, then ask your Fajr Brews admin to add you to
-            the workspace. Once you're added, sign in below.
+            Check your email to confirm your address. After you sign in, Fajr Brews will try to match
+            you to any orders you were already part of.
           </div>
           <button
             className="btn btn-secondary w-full mt-4"
@@ -149,19 +150,34 @@ export function AuthPage({ initialMode = 'login', onRecoveryComplete }: AuthPage
 
         <form onSubmit={handleSubmit} className="auth-form">
           {mode === 'signup' && (
-            <div className="field">
-              <label className="field-label" htmlFor="fullName">Full name</label>
-              <input
-                id="fullName"
-                className="input"
-                type="text"
-                placeholder="Your name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-                autoComplete="name"
-              />
-            </div>
+            <>
+              <div className="field">
+                <label className="field-label" htmlFor="fullName">Full name</label>
+                <input
+                  id="fullName"
+                  className="input"
+                  type="text"
+                  placeholder="Your name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                  autoComplete="name"
+                />
+              </div>
+
+              <div className="field">
+                <label className="field-label" htmlFor="phone">Phone number</label>
+                <input
+                  id="phone"
+                  className="input"
+                  type="tel"
+                  placeholder="Optional, but helps match older orders"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  autoComplete="tel"
+                />
+              </div>
+            </>
           )}
 
           {mode !== 'recovery' && (

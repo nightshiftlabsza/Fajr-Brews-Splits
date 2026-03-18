@@ -668,3 +668,592 @@ BEGIN
   END LOOP;
 END;
 $$;
+
+-- ============================================================
+-- MIGRATION 003 - Persistent Person Linking + Historical Access
+-- ============================================================
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS phone text;
+
+ALTER TABLE public.people
+  ADD COLUMN IF NOT EXISTS linked_user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS linked_at timestamptz,
+  ADD COLUMN IF NOT EXISTS link_source text;
+
+ALTER TABLE public.people
+  DROP CONSTRAINT IF EXISTS people_link_source_check;
+
+ALTER TABLE public.people
+  ADD CONSTRAINT people_link_source_check
+    CHECK (link_source IS NULL OR link_source IN ('email', 'phone', 'name', 'manual'));
+
+CREATE UNIQUE INDEX IF NOT EXISTS people_linked_user_id_key
+  ON public.people (linked_user_id)
+  WHERE linked_user_id IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION public.normalize_phone(p_phone text)
+RETURNS text LANGUAGE plpgsql IMMUTABLE AS $$
+DECLARE
+  v_digits text;
+BEGIN
+  v_digits := regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g');
+
+  IF v_digits = '' THEN
+    RETURN NULL;
+  END IF;
+
+  IF left(v_digits, 2) = '00' THEN
+    v_digits := substring(v_digits from 3);
+  END IF;
+
+  IF left(v_digits, 1) = '0' AND char_length(v_digits) = 10 THEN
+    RETURN '+27' || substring(v_digits from 2);
+  END IF;
+
+  IF left(v_digits, 2) = '27' AND char_length(v_digits) = 11 THEN
+    RETURN '+' || v_digits;
+  END IF;
+
+  IF char_length(v_digits) BETWEEN 9 AND 15 THEN
+    RETURN '+' || v_digits;
+  END IF;
+
+  RETURN NULL;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.normalize_full_name(p_name text)
+RETURNS text LANGUAGE sql IMMUTABLE AS $$
+  SELECT NULLIF(regexp_replace(lower(btrim(coalesce(p_name, ''))), '\s+', ' ', 'g'), '');
+$$;
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, email, full_name, phone)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'full_name', ''),
+    nullif(btrim(coalesce(new.raw_user_meta_data->>'phone', '')), '')
+  )
+  on conflict (id) do update
+    set email = excluded.email,
+        full_name = excluded.full_name,
+        phone = excluded.phone;
+  return new;
+end;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_my_person_link_candidates()
+RETURNS TABLE (
+  person_id uuid,
+  workspace_id uuid,
+  name text,
+  email text,
+  phone text,
+  match_reason text,
+  match_rank integer
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH me AS (
+    SELECT
+      auth.uid() AS user_id,
+      public.normalize_email(pr.email) AS normalized_email,
+      public.normalize_phone(pr.phone) AS normalized_phone,
+      public.normalize_full_name(pr.full_name) AS normalized_name
+    FROM public.profiles pr
+    WHERE pr.id = auth.uid()
+  ),
+  eligible_people AS (
+    SELECT
+      p.id,
+      p.workspace_id,
+      p.name,
+      p.email,
+      p.phone,
+      public.normalize_email(p.email) AS normalized_email,
+      public.normalize_phone(p.phone) AS normalized_phone,
+      public.normalize_full_name(p.name) AS normalized_name
+    FROM public.people p
+    WHERE p.linked_user_id IS NULL OR p.linked_user_id = auth.uid()
+  ),
+  email_matches AS (
+    SELECT
+      ep.id AS person_id,
+      ep.workspace_id,
+      ep.name,
+      ep.email,
+      ep.phone,
+      'email'::text AS match_reason,
+      1 AS match_rank
+    FROM eligible_people ep
+    CROSS JOIN me
+    WHERE me.normalized_email IS NOT NULL
+      AND ep.normalized_email IS NOT NULL
+      AND ep.normalized_email = me.normalized_email
+  ),
+  phone_matches AS (
+    SELECT
+      ep.id AS person_id,
+      ep.workspace_id,
+      ep.name,
+      ep.email,
+      ep.phone,
+      'phone'::text AS match_reason,
+      2 AS match_rank
+    FROM eligible_people ep
+    CROSS JOIN me
+    WHERE me.normalized_phone IS NOT NULL
+      AND ep.normalized_phone IS NOT NULL
+      AND ep.normalized_phone = me.normalized_phone
+      AND NOT EXISTS (
+        SELECT 1
+        FROM email_matches em
+        WHERE em.person_id = ep.id
+      )
+  ),
+  name_matches AS (
+    SELECT
+      ep.id AS person_id,
+      ep.workspace_id,
+      ep.name,
+      ep.email,
+      ep.phone,
+      'name'::text AS match_reason,
+      3 AS match_rank
+    FROM eligible_people ep
+    CROSS JOIN me
+    WHERE me.normalized_name IS NOT NULL
+      AND ep.normalized_name = me.normalized_name
+      AND ep.normalized_email IS NULL
+      AND ep.normalized_phone IS NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM email_matches
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM phone_matches
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM eligible_people dup
+        WHERE dup.id <> ep.id
+          AND dup.workspace_id = ep.workspace_id
+          AND dup.normalized_name = ep.normalized_name
+      )
+  )
+  SELECT * FROM email_matches
+  UNION ALL
+  SELECT * FROM phone_matches
+  UNION ALL
+  SELECT * FROM name_matches;
+$$;
+
+CREATE OR REPLACE FUNCTION public.sync_linked_person_orders(p_person_id uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_order_id uuid;
+BEGIN
+  FOR v_order_id IN
+    SELECT o.id
+    FROM public.orders o
+    WHERE o.payer_id = p_person_id
+      OR EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(o.lots) lot
+        CROSS JOIN LATERAL jsonb_array_elements(coalesce(lot->'shares', '[]'::jsonb)) share
+        WHERE share->>'personId' = p_person_id::text
+      )
+  LOOP
+    PERFORM public.sync_order_participants(v_order_id);
+  END LOOP;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.resolve_my_person_link()
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_existing record;
+  v_best_rank integer;
+  v_candidate_count integer;
+  v_candidate record;
+  v_candidates jsonb := '[]'::jsonb;
+BEGIN
+  SELECT
+    p.id,
+    p.name,
+    p.email,
+    p.phone,
+    coalesce(p.link_source, 'manual') AS match_reason
+  INTO v_existing
+  FROM public.people p
+  WHERE p.linked_user_id = auth.uid()
+  LIMIT 1;
+
+  IF FOUND THEN
+    RETURN jsonb_build_object(
+      'status', 'linked',
+      'linkedPersonId', v_existing.id,
+      'matchedBy', v_existing.match_reason,
+      'person', jsonb_build_object(
+        'personId', v_existing.id,
+        'name', v_existing.name,
+        'email', v_existing.email,
+        'phone', v_existing.phone,
+        'matchReason', v_existing.match_reason
+      ),
+      'candidates', '[]'::jsonb
+    );
+  END IF;
+
+  SELECT min(match_rank) INTO v_best_rank
+  FROM public.get_my_person_link_candidates();
+
+  IF v_best_rank IS NULL THEN
+    RETURN jsonb_build_object(
+      'status', 'none',
+      'linkedPersonId', NULL,
+      'matchedBy', NULL,
+      'person', NULL,
+      'candidates', '[]'::jsonb
+    );
+  END IF;
+
+  SELECT
+    count(*),
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'personId', person_id,
+          'workspaceId', workspace_id,
+          'name', name,
+          'email', email,
+          'phone', phone,
+          'matchReason', match_reason
+        )
+        ORDER BY name, person_id
+      ),
+      '[]'::jsonb
+    )
+  INTO v_candidate_count, v_candidates
+  FROM public.get_my_person_link_candidates()
+  WHERE match_rank = v_best_rank;
+
+  IF v_candidate_count = 1 AND v_best_rank IN (1, 2) THEN
+    SELECT *
+    INTO v_candidate
+    FROM public.get_my_person_link_candidates()
+    WHERE match_rank = v_best_rank
+    LIMIT 1;
+
+    UPDATE public.people
+    SET linked_user_id = auth.uid(),
+        linked_at = now(),
+        link_source = v_candidate.match_reason
+    WHERE id = v_candidate.person_id
+      AND (linked_user_id IS NULL OR linked_user_id = auth.uid());
+
+    IF NOT FOUND THEN
+      RETURN jsonb_build_object(
+        'status', 'ambiguous',
+        'linkedPersonId', NULL,
+        'matchedBy', NULL,
+        'person', NULL,
+        'candidates', v_candidates
+      );
+    END IF;
+
+    PERFORM public.sync_linked_person_orders(v_candidate.person_id);
+
+    RETURN jsonb_build_object(
+      'status', 'auto-linked',
+      'linkedPersonId', v_candidate.person_id,
+      'matchedBy', v_candidate.match_reason,
+      'person', jsonb_build_object(
+        'personId', v_candidate.person_id,
+        'workspaceId', v_candidate.workspace_id,
+        'name', v_candidate.name,
+        'email', v_candidate.email,
+        'phone', v_candidate.phone,
+        'matchReason', v_candidate.match_reason
+      ),
+      'candidates', '[]'::jsonb
+    );
+  END IF;
+
+  RETURN jsonb_build_object(
+    'status', CASE WHEN v_candidate_count = 1 THEN 'needs-confirmation' ELSE 'ambiguous' END,
+    'linkedPersonId', NULL,
+    'matchedBy', CASE WHEN v_candidate_count = 1 AND v_best_rank = 3 THEN 'name' ELSE NULL END,
+    'person', NULL,
+    'candidates', v_candidates
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.confirm_my_person_link(p_person_id uuid)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_candidate record;
+BEGIN
+  SELECT *
+  INTO v_candidate
+  FROM public.get_my_person_link_candidates()
+  WHERE person_id = p_person_id
+  ORDER BY match_rank
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'No matching person is available to confirm.';
+  END IF;
+
+  UPDATE public.people
+  SET linked_user_id = auth.uid(),
+      linked_at = now(),
+      link_source = v_candidate.match_reason
+  WHERE id = p_person_id
+    AND (linked_user_id IS NULL OR linked_user_id = auth.uid());
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'That record is already linked to another account.';
+  END IF;
+
+  PERFORM public.sync_linked_person_orders(p_person_id);
+
+  RETURN jsonb_build_object(
+    'status', 'linked',
+    'linkedPersonId', v_candidate.person_id,
+    'matchedBy', v_candidate.match_reason
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.can_access_order(
+  p_workspace_id uuid,
+  p_order_id uuid,
+  p_pin_required boolean
+)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT
+    EXISTS (
+      SELECT 1
+      FROM public.order_participants op
+      WHERE op.order_id = p_order_id
+        AND op.user_id = auth.uid()
+    )
+    OR (
+      public.is_workspace_member(p_workspace_id)
+      AND NOT coalesce(p_pin_required, false)
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION public.can_access_person(
+  p_workspace_id uuid,
+  p_person_id uuid
+)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT
+    public.is_workspace_member(p_workspace_id)
+    OR EXISTS (
+      SELECT 1
+      FROM public.people p
+      WHERE p.id = p_person_id
+        AND p.linked_user_id = auth.uid()
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM public.order_participants op
+      JOIN public.orders o
+        ON o.id = op.order_id
+       AND o.workspace_id = p_workspace_id
+      WHERE op.user_id = auth.uid()
+        AND (
+          o.payer_id = p_person_id
+          OR EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements(o.lots) lot
+            CROSS JOIN LATERAL jsonb_array_elements(coalesce(lot->'shares', '[]'::jsonb)) share
+            WHERE share->>'personId' = p_person_id::text
+          )
+        )
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION public.sync_order_participants(p_order_id uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.orders
+    WHERE id = p_order_id
+  ) THEN
+    RETURN;
+  END IF;
+
+  DELETE FROM public.order_participants op
+  WHERE op.order_id = p_order_id
+    AND NOT EXISTS (
+      WITH order_row AS (
+        SELECT id, workspace_id, payer_id, lots
+        FROM public.orders
+        WHERE id = p_order_id
+      ),
+      participant_people AS (
+        SELECT DISTINCT participant_ids.person_id
+        FROM (
+          SELECT payer_id AS person_id
+          FROM order_row
+          WHERE payer_id IS NOT NULL
+
+          UNION ALL
+
+          SELECT NULLIF(share->>'personId', '')::uuid AS person_id
+          FROM order_row o
+          CROSS JOIN LATERAL jsonb_array_elements(o.lots) lot
+          CROSS JOIN LATERAL jsonb_array_elements(coalesce(lot->'shares', '[]'::jsonb)) share
+          WHERE coalesce((share->>'shareGrams')::integer, 0) > 0
+            AND NULLIF(share->>'personId', '') IS NOT NULL
+        ) participant_ids
+        WHERE participant_ids.person_id IS NOT NULL
+      ),
+      participant_users AS (
+        SELECT DISTINCT o.id AS order_id, p.linked_user_id AS user_id
+        FROM order_row o
+        JOIN participant_people pp ON true
+        JOIN public.people p
+          ON p.id = pp.person_id
+         AND p.workspace_id = o.workspace_id
+        WHERE p.linked_user_id IS NOT NULL
+      )
+      SELECT 1
+      FROM participant_users pu
+      WHERE pu.order_id = op.order_id
+        AND pu.user_id = op.user_id
+    );
+
+  INSERT INTO public.order_participants (order_id, user_id)
+  WITH order_row AS (
+    SELECT id, workspace_id, payer_id, lots
+    FROM public.orders
+    WHERE id = p_order_id
+  ),
+  participant_people AS (
+    SELECT DISTINCT participant_ids.person_id
+    FROM (
+      SELECT payer_id AS person_id
+      FROM order_row
+      WHERE payer_id IS NOT NULL
+
+      UNION ALL
+
+      SELECT NULLIF(share->>'personId', '')::uuid AS person_id
+      FROM order_row o
+      CROSS JOIN LATERAL jsonb_array_elements(o.lots) lot
+      CROSS JOIN LATERAL jsonb_array_elements(coalesce(lot->'shares', '[]'::jsonb)) share
+      WHERE coalesce((share->>'shareGrams')::integer, 0) > 0
+        AND NULLIF(share->>'personId', '') IS NOT NULL
+    ) participant_ids
+    WHERE participant_ids.person_id IS NOT NULL
+  ),
+  participant_users AS (
+    SELECT DISTINCT o.id AS order_id, p.linked_user_id AS user_id
+    FROM order_row o
+    JOIN participant_people pp ON true
+    JOIN public.people p
+      ON p.id = pp.person_id
+     AND p.workspace_id = o.workspace_id
+    WHERE p.linked_user_id IS NOT NULL
+  )
+  SELECT pu.order_id, pu.user_id
+  FROM participant_users pu
+  ON CONFLICT DO NOTHING;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public._sync_order_participants_from_person()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_order_id uuid;
+  v_person_id uuid;
+  v_workspace_id uuid;
+BEGIN
+  v_person_id := coalesce(NEW.id, OLD.id);
+  v_workspace_id := coalesce(NEW.workspace_id, OLD.workspace_id);
+
+  FOR v_order_id IN
+    SELECT o.id
+    FROM public.orders o
+    WHERE o.workspace_id = v_workspace_id
+      AND (
+        o.payer_id = v_person_id
+        OR EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(o.lots) lot
+          CROSS JOIN LATERAL jsonb_array_elements(coalesce(lot->'shares', '[]'::jsonb)) share
+          WHERE share->>'personId' = v_person_id::text
+        )
+      )
+  LOOP
+    PERFORM public.sync_order_participants(v_order_id);
+  END LOOP;
+
+  RETURN coalesce(NEW, OLD);
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_sync_order_participants_from_person ON public.people;
+CREATE TRIGGER trg_sync_order_participants_from_person
+  AFTER UPDATE OF email, phone, name, linked_user_id
+  ON public.people
+  FOR EACH ROW
+  WHEN (
+    OLD.email IS DISTINCT FROM NEW.email
+    OR OLD.phone IS DISTINCT FROM NEW.phone
+    OR OLD.name IS DISTINCT FROM NEW.name
+    OR OLD.linked_user_id IS DISTINCT FROM NEW.linked_user_id
+  )
+  EXECUTE FUNCTION public._sync_order_participants_from_person();
+
+DROP TRIGGER IF EXISTS trg_sync_order_participants_from_membership ON public.workspace_members;
+
+DROP POLICY IF EXISTS "Members can view people" ON public.people;
+CREATE POLICY "Members can view people"
+  ON public.people FOR SELECT
+  USING (public.can_access_person(workspace_id, id));
+
+DROP POLICY IF EXISTS "Members can view orders" ON public.orders;
+DROP POLICY IF EXISTS "Members can update orders" ON public.orders;
+DROP POLICY IF EXISTS "Members can delete orders" ON public.orders;
+
+CREATE POLICY "Members can view orders"
+  ON public.orders FOR SELECT
+  USING (public.can_access_order(workspace_id, id, pin_required));
+
+CREATE POLICY "Members can update orders"
+  ON public.orders FOR UPDATE
+  USING (public.is_workspace_member(workspace_id) AND public.can_access_order(workspace_id, id, pin_required))
+  WITH CHECK (public.is_workspace_member(workspace_id));
+
+CREATE POLICY "Members can delete orders"
+  ON public.orders FOR DELETE
+  USING (public.is_workspace_member(workspace_id) AND public.can_access_order(workspace_id, id, pin_required));
+
+DO $$
+DECLARE
+  v_order_id uuid;
+BEGIN
+  FOR v_order_id IN
+    SELECT id
+    FROM public.orders
+  LOOP
+    PERFORM public.sync_order_participants(v_order_id);
+  END LOOP;
+END;
+$$;

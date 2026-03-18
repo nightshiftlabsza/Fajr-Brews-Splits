@@ -53,7 +53,7 @@ export function getAuthReinitializeOptions(isInitialized: boolean): { silent?: b
 }
 
 export default function App() {
-  const { initialize, isInitialized, isLoading, user, membershipStatus } = useAppStore();
+  const { initialize, isInitialized, isLoading, user, accessStatus, linkResolution, dismissLinkResolution } = useAppStore();
   const [currentTab, setCurrentTab] = useState<AppTab>('order');
   const [authMode, setAuthMode] = useState<'default' | 'recovery'>(() => (
     typeof window !== 'undefined' && isRecoveryHash(window.location.hash) ? 'recovery' : 'default'
@@ -101,6 +101,12 @@ export default function App() {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (accessStatus === 'participant' && (currentTab === 'order' || currentTab === 'people')) {
+      setCurrentTab('history');
+    }
+  }, [accessStatus, currentTab]);
 
   // Track mediaQuery listener for cleanup
   const modeListenerRef = useRef<((e: MediaQueryListEvent) => void) | null>(null);
@@ -188,10 +194,12 @@ export default function App() {
     return <AuthPage />;
   }
 
-  // Logged in but not a workspace member
-  if (membershipStatus === 'none') {
+  // Logged in but not linked to any accessible records yet
+  if (accessStatus === 'none') {
     return <PendingAccess />;
   }
+
+  const participantOnly = accessStatus === 'participant';
 
   // Main app
   return (
@@ -199,17 +207,38 @@ export default function App() {
       <Header
         currentTab={currentTab}
         onTabChange={setCurrentTab}
+        participantOnly={participantOnly}
       />
 
       <main className="app-main">
-        <section className={`app-page ${currentTab === 'order' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'order'}>
-          <OrderPage onNavigateToHistory={() => setCurrentTab('history')} />
-        </section>
-        <section className={`app-page ${currentTab === 'people' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'people'}>
-          <PeoplePage />
-        </section>
+        {linkResolution.status === 'auto-linked' && linkResolution.person && (
+          <div className="page-container" style={{ paddingBottom: 0 }}>
+            <div className="alert alert-success" style={{ marginBottom: 'var(--space-4)' }}>
+              Your account is now linked to {linkResolution.person.name}. Orders you were already part of are now available.
+              <button
+                className="btn btn-ghost btn-sm"
+                type="button"
+                onClick={dismissLinkResolution}
+                style={{ marginLeft: 'var(--space-3)', padding: 0 }}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!participantOnly && (
+          <section className={`app-page ${currentTab === 'order' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'order'}>
+            <OrderPage onNavigateToHistory={() => setCurrentTab('history')} />
+          </section>
+        )}
+        {!participantOnly && (
+          <section className={`app-page ${currentTab === 'people' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'people'}>
+            <PeoplePage />
+          </section>
+        )}
         <section className={`app-page ${currentTab === 'history' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'history'}>
-          <HistoryPage onNavigateToOrder={() => setCurrentTab('order')} />
+          <HistoryPage onNavigateToOrder={() => setCurrentTab('order')} participantOnly={participantOnly} />
         </section>
         <section className={`app-page ${currentTab === 'settings' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'settings'}>
           <SettingsPage />

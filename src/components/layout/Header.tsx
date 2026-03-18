@@ -4,17 +4,24 @@ import type { AppTab } from '../../types';
 interface HeaderProps {
   currentTab: AppTab;
   onTabChange: (tab: AppTab) => void;
+  participantOnly?: boolean;
 }
 
-const TABS: { id: AppTab; label: string }[] = [
+const FULL_TABS: { id: AppTab; label: string }[] = [
   { id: 'order', label: 'Order' },
   { id: 'people', label: 'People' },
   { id: 'history', label: 'Past Orders' },
   { id: 'settings', label: 'Settings' },
 ];
 
-export function Header({ currentTab, onTabChange }: HeaderProps) {
+const PARTICIPANT_TABS: { id: AppTab; label: string }[] = [
+  { id: 'history', label: 'My Orders' },
+  { id: 'settings', label: 'Settings' },
+];
+
+export function Header({ currentTab, onTabChange, participantOnly = false }: HeaderProps) {
   const { user } = useAppStore();
+  const tabs = participantOnly ? PARTICIPANT_TABS : FULL_TABS;
 
   return (
     <>
@@ -29,7 +36,7 @@ export function Header({ currentTab, onTabChange }: HeaderProps) {
           </div>
 
           <nav className="nav-desktop-tabs">
-            {TABS.map((tab) => (
+            {tabs.map((tab) => (
               <button
                 key={tab.id}
                 className={`nav-desktop-tab ${currentTab === tab.id ? 'active' : ''}`}
@@ -48,7 +55,7 @@ export function Header({ currentTab, onTabChange }: HeaderProps) {
       </header>
 
       <nav className="nav-bottom" aria-label="Primary navigation">
-        {TABS.map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab.id}
             className={`nav-bottom-tab ${currentTab === tab.id ? 'active' : ''}`}

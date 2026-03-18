@@ -16,7 +16,7 @@ const MODES: { id: ThemeMode; label: string; icon: string }[] = [
 
 export function SettingsPage() {
   const {
-    user, memberRole, settings, setTheme, setThemeMode, signOut,
+    user, memberRole, accessStatus, settings, setTheme, setThemeMode, signOut,
     workspaceMembers, fetchWorkspaceMembers, addMemberByEmail, removeMember,
   } = useAppStore();
 
@@ -29,6 +29,7 @@ export function SettingsPage() {
   const [removeError, setRemoveError] = useState('');
 
   const isAdmin = memberRole === 'owner' || memberRole === 'admin';
+  const roleLabel = accessStatus === 'participant' ? 'participant' : memberRole ?? 'member';
 
   async function loadMembers() {
     await fetchWorkspaceMembers();
@@ -78,7 +79,7 @@ export function SettingsPage() {
           <div>
             <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{user?.email}</div>
             <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 2, textTransform: 'capitalize' }}>
-              Workspace role: {memberRole}
+              Workspace role: {roleLabel}
             </div>
           </div>
           <button className="btn btn-secondary btn-sm" onClick={signOut}>Sign out</button>
@@ -147,21 +148,22 @@ export function SettingsPage() {
       </Section>
 
       {/* Workspace members (admin only) */}
-      <Section
-        title="Workspace Members"
-        action={
-          !membersLoaded ? (
-            <button className="btn btn-secondary btn-sm" onClick={loadMembers}>Load members</button>
-          ) : undefined
-        }
-      >
-        {!membersLoaded ? (
-          <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-            Click "Load members" to view and manage workspace access.
-          </p>
-        ) : (
-          <>
-            {workspaceMembers.length > 0 && (
+      {accessStatus === 'member' && (
+        <Section
+          title="Workspace Members"
+          action={
+            !membersLoaded ? (
+              <button className="btn btn-secondary btn-sm" onClick={loadMembers}>Load members</button>
+            ) : undefined
+          }
+        >
+          {!membersLoaded ? (
+            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
+              Click "Load members" to view and manage workspace access.
+            </p>
+          ) : (
+            <>
+              {workspaceMembers.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginBottom: 'var(--space-5)' }}>
                 {workspaceMembers.map((member) => (
                   <div key={member.id} style={{
@@ -204,51 +206,52 @@ export function SettingsPage() {
               </div>
             )}
 
-            {removeError && (
-              <div className="alert alert-error" style={{ marginBottom: 'var(--space-4)' }}>{removeError}</div>
-            )}
+              {removeError && (
+                <div className="alert alert-error" style={{ marginBottom: 'var(--space-4)' }}>{removeError}</div>
+              )}
 
-            {isAdmin && (
-              <div>
-                <div className="section-label">Add member by email</div>
-                <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-                  <input
-                    className="input"
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="member@example.com"
-                    style={{ flex: 1, minWidth: 200 }}
-                  />
-                  <select
-                    className="select"
-                    value={inviteRole}
-                    onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member')}
-                    style={{ width: 120 }}
-                  >
-                    <option value="member">Member</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                  <button className="btn btn-primary" onClick={handleInvite} disabled={inviting}>
-                    {inviting ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Add'}
-                  </button>
+              {isAdmin && (
+                <div>
+                  <div className="section-label">Add member by email</div>
+                  <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                    <input
+                      className="input"
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      placeholder="member@example.com"
+                      style={{ flex: 1, minWidth: 200 }}
+                    />
+                    <select
+                      className="select"
+                      value={inviteRole}
+                      onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member')}
+                      style={{ width: 120 }}
+                    >
+                      <option value="member">Member</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                    <button className="btn btn-primary" onClick={handleInvite} disabled={inviting}>
+                      {inviting ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Add'}
+                    </button>
+                  </div>
+                  {inviteError && <div className="alert alert-error mt-3">{inviteError}</div>}
+                  {inviteSuccess && <div className="alert alert-success mt-3">{inviteSuccess}</div>}
+                  <p className="field-hint mt-2">
+                    The person must first create an account in the app, then you can add them here.
+                  </p>
                 </div>
-                {inviteError && <div className="alert alert-error mt-3">{inviteError}</div>}
-                {inviteSuccess && <div className="alert alert-success mt-3">{inviteSuccess}</div>}
-                <p className="field-hint mt-2">
-                  The person must first create an account in the app, then you can add them here.
-                </p>
-              </div>
-            )}
+              )}
 
-            {!isAdmin && (
-              <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
-                Only admins can add or remove workspace members.
-              </p>
-            )}
-          </>
-        )}
-      </Section>
+              {!isAdmin && (
+                <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+                  Only admins can add or remove workspace members.
+                </p>
+              )}
+            </>
+          )}
+        </Section>
+      )}
 
       {/* Realtime status */}
       <Section title="Sync Status">

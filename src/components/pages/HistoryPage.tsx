@@ -3,14 +3,15 @@ import { useAppStore } from '../../store/appStore';
 import type { Order } from '../../types';
 import { formatDateShort, formatZAR, todayISO } from '../../lib/formatters';
 import { calculate } from '../../lib/calculations';
-import { getPastOrders } from '../../lib/orderLifecycle';
+import { getActiveOrders, getPastOrders } from '../../lib/orderLifecycle';
 import { SettlementPacks } from '../order/SettlementPacks';
 
 interface Props {
   onNavigateToOrder: () => void;
+  participantOnly?: boolean;
 }
 
-export function HistoryPage({ onNavigateToOrder }: Props) {
+export function HistoryPage({ onNavigateToOrder, participantOnly = false }: Props) {
   const {
     orders, people, deleteOrder, createOrder,
     exportJSON, importJSON, setLastExportDate,
@@ -25,6 +26,7 @@ export function HistoryPage({ onNavigateToOrder }: Props) {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   const personNames = Object.fromEntries(people.map((p) => [p.id, p.name]));
+  const activeOrders = getActiveOrders(orders);
   const pastOrders = getPastOrders(orders);
   const pinOrder = pinOrderId ? pastOrders.find((order) => order.id === pinOrderId) ?? null : null;
   const selectedOrder = selectedOrderId ? pastOrders.find((order) => order.id === selectedOrderId) ?? null : null;
@@ -182,28 +184,66 @@ export function HistoryPage({ onNavigateToOrder }: Props) {
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
-          <h2 style={{ marginBottom: 4 }}>Past Orders</h2>
+          <h2 style={{ marginBottom: 4 }}>{participantOnly ? 'My Orders' : 'Past Orders'}</h2>
           <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-            Finalized orders live here with their full settlement details intact.
+            {participantOnly
+              ? 'Orders you were part of appear here automatically, including ones created before your account existed.'
+              : 'Finalized orders live here with their full settlement details intact.'}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-          <button className="btn btn-secondary btn-sm" onClick={handleExport}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-            Export JSON
-          </button>
-          <button className="btn btn-secondary btn-sm" onClick={handleImport}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-            Import JSON
-          </button>
-        </div>
+        {!participantOnly && (
+          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+            <button className="btn btn-secondary btn-sm" onClick={handleExport}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              Export JSON
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={handleImport}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+              Import JSON
+            </button>
+          </div>
+        )}
       </div>
+
+      {participantOnly && activeOrders.length > 0 && (
+        <section style={{ marginBottom: 'var(--space-6)' }}>
+          <div style={{ marginBottom: 'var(--space-3)' }}>
+            <div className="section-label" style={{ marginBottom: 4 }}>Active Orders</div>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+              These orders are still in progress, and your participation is already recognized.
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            {activeOrders.map((order) => {
+              const result = calculate(order, personNames);
+              const participantCount = result.personIds.length;
+
+              return (
+                <div key={order.id} className="card">
+                  <div className="card-padded" style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{order.name}</div>
+                      <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
+                        {formatDateShort(order.orderDate)} · {participantCount} participant{participantCount !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', alignSelf: 'center' }}>
+                      Still in progress
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {pastOrders.length === 0 && (
         <div className="empty-state">
           <div className="empty-state-icon">📂</div>
           <h3>No past orders yet</h3>
-          <p>Finalize an order from the Summary step and it will land here.</p>
+          <p>{participantOnly ? 'Older finalized orders will appear here when you were included in them.' : 'Finalize an order from the Summary step and it will land here.'}</p>
         </div>
       )}
 
@@ -261,16 +301,20 @@ export function HistoryPage({ onNavigateToOrder }: Props) {
                     <button className="btn btn-primary btn-sm" onClick={() => handleReview(order)}>
                       {isLocked ? '🔒 Unlock' : isSelected ? 'Hide details' : 'Review settlement'}
                     </button>
-                    <button className="btn btn-secondary btn-sm" onClick={() => handleDuplicate(order)}>
-                      Reopen as copy
-                    </button>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ color: 'var(--color-unpaid)' }}
-                      onClick={() => handleDelete(order)}
-                    >
-                      Delete
-                    </button>
+                    {!participantOnly && (
+                      <button className="btn btn-secondary btn-sm" onClick={() => handleDuplicate(order)}>
+                        Reopen as copy
+                      </button>
+                    )}
+                    {!participantOnly && (
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ color: 'var(--color-unpaid)' }}
+                        onClick={() => handleDelete(order)}
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

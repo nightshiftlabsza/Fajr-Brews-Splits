@@ -132,6 +132,9 @@ export interface DbPerson {
   phone: string | null;
   email: string | null;
   note: string | null;
+  linked_user_id?: string | null;
+  linked_at?: string | null;
+  link_source?: 'email' | 'phone' | 'name' | 'manual' | null;
   created_at: string;
   updated_at: string;
 }
@@ -159,6 +162,7 @@ export interface DbProfile {
   id: string;
   email: string;
   full_name: string | null;
+  phone?: string | null;
   created_at: string;
 }
 
@@ -225,7 +229,26 @@ export interface AppSettings {
 }
 
 // ─── Workspace Membership ─────────────────────────────────────
-export type MembershipStatus = 'checking' | 'member' | 'none' | 'error';
+export type AccessStatus = 'checking' | 'member' | 'participant' | 'none' | 'error';
+
+export type PersonMatchReason = 'email' | 'phone' | 'name' | 'manual';
+
+export interface PersonLinkCandidate {
+  personId: string;
+  workspaceId?: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  matchReason: Exclude<PersonMatchReason, 'manual'>;
+}
+
+export interface PersonLinkResolution {
+  status: 'idle' | 'linked' | 'auto-linked' | 'needs-confirmation' | 'ambiguous' | 'none';
+  linkedPersonId: string | null;
+  matchedBy: PersonMatchReason | null;
+  person: PersonLinkCandidate | null;
+  candidates: PersonLinkCandidate[];
+}
 
 export interface WorkspaceMember {
   id: string;
@@ -242,6 +265,7 @@ export interface AuthUser {
   id: string;
   email: string;
   fullName?: string;
+  phone?: string;
 }
 
 // ─── App Tab Navigation ───────────────────────────────────────
