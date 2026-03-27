@@ -4,8 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
-import type { Order, Person } from '../../types';
-import type { BagAllocationDraft } from '../../lib/orderWizard';
+import type { Bag, Order, Person } from '../../types';
 
 const mockStoreState = {
   people: [] as Person[],
@@ -23,7 +22,7 @@ vi.mock('../../store/appStore', () => ({
   ),
 }));
 
-import { BagAssignmentCard, CoffeeLotsSection } from './CoffeeLotsSection';
+import { BagCard, CoffeeLotsSection } from './CoffeeLotsSection';
 
 const people: Person[] = [
   {
@@ -49,22 +48,21 @@ const people: Person[] = [
   },
 ];
 
-function makeBag(overrides: Partial<BagAllocationDraft> = {}): BagAllocationDraft {
+function makeBag(overrides: Partial<Bag> = {}): Bag {
   return {
-    id: overrides.id || `bag-${overrides.bagIndex ?? 0}`,
-    bagIndex: overrides.bagIndex ?? 0,
-    mode: overrides.mode ?? 'single',
-    participants: overrides.participants ?? [],
+    id: overrides.id || `bag-${Math.random().toString(36).slice(2)}`,
+    splitMode: overrides.splitMode ?? 'unassigned',
+    buyers: overrides.buyers ?? [],
   };
 }
 
-function Harness({ initialBags }: { initialBags: BagAllocationDraft[] }) {
+function Harness({ initialBags }: { initialBags: Bag[] }) {
   const [bags, setBags] = useState(initialBags);
 
   return (
     <div>
       {bags.map((bag, bagIndex) => (
-        <BagAssignmentCard
+        <BagCard
           key={bag.id}
           bag={bag}
           bags={bags}
@@ -72,7 +70,9 @@ function Harness({ initialBags }: { initialBags: BagAllocationDraft[] }) {
           gramsPerBag={250}
           people={people}
           recentBuyerIds={[]}
-          onChange={(nextBags) => setBags(nextBags)}
+          canRemove={bags.length > 1}
+          onChange={(nextBags: Bag[]) => setBags(nextBags)}
+          onRemove={() => undefined}
           onAddNewBuyer={() => undefined}
         />
       ))}
@@ -107,6 +107,13 @@ function makeLot(orderLotOverrides: Partial<Order['lots'][number]> = {}): Order[
     gramsPerBag: orderLotOverrides.gramsPerBag ?? 250,
     quantity: orderLotOverrides.quantity ?? 1,
     shares: orderLotOverrides.shares ?? [{ id: 'share-1', personId: 'person-1', shareGrams: 250, bagIndex: 0 }],
+    bags: orderLotOverrides.bags ?? [
+      {
+        id: 'bag-0',
+        splitMode: 'full',
+        buyers: [{ id: 'buyer-1', personId: 'person-1', grams: 250 }],
+      },
+    ],
     bagAllocations: orderLotOverrides.bagAllocations ?? [
       {
         id: 'bag-0',
@@ -149,15 +156,7 @@ function setSelectValue(select: HTMLSelectElement, value: string) {
   });
 }
 
-function setInputValue(input: HTMLInputElement, value: string) {
-  act(() => {
-    input.value = value;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-  });
-}
-
-describe('BagAssignmentCard', () => {
+describe('BagCard', () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -175,65 +174,38 @@ describe('BagAssignmentCard', () => {
     container.remove();
   });
 
-  it('shows the split editor on the first click', () => {
+  it('shows quick-assign buttons for unassigned bags', () => {
     act(() => {
-      root.render(<Harness initialBags={[makeBag({ bagIndex: 0 })]} />);
+      root.render(<Harness initialBags={[makeBag()]} />);
     });
 
-    clickButtonByText(container, 'Split bag');
-
-    expect(container.textContent).toContain('Back to single owner');
-    expect(container.querySelectorAll('.buyer-row')).toHaveLength(1);
+    expect(container.textContent).toContain('Split equally');
+    expect(container.textContent).toContain('Custom split');
+    expect(container.querySelector('select')).toBeTruthy();
   });
 
-  it('keeps split allocations while editing other bags in the same lot', () => {
+  it('assigns full bag when a person is selected from the dropdown', () => {
     act(() => {
-      root.render(<Harness initialBags={[makeBag({ bagIndex: 0 }), makeBag({ bagIndex: 1 })]} />);
+      root.render(<Harness initialBags={[makeBag()]} />);
     });
 
-    const bagCards = container.querySelectorAll('.bag-card');
-    const firstBag = bagCards[0];
-    const secondBag = bagCards[1];
+    const select = container.querySelector('select') as HTMLSelectElement;
+    setSelectValue(select, 'person-1');
 
-    clickButtonByText(container, 'Split bag', firstBag);
-
-    let firstBagRows = firstBag.querySelectorAll('.buyer-row');
-    setSelectValue(firstBagRows[0].querySelector('select') as HTMLSelectElement, 'person-1');
-    clickButtonByText(container, 'Add buyer', firstBag);
-    clickButtonByText(container, 'Split equally', firstBag);
-
-    clickButtonByText(container, 'Split bag', secondBag);
-
-    const persistedRows = firstBag.querySelectorAll('.buyer-row');
-    const firstSelects = firstBag.querySelectorAll('select');
-    const firstInputs = firstBag.querySelectorAll('input');
-
-    expect(persistedRows).toHaveLength(2);
-    expect((firstSelects[0] as HTMLSelectElement).value).toBe('person-1');
-    expect((firstSelects[1] as HTMLSelectElement).value).toBe('person-2');
-    expect((firstInputs[0] as HTMLInputElement).value).toBe('125');
-    expect((firstInputs[1] as HTMLInputElement).value).toBe('125');
+    // Should now show Alice as assigned (collapsed or full mode)
+    expect(container.textContent).toContain('Alice');
+    expect(container.textContent).toContain('Full bag');
   });
 
-  it('returns cleanly to single-owner mode after editing a split bag', () => {
+  it('starts equal split mode with two buyer slots', () => {
     act(() => {
-      root.render(<Harness initialBags={[makeBag({ bagIndex: 0 })]} />);
+      root.render(<Harness initialBags={[makeBag()]} />);
     });
 
-    clickButtonByText(container, 'Split bag');
+    clickButtonByText(container, 'Split equally');
 
-    let rows = container.querySelectorAll('.buyer-row');
-    setSelectValue(rows[0].querySelector('select') as HTMLSelectElement, 'person-1');
-    setInputValue(rows[0].querySelector('input') as HTMLInputElement, '125');
-    clickButtonByText(container, 'Add buyer');
-
-    rows = container.querySelectorAll('.buyer-row');
-    setInputValue(rows[1].querySelector('input') as HTMLInputElement, '125');
-    clickButtonByText(container, 'Back to single owner');
-
-    expect(container.textContent).not.toContain('Back to single owner');
-    expect(container.querySelectorAll('.buyer-row')).toHaveLength(0);
-    expect((container.querySelector('select') as HTMLSelectElement).value).toBe('');
+    expect(container.textContent).toContain('Equal split');
+    expect(container.querySelectorAll('.buyer-row')).toHaveLength(2);
   });
 });
 
@@ -263,6 +235,13 @@ describe('CoffeeLotsSection accordion flow', () => {
           id: 'lot-2',
           name: 'Burundi Natural',
           shares: [{ id: 'share-2', personId: 'person-2', shareGrams: 250, bagIndex: 0 }],
+          bags: [
+            {
+              id: 'bag-1',
+              splitMode: 'full',
+              buyers: [{ id: 'buyer-2', personId: 'person-2', grams: 250 }],
+            },
+          ],
           bagAllocations: [
             {
               id: 'bag-1',

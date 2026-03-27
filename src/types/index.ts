@@ -50,14 +50,30 @@ export interface LotBagAllocation {
   participants: LotBagParticipant[];
 }
 
+// ─── Bag-First Model ────────────────────────────────────────────
+export type BagSplitMode = 'full' | 'equal' | 'custom' | 'unassigned';
+
+export interface BagBuyer {
+  id: string;
+  personId: string;
+  grams: number; // auto-calculated for full/equal, manual for custom
+}
+
+export interface Bag {
+  id: string;
+  splitMode: BagSplitMode;
+  buyers: BagBuyer[];
+}
+
 export interface CoffeeLot {
   id: string;
   name: string;
   foreignPricePerBag: number; // > 0, original list price in foreign currency
   gramsPerBag: number;        // integer >= 1
-  quantity: number;           // integer >= 1
+  quantity: number;           // integer >= 1 (kept for backward compat; derived from bags.length when bags present)
   shares: ShareLine[];
   bagAllocations?: LotBagAllocation[];
+  bags?: Bag[];               // new bag-first model — preferred when present
 }
 
 // ─── Fees ─────────────────────────────────────────────────────
@@ -181,7 +197,7 @@ export interface LotPersonBreakdown {
   lotId: string;
   lotName: string;
   bagIndex: number;
-  bagMode: 'single' | 'split';
+  bagMode: BagSplitMode;
   shareGrams: number;
   gramsPerBag: number;
   lotQuantity: number;

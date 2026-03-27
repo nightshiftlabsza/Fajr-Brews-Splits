@@ -1,4 +1,7 @@
 import type {
+  Bag,
+  BagBuyer,
+  BagSplitMode,
   CoffeeLot,
   LotBagAllocation,
   LotBagParticipant,
@@ -312,6 +315,248 @@ export function getLotBagStatus(bags: BagAllocationDraft[], gramsPerBag: number)
   };
 }
 
+// ─── Bag-First Model ────────────────────────────────────────────
+
+function genBagId(): string {
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+}
+
+/** Infer the split mode from a set of buyers and the bag size. */
+export function inferSplitMode(buyers: BagBuyer[], gramsPerBag: number): BagSplitMode {
+  if (buyers.length === 0) return 'unassigned';
+  if (buyers.length === 1 && buyers[0].grams === gramsPerBag) return 'full';
+  if (buyers.length >= 2) {
+    const base = Math.floor(gramsPerBag / buyers.length);
+    const remainder = gramsPerBag - base * buyers.length;
+    const isEqual = buyers.every((b, i) => {
+      const expected = i === buyers.length - 1 ? base + remainder : base;
+      return b.grams === expected;
+    });
+    if (isEqual) return 'equal';
+    return 'custom';
+  }
+  return 'custom';
+}
+
+/** Auto-fill grams for full/equal modes. Custom and unassigned are left as-is. */
+export function recalculateBagGrams(bag: Bag, gramsPerBag: number): Bag {
+  if (bag.splitMode === 'unassigned' || bag.buyers.length === 0) {
+    return { ...bag, splitMode: 'unassigned', buyers: [] };
+  }
+  if (bag.splitMode === 'full') {
+    if (bag.buyers.length !== 1) return bag;
+    return {
+      ...bag,
+      buyers: [{ ...bag.buyers[0], grams: gramsPerBag }],
+    };
+  }
+  if (bag.splitMode === 'equal') {
+    const n = bag.buyers.length;
+    const base = Math.floor(gramsPerBag / n);
+    const remainder = gramsPerBag - base * n;
+    return {
+      ...bag,
+      buyers: bag.buyers.map((b, i) => ({
+        ...b,
+        grams: i === n - 1 ? base + remainder : base,
+      })),
+    };
+  }
+  // custom: no auto-calc
+  return bag;
+}
+
+/** Create a new empty bag. */
+export function createUnassignedBag(): Bag {
+  return { id: genBagId(), splitMode: 'unassigned', buyers: [] };
+}
+
+/** Create N unassigned bags. */
+export function createUnassignedBags(count: number): Bag[] {
+  return Array.from({ length: count }, () => createUnassignedBag());
+}
+
+/** Convert a legacy BagAllocationDraft into the new Bag format. */
+function draftToBag(draft: BagAllocationDraft, gramsPerBag: number): Bag {
+  const buyers: BagBuyer[] = draft.participants
+    .filter((p) => p.personId.trim() && p.shareGrams > 0)
+    .map((p) => ({
+      id: p.id || genBagId(),
+      personId: p.personId,
+      grams: p.shareGrams,
+    }));
+
+  const splitMode = inferSplitMode(buyers, gramsPerBag);
+  return { id: draft.id || genBagId(), splitMode, buyers };
+}
+
+/**
+ * Normalize a CoffeeLot into Bag[] (the new model).
+ * Prefers lot.bags if present; otherwise converts from legacy formats.
+ */
+export function normalizeLotToBags(lot: CoffeeLot): Bag[] {
+  if (lot.bags && lot.bags.length > 0) return lot.bags;
+  const drafts = expandLotToBagDrafts(lot);
+  return drafts.map((d) => draftToBag(d, lot.gramsPerBag));
+}
+
+/**
+ * Serialize Bag[] back to all CoffeeLot fields for write-through backward compat.
+ * Returns bags, shares, bagAllocations, and quantity.
+ */
+export function serializeLotFromBags(
+  bags: Bag[],
+): Pick<CoffeeLot, 'bags' | 'shares' | 'bagAllocations' | 'quantity'> {
+  const shares: ShareLine[] = [];
+  const bagAllocations: LotBagAllocation[] = [];
+
+  for (let bagIndex = 0; bagIndex < bags.length; bagIndex++) {
+    const bag = bags[bagIndex];
+
+    const participants: LotBagParticipant[] = bag.buyers
+      .filter((b) => b.personId.trim() && b.grams > 0)
+      .map((b) => ({
+        id: b.id,
+        personId: b.personId,
+        shareGrams: b.grams,
+        sourceShareId: b.id,
+      }));
+
+    for (const p of participants) {
+      shares.push({
+        id: p.sourceShareId,
+        personId: p.personId,
+        shareGrams: p.shareGrams,
+        bagIndex,
+      });
+    }
+
+    const legacyMode: 'single' | 'split' =
+      bag.splitMode === 'full' || bag.splitMode === 'unassigned' ? 'single' : 'split';
+
+    bagAllocations.push({
+      id: bag.id,
+      bagIndex,
+      mode: legacyMode,
+      participants,
+    });
+  }
+
+  return {
+    bags,
+    shares,
+    bagAllocations,
+    quantity: bags.length,
+  };
+}
+
+/** Validate Bag[] against the new model. */
+export function validateBags(bags: Bag[], gramsPerBag: number): string[] {
+  const errors: string[] = [];
+
+  for (let i = 0; i < bags.length; i++) {
+    const bag = bags[i];
+    const label = `Bag ${i + 1}`;
+
+    if (bag.splitMode === 'unassigned') {
+      errors.push(`${label}: buyer is required.`);
+      continue;
+    }
+
+    if (bag.splitMode === 'full') {
+      if (bag.buyers.length !== 1 || !bag.buyers[0].personId.trim()) {
+        errors.push(`${label}: full bags need exactly one buyer.`);
+        continue;
+      }
+      if (bag.buyers[0].grams !== gramsPerBag) {
+        errors.push(`${label}: full bags must assign exactly ${gramsPerBag}g.`);
+      }
+      continue;
+    }
+
+    // equal or custom
+    if (bag.buyers.length < 2) {
+      errors.push(`${label}: shared bags need at least two buyers.`);
+      continue;
+    }
+    if (bag.buyers.some((b) => !b.personId.trim())) {
+      errors.push(`${label}: each buyer row needs a selected person.`);
+    }
+    if (bag.buyers.some((b) => !Number.isInteger(b.grams) || b.grams < 1)) {
+      errors.push(`${label}: buyer grams must be whole numbers greater than zero.`);
+    }
+    const total = bag.buyers.reduce((s, b) => s + b.grams, 0);
+    if (total !== gramsPerBag) {
+      errors.push(`${label}: buyer grams must total exactly ${gramsPerBag}g.`);
+    }
+  }
+
+  return errors;
+}
+
+/** Get bag status for the new Bag[] model. */
+export function getBagStatus(bags: Bag[], gramsPerBag: number): LotBagStatus {
+  const totalBags = bags.length;
+  const errors = validateBags(bags, gramsPerBag);
+  const assignedBags = bags.filter((_, i) => {
+    const bagErrors = validateBags([bags[i]], gramsPerBag);
+    return bagErrors.length === 0;
+  }).length;
+  const emptyBags = bags.filter((b) => b.splitMode === 'unassigned').length;
+  const splitAttentionBags = totalBags - assignedBags - emptyBags;
+
+  if (assignedBags === totalBags) {
+    return {
+      tone: 'complete',
+      label: `${assignedBags} of ${totalBags} bags assigned`,
+      assignedBags,
+      emptyBags,
+      splitAttentionBags,
+      totalBags,
+    };
+  }
+
+  const fragments: string[] = [];
+  if (emptyBags > 0) {
+    fragments.push(`${emptyBags} ${pluralize(emptyBags, 'bag')} still ${emptyBags === 1 ? 'needs' : 'need'} a buyer`);
+  }
+  if (splitAttentionBags > 0) {
+    fragments.push(`${splitAttentionBags} shared ${pluralize(splitAttentionBags, 'bag')} ${splitAttentionBags === 1 ? 'needs' : 'need'} attention`);
+  }
+
+  return {
+    tone: splitAttentionBags > 0 ? 'error' : 'warning',
+    label: fragments.length > 0 ? fragments.join(' • ') : `${assignedBags} of ${totalBags} bags assigned`,
+    assignedBags,
+    emptyBags,
+    splitAttentionBags,
+    totalBags,
+  };
+}
+
+/** Copy a bag's allocation to all unassigned bags in the list. */
+export function applyAllocationToBags(sourceBag: Bag, targetBags: Bag[]): Bag[] {
+  return targetBags.map((bag) => {
+    if (bag.splitMode !== 'unassigned') return bag;
+    return {
+      ...bag,
+      splitMode: sourceBag.splitMode,
+      buyers: sourceBag.buyers.map((b) => ({ ...b, id: genBagId() })),
+    };
+  });
+}
+
+/** Duplicate a bag's allocation as a new bag appended to the list. */
+export function duplicateBag(sourceBag: Bag): Bag {
+  return {
+    id: genBagId(),
+    splitMode: sourceBag.splitMode,
+    buyers: sourceBag.buyers.map((b) => ({ ...b, id: genBagId() })),
+  };
+}
+
 export function validateSetupStep(order: Order): string[] {
   const errors: string[] = [];
   if (!order.name.trim()) errors.push('Order name is required.');
@@ -322,33 +567,25 @@ export function validateSetupStep(order: Order): string[] {
 
 export function validateCoffeeLot(lot: CoffeeLot): string[] {
   const errors: string[] = [];
-  const totalGrams = lot.gramsPerBag * lot.quantity;
-  const allocatedGrams = lot.shares.reduce((sum, share) => sum + (share.shareGrams || 0), 0);
-  const bagDraftErrors = validateBagDrafts(expandLotToBagDrafts(lot), lot.gramsPerBag);
+  const bags = normalizeLotToBags(lot);
 
   if (!lot.name.trim()) errors.push('Coffee name is required.');
   if (!Number.isInteger(lot.gramsPerBag) || lot.gramsPerBag < 1) {
     errors.push('Grams per bag must be an integer greater than zero.');
   }
-  if (!Number.isInteger(lot.quantity) || lot.quantity < 1) {
-    errors.push('Quantity must be an integer greater than zero.');
+  if (bags.length < 1) {
+    errors.push('At least one bag is required.');
   }
   if (!Number.isFinite(lot.foreignPricePerBag) || lot.foreignPricePerBag <= 0) {
     errors.push('Foreign list price per bag must be greater than zero.');
   }
-  if (lot.shares.length === 0) {
+
+  const hasBuyers = bags.some((b) => b.buyers.length > 0);
+  if (!hasBuyers) {
     errors.push('At least one buyer is required.');
   }
-  if (allocatedGrams !== totalGrams) {
-    errors.push(`Buyer grams must total exactly ${totalGrams}g.`);
-  }
-  if (lot.shares.some((share) => !Number.isInteger(share.shareGrams) || share.shareGrams < 1)) {
-    errors.push('Buyer grams must be whole numbers greater than zero.');
-  }
-  if (lot.shares.some((share) => !share.personId)) {
-    errors.push('Each buyer row must have a selected buyer.');
-  }
-  errors.push(...bagDraftErrors);
+
+  errors.push(...validateBags(bags, lot.gramsPerBag));
 
   return errors;
 }
@@ -397,16 +634,15 @@ export function getMaxUnlockedStepIndex(order: Order): number {
 }
 
 export function getLotAssignmentMode(lot: CoffeeLot): 'unassigned' | 'own' | 'split' {
-  const bags = expandLotToBagDrafts(lot);
-  if (bags.every((bag) => bag.participants.length === 0)) return 'unassigned';
-  if (bags.every((bag) => bag.mode === 'single' && bag.participants.length === 1 && bag.participants[0].shareGrams === lot.gramsPerBag)) {
-    return 'own';
-  }
+  const bags = normalizeLotToBags(lot);
+  if (bags.every((bag) => bag.splitMode === 'unassigned')) return 'unassigned';
+  if (bags.every((bag) => bag.splitMode === 'full')) return 'own';
   return 'split';
 }
 
 export function getInitialShareGramsForNewBuyer(lot: CoffeeLot): number {
-  const totalGrams = lot.gramsPerBag * lot.quantity;
-  const allocatedGrams = lot.shares.reduce((sum, share) => sum + (share.shareGrams || 0), 0);
+  const bags = normalizeLotToBags(lot);
+  const totalGrams = lot.gramsPerBag * bags.length;
+  const allocatedGrams = bags.reduce((sum, bag) => sum + bag.buyers.reduce((s, b) => s + b.grams, 0), 0);
   return Math.max(0, totalGrams - allocatedGrams);
 }

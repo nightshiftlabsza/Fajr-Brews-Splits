@@ -142,7 +142,7 @@ export async function generateInvoicePDF(
     setTextColor(doc, MID);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
-    const gramsLine = `Bag ${lb.bagIndex + 1} · ${lb.shareGrams}g · ${lb.bagMode === 'split' ? 'split bag' : 'own bag'}`;
+    const gramsLine = `Bag ${lb.bagIndex + 1} · ${lb.shareGrams}g · ${lb.bagMode === 'full' ? 'own bag' : lb.bagMode === 'unassigned' ? 'unassigned' : 'split bag'}`;
     doc.text(gramsLine, 24, y);
 
     if (lb.splitWith.length > 0) {

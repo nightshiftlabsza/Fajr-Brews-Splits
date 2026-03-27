@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BagAllocationDraft } from './orderWizard';
-import type { CoffeeLot, Order } from '../types';
+import type { Bag, CoffeeLot, Order } from '../types';
 import {
   collapseBagDraftsToShares,
   expandLotToBagDrafts,
@@ -14,6 +14,17 @@ import {
   validateCoffeeStep,
   validateGoodsStep,
   validateSetupStep,
+  // Bag-first API
+  normalizeLotToBags,
+  serializeLotFromBags,
+  inferSplitMode,
+  recalculateBagGrams,
+  createUnassignedBag,
+  createUnassignedBags,
+  validateBags,
+  getBagStatus,
+  applyAllocationToBags,
+  duplicateBag,
 } from './orderWizard';
 
 const baseOrder: Order = {
@@ -372,5 +383,220 @@ describe('bag-draft validation', () => {
     };
     expect(validateCoffeeStep(order)).toEqual([]);
     expect(isStepComplete(order, 'coffees')).toBe(true);
+  });
+});
+
+// ─── Bag-First Model Tests ─────────────────────────────────────
+
+describe('inferSplitMode', () => {
+  it('returns unassigned for empty buyers', () => {
+    expect(inferSplitMode([], 250)).toBe('unassigned');
+  });
+
+  it('returns full for a single buyer with full grams', () => {
+    expect(inferSplitMode([{ id: '1', personId: 'p1', grams: 250 }], 250)).toBe('full');
+  });
+
+  it('returns equal for two buyers with equal grams', () => {
+    expect(inferSplitMode([
+      { id: '1', personId: 'p1', grams: 125 },
+      { id: '2', personId: 'p2', grams: 125 },
+    ], 250)).toBe('equal');
+  });
+
+  it('returns equal for three buyers with remainder to last', () => {
+    expect(inferSplitMode([
+      { id: '1', personId: 'p1', grams: 83 },
+      { id: '2', personId: 'p2', grams: 83 },
+      { id: '3', personId: 'p3', grams: 84 },
+    ], 250)).toBe('equal');
+  });
+
+  it('returns custom for unequal grams', () => {
+    expect(inferSplitMode([
+      { id: '1', personId: 'p1', grams: 50 },
+      { id: '2', personId: 'p2', grams: 200 },
+    ], 250)).toBe('custom');
+  });
+});
+
+describe('recalculateBagGrams', () => {
+  it('auto-fills full bag grams', () => {
+    const bag: Bag = { id: '1', splitMode: 'full', buyers: [{ id: 'b1', personId: 'p1', grams: 0 }] };
+    const result = recalculateBagGrams(bag, 250);
+    expect(result.buyers[0].grams).toBe(250);
+  });
+
+  it('distributes equal grams with remainder to last', () => {
+    const bag: Bag = {
+      id: '1', splitMode: 'equal', buyers: [
+        { id: 'b1', personId: 'p1', grams: 0 },
+        { id: 'b2', personId: 'p2', grams: 0 },
+        { id: 'b3', personId: 'p3', grams: 0 },
+      ],
+    };
+    const result = recalculateBagGrams(bag, 250);
+    expect(result.buyers.map((b) => b.grams)).toEqual([83, 83, 84]);
+  });
+
+  it('does not auto-calc custom bags', () => {
+    const bag: Bag = {
+      id: '1', splitMode: 'custom', buyers: [
+        { id: 'b1', personId: 'p1', grams: 100 },
+        { id: 'b2', personId: 'p2', grams: 100 },
+      ],
+    };
+    const result = recalculateBagGrams(bag, 250);
+    expect(result.buyers.map((b) => b.grams)).toEqual([100, 100]);
+  });
+});
+
+describe('normalizeLotToBags', () => {
+  it('returns lot.bags directly if present', () => {
+    const bags: Bag[] = [
+      { id: 'b1', splitMode: 'full', buyers: [{ id: 'x', personId: 'p1', grams: 250 }] },
+    ];
+    const lot: CoffeeLot = { ...makeLot(), bags };
+    expect(normalizeLotToBags(lot)).toBe(bags);
+  });
+
+  it('normalizes legacy shares into bags', () => {
+    const lot = makeLot();
+    const bags = normalizeLotToBags(lot);
+    expect(bags).toHaveLength(2);
+    expect(bags[0].splitMode).toBe('full');
+    expect(bags[0].buyers[0].personId).toBe('person-1');
+    expect(bags[0].buyers[0].grams).toBe(250);
+    expect(bags[1].splitMode).toBe('full');
+    expect(bags[1].buyers[0].personId).toBe('person-2');
+  });
+
+  it('normalizes cross-boundary shares into mixed bags', () => {
+    const lot = makeLot({
+      shares: [
+        { id: 's1', personId: 'person-1', shareGrams: 300 },
+        { id: 's2', personId: 'person-2', shareGrams: 200 },
+      ],
+    });
+    const bags = normalizeLotToBags(lot);
+    expect(bags).toHaveLength(2);
+    expect(bags[0].splitMode).toBe('full');
+    expect(bags[1].splitMode).toBe('custom');
+    expect(bags[1].buyers).toHaveLength(2);
+  });
+});
+
+describe('serializeLotFromBags', () => {
+  it('round-trips bags to all legacy fields', () => {
+    const bags: Bag[] = [
+      { id: 'b1', splitMode: 'full', buyers: [{ id: 'x', personId: 'p1', grams: 250 }] },
+      { id: 'b2', splitMode: 'equal', buyers: [
+        { id: 'y', personId: 'p1', grams: 125 },
+        { id: 'z', personId: 'p2', grams: 125 },
+      ]},
+    ];
+    const result = serializeLotFromBags(bags);
+    expect(result.quantity).toBe(2);
+    expect(result.bags).toBe(bags);
+    expect(result.shares).toHaveLength(3);
+    expect(result.bagAllocations).toHaveLength(2);
+    expect(result.bagAllocations![0].mode).toBe('single');
+    expect(result.bagAllocations![1].mode).toBe('split');
+  });
+});
+
+describe('validateBags', () => {
+  it('rejects unassigned bags', () => {
+    const errors = validateBags([createUnassignedBag()], 250);
+    expect(errors).toEqual(['Bag 1: buyer is required.']);
+  });
+
+  it('accepts a valid full bag', () => {
+    const bags: Bag[] = [{ id: '1', splitMode: 'full', buyers: [{ id: 'b', personId: 'p1', grams: 250 }] }];
+    expect(validateBags(bags, 250)).toEqual([]);
+  });
+
+  it('accepts a valid equal split', () => {
+    const bags: Bag[] = [{
+      id: '1', splitMode: 'equal', buyers: [
+        { id: 'b1', personId: 'p1', grams: 125 },
+        { id: 'b2', personId: 'p2', grams: 125 },
+      ],
+    }];
+    expect(validateBags(bags, 250)).toEqual([]);
+  });
+
+  it('rejects a split bag with fewer than 2 buyers', () => {
+    const bags: Bag[] = [{
+      id: '1', splitMode: 'equal', buyers: [{ id: 'b1', personId: 'p1', grams: 250 }],
+    }];
+    expect(validateBags(bags, 250)).toContainEqual(expect.stringContaining('at least two buyers'));
+  });
+
+  it('rejects a custom split with wrong total', () => {
+    const bags: Bag[] = [{
+      id: '1', splitMode: 'custom', buyers: [
+        { id: 'b1', personId: 'p1', grams: 100 },
+        { id: 'b2', personId: 'p2', grams: 100 },
+      ],
+    }];
+    expect(validateBags(bags, 250)).toContainEqual(expect.stringContaining('total exactly 250g'));
+  });
+});
+
+describe('getBagStatus', () => {
+  it('reports complete when all bags are valid', () => {
+    const bags: Bag[] = [
+      { id: '1', splitMode: 'full', buyers: [{ id: 'b', personId: 'p1', grams: 250 }] },
+    ];
+    expect(getBagStatus(bags, 250).tone).toBe('complete');
+  });
+
+  it('reports warning for unassigned bags', () => {
+    const bags: Bag[] = [createUnassignedBag()];
+    expect(getBagStatus(bags, 250).tone).toBe('warning');
+  });
+});
+
+describe('bulk actions', () => {
+  it('applies allocation to all unassigned bags', () => {
+    const source: Bag = { id: 's', splitMode: 'full', buyers: [{ id: 'b', personId: 'p1', grams: 250 }] };
+    const targets: Bag[] = [
+      source,
+      createUnassignedBag(),
+      { id: 'assigned', splitMode: 'full', buyers: [{ id: 'b2', personId: 'p2', grams: 250 }] },
+      createUnassignedBag(),
+    ];
+    const result = applyAllocationToBags(source, targets);
+    expect(result[0]).toBe(source); // source unchanged
+    expect(result[1].splitMode).toBe('full');
+    expect(result[1].buyers[0].personId).toBe('p1');
+    expect(result[2].buyers[0].personId).toBe('p2'); // assigned bag unchanged
+    expect(result[3].splitMode).toBe('full');
+    expect(result[3].buyers[0].personId).toBe('p1');
+  });
+
+  it('duplicates a bag with new IDs', () => {
+    const source: Bag = { id: 's', splitMode: 'equal', buyers: [
+      { id: 'b1', personId: 'p1', grams: 125 },
+      { id: 'b2', personId: 'p2', grams: 125 },
+    ]};
+    const duped = duplicateBag(source);
+    expect(duped.id).not.toBe(source.id);
+    expect(duped.splitMode).toBe('equal');
+    expect(duped.buyers).toHaveLength(2);
+    expect(duped.buyers[0].personId).toBe('p1');
+    expect(duped.buyers[0].id).not.toBe(source.buyers[0].id);
+  });
+});
+
+describe('createUnassignedBags', () => {
+  it('creates N unassigned bags with unique IDs', () => {
+    const bags = createUnassignedBags(3);
+    expect(bags).toHaveLength(3);
+    expect(bags.every((b) => b.splitMode === 'unassigned')).toBe(true);
+    expect(bags.every((b) => b.buyers.length === 0)).toBe(true);
+    const ids = new Set(bags.map((b) => b.id));
+    expect(ids.size).toBe(3);
   });
 });

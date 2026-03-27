@@ -1,14 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
-import type { CoffeeLot, Order, Person } from '../../types';
+import type { Bag, BagBuyer, BagSplitMode, CoffeeLot, Order, Person } from '../../types';
 import { formatGrams } from '../../lib/formatters';
 import { getCanonicalPeopleOptions } from '../../lib/peopleOptions';
 import {
-  expandLotToBagDrafts,
-  getLotBagStatus,
-  serializeBagDrafts,
-  type BagAllocationDraft,
-  type BagParticipantDraft,
+  normalizeLotToBags,
+  serializeLotFromBags,
+  createUnassignedBag,
+  createUnassignedBags,
+  recalculateBagGrams,
+  inferSplitMode,
+  applyAllocationToBags,
+  duplicateBag,
+  getBagStatus,
+  type LotBagStatus,
 } from '../../lib/orderWizard';
 import { PersonEditor, type PersonFormValues } from '../people/PersonEditor';
 
@@ -16,127 +21,65 @@ function genId() {
   return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
 }
 
-function createParticipant(personId: string, shareGrams: number, sourceShareId?: string): BagParticipantDraft {
-  const id = genId();
-  return {
-    id,
-    personId,
-    shareGrams,
-    sourceShareId: sourceShareId || id,
-  };
+function pluralize(count: number, singular: string, plural = `${singular}s`): string {
+  return count === 1 ? singular : plural;
 }
 
-function getBagAllocatedGrams(bag: BagAllocationDraft): number {
-  return bag.participants.reduce((sum, participant) => sum + (participant.shareGrams || 0), 0);
+function summarizeNames(names: string[], limit = 3): string {
+  if (names.length === 0) return 'No buyers assigned yet';
+  if (names.length <= limit) return names.join(', ');
+  return `${names.slice(0, limit).join(', ')} +${names.length - limit} more`;
 }
 
-function isBagValid(bag: BagAllocationDraft, gramsPerBag: number): boolean {
-  if (bag.mode === 'single') {
-    return (
-      bag.participants.length === 1 &&
-      bag.participants[0].personId.trim().length > 0 &&
-      bag.participants[0].shareGrams === gramsPerBag
-    );
-  }
-
-  const allocated = getBagAllocatedGrams(bag);
-  const validParticipants = bag.participants.filter((participant) => participant.personId.trim().length > 0 && participant.shareGrams > 0).length;
-  return (
-    validParticipants >= 2 &&
-    bag.participants.every((participant) => participant.personId.trim().length > 0 && Number.isInteger(participant.shareGrams) && participant.shareGrams > 0) &&
-    allocated === gramsPerBag
-  );
+function getPreferredExpandedLotId(lots: CoffeeLot[]): string | null {
+  const firstIncomplete = lots.find((lot) => {
+    const bags = normalizeLotToBags(lot);
+    return getBagStatus(bags, lot.gramsPerBag).tone !== 'complete';
+  });
+  return firstIncomplete?.id ?? lots[lots.length - 1]?.id ?? null;
 }
 
-function copyBagDraft(bag: BagAllocationDraft, bagIndex = bag.bagIndex): BagAllocationDraft {
-  return {
-    id: bag.id,
-    bagIndex,
-    mode: bag.mode,
-    participants: bag.participants.map((participant) => ({
-      ...participant,
-      id: genId(),
-      sourceShareId: genId(),
-    })),
-  };
-}
-
-function buildSingleOwnerBag(bag: BagAllocationDraft, personId: string, gramsPerBag: number): BagAllocationDraft {
-  if (!personId) {
-    return {
-      ...bag,
-      mode: 'single',
-      participants: [],
-    };
-  }
-
-  const existing = bag.participants.find((participant) => participant.personId === personId);
-  return {
-    ...bag,
-    mode: 'single',
-    participants: [createParticipant(personId, gramsPerBag, existing?.sourceShareId)],
-  };
-}
-
-function orderPeopleForBag(
-  people: Person[],
-  bags: BagAllocationDraft[],
-  recentBuyerIds: string[],
-): Person[] {
+function orderPeopleForBag(people: Person[], bags: Bag[], recentBuyerIds: string[]): Person[] {
   return getCanonicalPeopleOptions(
     people,
-    bags.flatMap((bag) => bag.participants.map((participant) => participant.personId).filter(Boolean)),
+    bags.flatMap((bag) => bag.buyers.map((b) => b.personId).filter(Boolean)),
     recentBuyerIds,
   );
 }
 
-function getBagTone(bag: BagAllocationDraft, gramsPerBag: number): { label: string; tone: 'complete' | 'warning' | 'info' } {
-  if (bag.participants.length === 0) {
+function getBagDisplayLabel(bag: Bag, gramsPerBag: number, people: Person[]): string {
+  if (bag.splitMode === 'unassigned') return 'Unassigned';
+  const names = bag.buyers
+    .filter((b) => b.personId.trim())
+    .map((b) => people.find((p) => p.id === b.personId)?.name || 'Unknown');
+
+  if (bag.splitMode === 'full') return names[0] || 'Unassigned';
+  if (bag.splitMode === 'equal') {
+    return `${names.join(' + ')} (equal ${bag.buyers.map((b) => `${b.grams}g`).join('/')})`;
+  }
+  return `${names.join(' + ')} (${bag.buyers.map((b) => `${b.grams}g`).join('/')})`;
+}
+
+function getBagToneLabel(bag: Bag, gramsPerBag: number): { label: string; tone: 'complete' | 'warning' | 'info' } {
+  if (bag.splitMode === 'unassigned') return { label: 'Needs buyer', tone: 'warning' };
+  if (bag.splitMode === 'full') {
+    if (bag.buyers.length === 1 && bag.buyers[0].personId.trim() && bag.buyers[0].grams === gramsPerBag) {
+      return { label: 'Full bag', tone: 'complete' };
+    }
     return { label: 'Needs buyer', tone: 'warning' };
   }
-  if (bag.mode === 'split' && !isBagValid(bag, gramsPerBag)) {
-    return { label: 'Shared bag needs attention', tone: 'warning' };
-  }
-  if (bag.mode === 'split') {
-    return { label: 'Shared bag', tone: 'info' };
+  if (bag.splitMode === 'equal' || bag.splitMode === 'custom') {
+    const total = bag.buyers.reduce((s, b) => s + b.grams, 0);
+    const allValid = bag.buyers.length >= 2 &&
+      bag.buyers.every((b) => b.personId.trim() && b.grams > 0) &&
+      total === gramsPerBag;
+    if (allValid) return { label: bag.splitMode === 'equal' ? 'Equal split' : 'Custom split', tone: 'complete' };
+    return { label: 'Split needs attention', tone: 'warning' };
   }
   return { label: 'Assigned', tone: 'complete' };
 }
 
-function getSplitBagNote(bag: BagAllocationDraft, gramsPerBag: number): { tone: 'complete' | 'warning' | 'error'; label: string } {
-  const allocated = getBagAllocatedGrams(bag);
-  const delta = gramsPerBag - allocated;
-
-  if (
-    bag.participants.filter((participant) => participant.personId.trim().length > 0 && participant.shareGrams > 0).length >= 2 &&
-    bag.participants.every((participant) => participant.personId.trim().length > 0 && participant.shareGrams > 0) &&
-    delta === 0
-  ) {
-    return {
-      tone: 'complete',
-      label: `Shared bag balanced at ${formatGrams(gramsPerBag)}.`,
-    };
-  }
-
-  if (bag.participants.filter((participant) => participant.personId.trim().length > 0 && participant.shareGrams > 0).length < 2) {
-    return {
-      tone: 'warning',
-      label: 'Add at least two buyers before this bag counts as shared.',
-    };
-  }
-
-  if (delta > 0) {
-    return {
-      tone: 'warning',
-      label: `${formatGrams(delta)} still need to be assigned in this shared bag.`,
-    };
-  }
-
-  return {
-    tone: 'error',
-    label: `${formatGrams(Math.abs(delta))} are over-assigned in this shared bag.`,
-  };
-}
+// ─── Main Component ──────────────────────────────────────────
 
 interface Props {
   order: Order;
@@ -151,68 +94,15 @@ interface LotFormState {
   name: string;
   foreignPricePerBag: string;
   gramsPerBag: string;
-  quantity: string;
-}
-
-interface LotSummaryState {
-  buyerSummary: string;
-  statusLabel: string;
-  statusDetail: string;
-  statusTone: 'complete' | 'warning' | 'error' | 'info';
+  initialBagCount: string;
 }
 
 const emptyLotForm: LotFormState = {
   name: '',
   foreignPricePerBag: '',
   gramsPerBag: '250',
-  quantity: '1',
+  initialBagCount: '1',
 };
-
-function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return count === 1 ? singular : plural;
-}
-
-function summarizeNames(names: string[], limit = 3): string {
-  if (names.length === 0) return 'No buyers assigned yet';
-  if (names.length <= limit) return names.join(', ');
-  return `${names.slice(0, limit).join(', ')} +${names.length - limit} more`;
-}
-
-function getPreferredExpandedLotId(lots: CoffeeLot[]): string | null {
-  const firstIncomplete = lots.find((lot) => getLotBagStatus(expandLotToBagDrafts(lot), lot.gramsPerBag).tone !== 'complete');
-  return firstIncomplete?.id ?? lots[lots.length - 1]?.id ?? null;
-}
-
-function getLotSummaryState(lot: CoffeeLot, bags: BagAllocationDraft[], people: Person[], bagStatus: ReturnType<typeof getLotBagStatus>): LotSummaryState {
-  const buyerNames = Array.from(
-    new Set(
-      bags.flatMap((bag) => bag.participants)
-        .filter((participant) => participant.personId.trim() && participant.shareGrams > 0)
-        .map((participant) => people.find((person) => person.id === participant.personId)?.name || 'Unknown'),
-    ),
-  );
-  const splitBagCount = bags.filter((bag) => bag.mode === 'split').length;
-
-  if (bagStatus.tone !== 'complete') {
-    return {
-      buyerSummary: summarizeNames(buyerNames),
-      statusLabel: 'Needs attention',
-      statusDetail: bagStatus.label,
-      statusTone: bagStatus.tone,
-    };
-  }
-
-  const statusLabel = splitBagCount > 0
-    ? `${bagStatus.assignedBags} bags assigned · ${splitBagCount} ${pluralize(splitBagCount, 'split bag')}`
-    : `${bagStatus.assignedBags} ${pluralize(bagStatus.assignedBags, 'bag')} assigned`;
-
-  return {
-    buyerSummary: summarizeNames(buyerNames),
-    statusLabel,
-    statusDetail: splitBagCount > 0 ? 'Shared bags are preserved bag-by-bag.' : 'All bags are fully assigned.',
-    statusTone: splitBagCount > 0 ? 'info' : 'complete',
-  };
-}
 
 export function CoffeeLotsSection({ order }: Props) {
   const { people, addPerson, updateOrder } = useAppStore();
@@ -237,7 +127,7 @@ export function CoffeeLotsSection({ order }: Props) {
     : null;
 
   const activeBuyerBag = activeBuyerLot && buyerModalTarget
-    ? expandLotToBagDrafts(activeBuyerLot).find((bag) => bag.id === buyerModalTarget.bagId) ?? null
+    ? normalizeLotToBags(activeBuyerLot).find((bag) => bag.id === buyerModalTarget.bagId) ?? null
     : null;
 
   const lotCountLabel = useMemo(() => (
@@ -246,7 +136,7 @@ export function CoffeeLotsSection({ order }: Props) {
 
   function rememberBuyer(personId: string) {
     if (!personId) return;
-    setRecentBuyerIds((current) => [personId, ...current.filter((candidate) => candidate !== personId)]);
+    setRecentBuyerIds((current) => [personId, ...current.filter((c) => c !== personId)]);
   }
 
   function openNew() {
@@ -257,11 +147,12 @@ export function CoffeeLotsSection({ order }: Props) {
   }
 
   function openEdit(lot: CoffeeLot) {
+    const bags = normalizeLotToBags(lot);
     setLotForm({
       name: lot.name,
       foreignPricePerBag: String(lot.foreignPricePerBag),
       gramsPerBag: String(lot.gramsPerBag),
-      quantity: String(lot.quantity),
+      initialBagCount: String(bags.length),
     });
     setFormError('');
     setExpandedLotId(lot.id);
@@ -270,15 +161,17 @@ export function CoffeeLotsSection({ order }: Props) {
 
   function saveLot() {
     const gramsPerBag = parseInt(lotForm.gramsPerBag, 10);
-    const quantity = parseInt(lotForm.quantity, 10);
+    const initialBagCount = parseInt(lotForm.initialBagCount, 10);
     const foreignPricePerBag = parseFloat(lotForm.foreignPricePerBag);
 
     if (!lotForm.name.trim()) return setFormError('Coffee name is required.');
     if (!Number.isInteger(gramsPerBag) || gramsPerBag < 1) return setFormError('Grams per bag must be an integer >= 1.');
-    if (!Number.isInteger(quantity) || quantity < 1) return setFormError('Quantity must be an integer >= 1.');
     if (!Number.isFinite(foreignPricePerBag) || foreignPricePerBag <= 0) return setFormError('Foreign list price per bag must be greater than zero.');
 
     if (editingLotId === 'new') {
+      if (!Number.isInteger(initialBagCount) || initialBagCount < 1) return setFormError('Initial bag count must be at least 1.');
+      const newBags = createUnassignedBags(initialBagCount);
+      const serialized = serializeLotFromBags(newBags);
       const newLotId = genId();
       void updateOrder(order.id, {
         lots: [
@@ -288,8 +181,7 @@ export function CoffeeLotsSection({ order }: Props) {
             name: lotForm.name.trim(),
             foreignPricePerBag,
             gramsPerBag,
-            quantity,
-            shares: [],
+            ...serialized,
           },
         ],
       });
@@ -305,35 +197,23 @@ export function CoffeeLotsSection({ order }: Props) {
       return;
     }
 
-    let nextShares = existingLot.shares;
-    let nextBagAllocations = existingLot.bagAllocations;
+    let nextBags = normalizeLotToBags(existingLot);
 
     if (existingLot.gramsPerBag !== gramsPerBag) {
-      if (
-        existingLot.shares.length > 0 &&
-        !confirm('Changing grams per bag resets the bag assignments for this coffee. Continue?')
-      ) {
+      // Grams per bag changed — recalculate full/equal bags, reset custom bags
+      const hasCustom = nextBags.some((b) => b.splitMode === 'custom');
+      if (hasCustom && !confirm('Changing grams per bag will reset custom split bags. Continue?')) {
         return;
       }
-      nextShares = [];
-      nextBagAllocations = [];
-    } else if (quantity < existingLot.quantity) {
-      const existingBags = expandLotToBagDrafts(existingLot);
-      const removedBags = existingBags.slice(quantity);
-      const droppingAssignments = removedBags.some((bag) => bag.participants.length > 0);
-
-      if (
-        droppingAssignments &&
-        !confirm(`Reducing the quantity will remove assignments from ${removedBags.length} bag${removedBags.length === 1 ? '' : 's'}. Continue?`)
-      ) {
-        return;
-      }
-
-      const serialized = serializeBagDrafts(existingBags.slice(0, quantity));
-      nextShares = serialized.shares;
-      nextBagAllocations = serialized.bagAllocations;
+      nextBags = nextBags.map((bag) => {
+        if (bag.splitMode === 'custom') {
+          return { ...bag, splitMode: 'unassigned' as BagSplitMode, buyers: [] };
+        }
+        return recalculateBagGrams(bag, gramsPerBag);
+      });
     }
 
+    const serialized = serializeLotFromBags(nextBags);
     void updateOrder(order.id, {
       lots: order.lots.map((lot) => (lot.id === editingLotId
         ? {
@@ -341,9 +221,7 @@ export function CoffeeLotsSection({ order }: Props) {
             name: lotForm.name.trim(),
             foreignPricePerBag,
             gramsPerBag,
-            quantity,
-            shares: nextShares,
-            bagAllocations: nextBagAllocations,
+            ...serialized,
           }
         : lot)),
     });
@@ -354,28 +232,16 @@ export function CoffeeLotsSection({ order }: Props) {
 
   function deleteLot(lotId: string) {
     const remainingLots = order.lots.filter((lot) => lot.id !== lotId);
-    void updateOrder(order.id, {
-      lots: remainingLots,
-    });
-    if (editingLotId === lotId) {
-      setEditingLotId(null);
-    }
-    if (expandedLotId === lotId) {
-      setExpandedLotId(getPreferredExpandedLotId(remainingLots));
-    }
+    void updateOrder(order.id, { lots: remainingLots });
+    if (editingLotId === lotId) setEditingLotId(null);
+    if (expandedLotId === lotId) setExpandedLotId(getPreferredExpandedLotId(remainingLots));
   }
 
-  function updateShares(lotId: string, bags: BagAllocationDraft[], touchedPersonIds: string[] = []) {
+  function updateBags(lotId: string, bags: Bag[], touchedPersonIds: string[] = []) {
     touchedPersonIds.forEach(rememberBuyer);
-    const serialized = serializeBagDrafts(bags);
+    const serialized = serializeLotFromBags(bags);
     void updateOrder(order.id, {
-      lots: order.lots.map((lot) => (lot.id === lotId
-        ? {
-            ...lot,
-            shares: serialized.shares,
-            bagAllocations: serialized.bagAllocations,
-          }
-        : lot)),
+      lots: order.lots.map((lot) => (lot.id === lotId ? { ...lot, ...serialized } : lot)),
     });
   }
 
@@ -396,21 +262,27 @@ export function CoffeeLotsSection({ order }: Props) {
         note: values.note || undefined,
       });
 
-      const nextBags = expandLotToBagDrafts(activeBuyerLot).map((bag) => {
+      const nextBags = normalizeLotToBags(activeBuyerLot).map((bag) => {
         if (bag.id !== activeBuyerBag.id) return bag;
 
-        if (bag.mode === 'split') {
-          const remaining = Math.max(0, activeBuyerLot.gramsPerBag - getBagAllocatedGrams(bag));
-          return {
-            ...bag,
-            participants: [...bag.participants, createParticipant(person.id, remaining)],
-          };
+        if (bag.splitMode === 'equal' || bag.splitMode === 'custom') {
+          const newBuyer: BagBuyer = { id: genId(), personId: person.id, grams: 0 };
+          const updatedBag: Bag = { ...bag, buyers: [...bag.buyers, newBuyer] };
+          if (bag.splitMode === 'equal') {
+            return recalculateBagGrams({ ...updatedBag, splitMode: 'equal' }, activeBuyerLot.gramsPerBag);
+          }
+          return updatedBag;
         }
 
-        return buildSingleOwnerBag(bag, person.id, activeBuyerLot.gramsPerBag);
+        // For unassigned or full: assign as full owner
+        return recalculateBagGrams({
+          ...bag,
+          splitMode: 'full',
+          buyers: [{ id: genId(), personId: person.id, grams: activeBuyerLot.gramsPerBag }],
+        }, activeBuyerLot.gramsPerBag);
       });
 
-      updateShares(activeBuyerLot.id, nextBags, [person.id]);
+      updateBags(activeBuyerLot.id, nextBags, [person.id]);
       setBuyerModalTarget(null);
     } catch (error) {
       setBuyerError(error instanceof Error ? error.message : 'Failed to add buyer.');
@@ -423,13 +295,10 @@ export function CoffeeLotsSection({ order }: Props) {
     <div className="wizard-step-stack">
       {buyerModalTarget && activeBuyerLot && activeBuyerBag && (
         <div className="wizard-modal-backdrop" onClick={() => setBuyerModalTarget(null)}>
-          <div
-            className="wizard-modal-sheet"
-            onClick={(event) => event.stopPropagation()}
-          >
+          <div className="wizard-modal-sheet" onClick={(event) => event.stopPropagation()}>
             <PersonEditor
               title="Add new buyer"
-              description={`This buyer will be added to the shared directory and inserted directly into Bag ${activeBuyerBag.bagIndex + 1} for "${activeBuyerLot.name || 'this coffee lot'}".`}
+              description={`This buyer will be added to the shared directory and assigned to Bag ${normalizeLotToBags(activeBuyerLot).indexOf(activeBuyerBag) + 1} for "${activeBuyerLot.name || 'this coffee lot'}".`}
               error={buyerError}
               saving={buyerSaving}
               submitLabel="Add buyer"
@@ -446,7 +315,7 @@ export function CoffeeLotsSection({ order }: Props) {
             <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Step 2</div>
             <h3 className="wizard-card-title">Add coffees and assign bags</h3>
             <p className="wizard-card-copy">
-              Add each coffee, then assign each bag to a buyer. Only open grams when a bag is genuinely being shared.
+              Add each coffee, then assign buyers to each bag. Smart defaults handle the common cases automatically.
             </p>
           </div>
           <div className="wizard-badge wizard-badge-muted">{lotCountLabel}</div>
@@ -477,20 +346,14 @@ export function CoffeeLotsSection({ order }: Props) {
           lotForm={lotForm}
           formError={formError}
           setLotForm={setLotForm}
-          onExpand={() => {
-            setExpandedLotId(lot.id);
-            setEditingLotId(null);
-          }}
-          onCollapse={() => setExpandedLotId((current) => (current === lot.id ? null : current))}
+          onExpand={() => { setExpandedLotId(lot.id); setEditingLotId(null); }}
+          onCollapse={() => setExpandedLotId((c) => (c === lot.id ? null : c))}
           onEdit={() => openEdit(lot)}
           onSave={saveLot}
           onCancel={() => setEditingLotId(null)}
           onDelete={() => deleteLot(lot.id)}
-          onBagsChange={(bags, touchedPersonIds) => updateShares(lot.id, bags, touchedPersonIds)}
-          onAddNewBuyer={(bagId) => {
-            setBuyerError('');
-            setBuyerModalTarget({ lotId: lot.id, bagId });
-          }}
+          onBagsChange={(bags, touchedPersonIds) => updateBags(lot.id, bags, touchedPersonIds)}
+          onAddNewBuyer={(bagId) => { setBuyerError(''); setBuyerModalTarget({ lotId: lot.id, bagId }); }}
         />
       ))}
 
@@ -500,6 +363,7 @@ export function CoffeeLotsSection({ order }: Props) {
           <LotForm
             form={lotForm}
             error={formError}
+            isNew
             onChange={setLotForm}
             onSave={saveLot}
             onCancel={() => setEditingLotId(null)}
@@ -518,6 +382,8 @@ export function CoffeeLotsSection({ order }: Props) {
   );
 }
 
+// ─── LotCard ──────────────────────────────────────────────────
+
 interface LotCardProps {
   lot: CoffeeLot;
   people: Person[];
@@ -533,43 +399,44 @@ interface LotCardProps {
   onSave: () => void;
   onCancel: () => void;
   onDelete: () => void;
-  onBagsChange: (bags: BagAllocationDraft[], touchedPersonIds?: string[]) => void;
+  onBagsChange: (bags: Bag[], touchedPersonIds?: string[]) => void;
   onAddNewBuyer: (bagId: string) => void;
 }
 
 function LotCard({
-  lot,
-  people,
-  recentBuyerIds,
-  isEditing,
-  isExpanded,
-  lotForm,
-  formError,
-  setLotForm,
-  onExpand,
-  onCollapse,
-  onEdit,
-  onSave,
-  onCancel,
-  onDelete,
-  onBagsChange,
-  onAddNewBuyer,
+  lot, people, recentBuyerIds, isEditing, isExpanded,
+  lotForm, formError, setLotForm,
+  onExpand, onCollapse, onEdit, onSave, onCancel, onDelete,
+  onBagsChange, onAddNewBuyer,
 }: LotCardProps) {
-  const totalGrams = lot.gramsPerBag * lot.quantity;
-  const bags = useMemo(() => expandLotToBagDrafts(lot), [lot]);
-  const bagStatus = useMemo(() => getLotBagStatus(bags, lot.gramsPerBag), [bags, lot.gramsPerBag]);
-  const includesSplitBag = bags.some((bag) => bag.mode === 'split');
+  const bags = useMemo(() => normalizeLotToBags(lot), [lot]);
+  const bagStatus = useMemo(() => getBagStatus(bags, lot.gramsPerBag), [bags, lot.gramsPerBag]);
+  const totalGrams = lot.gramsPerBag * bags.length;
+
+  const buyerNames = useMemo(() => Array.from(new Set(
+    bags.flatMap((bag) => bag.buyers)
+      .filter((b) => b.personId.trim() && b.grams > 0)
+      .map((b) => people.find((p) => p.id === b.personId)?.name || 'Unknown'),
+  )), [bags, people]);
+
+  const splitBagCount = bags.filter((b) => b.splitMode === 'equal' || b.splitMode === 'custom').length;
+
   const badgeClass = bagStatus.tone === 'complete'
     ? 'wizard-badge-accent'
-    : includesSplitBag
-      ? 'wizard-badge-info'
-      : 'wizard-badge-muted';
+    : splitBagCount > 0 ? 'wizard-badge-info' : 'wizard-badge-muted';
   const badgeLabel = bagStatus.assignedBags === 0
     ? 'Unassigned'
-    : includesSplitBag
-      ? 'Shared bags'
-      : 'Assigned';
-  const summaryState = useMemo(() => getLotSummaryState(lot, bags, people, bagStatus), [bagStatus, bags, lot, people]);
+    : splitBagCount > 0 ? 'Shared bags' : 'Assigned';
+
+  function handleAddBag() {
+    const newBag = createUnassignedBag();
+    onBagsChange([...bags, newBag]);
+  }
+
+  function handleRemoveBag(bagId: string) {
+    if (bags.length <= 1) return;
+    onBagsChange(bags.filter((b) => b.id !== bagId));
+  }
 
   return (
     <section className="wizard-panel">
@@ -579,6 +446,7 @@ function LotCard({
           <LotForm
             form={lotForm}
             error={formError}
+            isNew={false}
             onChange={setLotForm}
             onSave={onSave}
             onCancel={onCancel}
@@ -592,25 +460,27 @@ function LotCard({
                 <div>
                   <div className="wizard-card-title">{lot.name}</div>
                   <p className="wizard-card-copy coffee-lot-summary-copy">
-                    {lot.quantity} x {formatGrams(lot.gramsPerBag)} bag · {formatGrams(totalGrams)} total
+                    {bags.length} x {formatGrams(lot.gramsPerBag)} bag · {formatGrams(totalGrams)} total
                   </p>
                 </div>
-                <StatusBadge tone={summaryState.statusTone} label={summaryState.statusLabel} compact />
+                <StatusBadge
+                  tone={bagStatus.tone === 'complete' ? 'complete' : bagStatus.tone === 'warning' ? 'warning' : 'error'}
+                  label={bagStatus.label}
+                  compact
+                />
               </div>
 
               <div className="coffee-lot-summary-grid">
                 <div className="coffee-lot-summary-item">
                   <span className="coffee-lot-summary-label">Buyers</span>
-                  <strong>{summaryState.buyerSummary}</strong>
+                  <strong>{summarizeNames(buyerNames)}</strong>
                 </div>
                 <div className="coffee-lot-summary-item">
                   <span className="coffee-lot-summary-label">Status</span>
-                  <strong>{summaryState.statusLabel}</strong>
-                  <span>{summaryState.statusDetail}</span>
+                  <strong>{bagStatus.assignedBags} of {bags.length} bags assigned</strong>
                 </div>
               </div>
             </div>
-
             <span className="coffee-lot-summary-chevron" aria-hidden="true">⌄</span>
           </button>
 
@@ -626,14 +496,12 @@ function LotCard({
             <div>
               <div className="wizard-card-title">{lot.name}</div>
               <p className="wizard-card-copy" style={{ marginTop: 'var(--space-2)' }}>
-                {lot.quantity} x {formatGrams(lot.gramsPerBag)} bag • {formatGrams(totalGrams)} total • {lot.foreignPricePerBag} list price per bag
+                {bags.length} x {formatGrams(lot.gramsPerBag)} bag • {formatGrams(totalGrams)} total • {lot.foreignPricePerBag} list price per bag
               </p>
             </div>
 
             <div className="wizard-chip-row">
-              <span className={`wizard-badge ${badgeClass}`}>
-                {badgeLabel}
-              </span>
+              <span className={`wizard-badge ${badgeClass}`}>{badgeLabel}</span>
               <button className="btn btn-ghost btn-sm" onClick={onCollapse}>Collapse</button>
               <button className="btn btn-ghost btn-sm" onClick={onEdit}>Edit</button>
               <button className="btn btn-ghost btn-sm" style={{ color: 'var(--color-unpaid)' }} onClick={onDelete}>Delete</button>
@@ -644,18 +512,18 @@ function LotCard({
             <div className="wizard-subsection-header">
               <div>
                 <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>
-                  {lot.quantity === 1 ? 'Who is ordering this bag?' : 'Who is ordering these bags?'}
+                  {bags.length === 1 ? 'Who is ordering this bag?' : 'Who is ordering these bags?'}
                 </div>
                 <p className="wizard-card-copy">
-                  Assign each bag to one buyer by default, and only split the bags that are actually shared.
+                  Select buyers — the system auto-assigns grams. Use custom split only when needed.
                 </p>
               </div>
-              <StatusBadge tone={bagStatus.tone} label={bagStatus.label} />
+              <StatusBadge tone={bagStatus.tone === 'complete' ? 'complete' : bagStatus.tone === 'warning' ? 'warning' : 'error'} label={bagStatus.label} />
             </div>
 
             <div className="bag-card-list">
               {bags.map((bag, bagIndex) => (
-                <BagAssignmentCard
+                <BagCard
                   key={bag.id}
                   bag={bag}
                   bags={bags}
@@ -663,10 +531,18 @@ function LotCard({
                   gramsPerBag={lot.gramsPerBag}
                   people={people}
                   recentBuyerIds={recentBuyerIds}
+                  canRemove={bags.length > 1}
                   onChange={(nextBags, touchedPersonIds) => onBagsChange(nextBags, touchedPersonIds)}
+                  onRemove={() => handleRemoveBag(bag.id)}
                   onAddNewBuyer={() => onAddNewBuyer(bag.id)}
                 />
               ))}
+            </div>
+
+            <div className="wizard-inline-actions">
+              <button className="btn btn-secondary btn-sm" onClick={handleAddBag}>
+                + Add bag
+              </button>
             </div>
           </div>
 
@@ -679,15 +555,18 @@ function LotCard({
   );
 }
 
+// ─── LotForm ──────────────────────────────────────────────────
+
 interface LotFormProps {
   form: LotFormState;
   error: string;
+  isNew: boolean;
   onChange: (form: LotFormState) => void;
   onSave: () => void;
   onCancel: () => void;
 }
 
-function LotForm({ form, error, onChange, onSave, onCancel }: LotFormProps) {
+function LotForm({ form, error, isNew, onChange, onSave, onCancel }: LotFormProps) {
   function setField(key: keyof LotFormState) {
     return (e: React.ChangeEvent<HTMLInputElement>) => onChange({ ...form, [key]: e.target.value });
   }
@@ -732,18 +611,20 @@ function LotForm({ form, error, onChange, onSave, onCancel }: LotFormProps) {
         </div>
       </div>
 
-      <div className="field" style={{ maxWidth: 220 }}>
-        <label className="field-label">Quantity</label>
-        <input
-          className="input"
-          type="number"
-          value={form.quantity}
-          onChange={setField('quantity')}
-          min="1"
-          step="1"
-          placeholder="1"
-        />
-      </div>
+      {isNew && (
+        <div className="field" style={{ maxWidth: 220 }}>
+          <label className="field-label">Initial bag count</label>
+          <input
+            className="input"
+            type="number"
+            value={form.initialBagCount}
+            onChange={setField('initialBagCount')}
+            min="1"
+            step="1"
+            placeholder="1"
+          />
+        </div>
+      )}
 
       {error && <div className="alert alert-error">{error}</div>}
 
@@ -755,208 +636,346 @@ function LotForm({ form, error, onChange, onSave, onCancel }: LotFormProps) {
   );
 }
 
-interface BagAssignmentCardProps {
-  bag: BagAllocationDraft;
-  bags: BagAllocationDraft[];
+// ─── BagCard ──────────────────────────────────────────────────
+
+interface BagCardProps {
+  bag: Bag;
+  bags: Bag[];
   bagIndex: number;
   gramsPerBag: number;
   people: Person[];
   recentBuyerIds: string[];
-  onChange: (bags: BagAllocationDraft[], touchedPersonIds?: string[]) => void;
+  canRemove: boolean;
+  onChange: (bags: Bag[], touchedPersonIds?: string[]) => void;
+  onRemove: () => void;
   onAddNewBuyer: () => void;
 }
 
-export function BagAssignmentCard({
-  bag,
-  bags,
-  bagIndex,
-  gramsPerBag,
-  people,
-  recentBuyerIds,
-  onChange,
-  onAddNewBuyer,
-}: BagAssignmentCardProps) {
+export function BagCard({
+  bag, bags, bagIndex, gramsPerBag, people, recentBuyerIds,
+  canRemove, onChange, onRemove, onAddNewBuyer,
+}: BagCardProps) {
+  const [isExpanded, setIsExpanded] = useState(bag.splitMode === 'unassigned');
   const orderedPeople = useMemo(() => orderPeopleForBag(people, bags, recentBuyerIds), [people, bags, recentBuyerIds]);
-  const selectedPersonId = bag.participants[0]?.personId ?? '';
-  const tone = getBagTone(bag, gramsPerBag);
-  const splitNote = bag.mode === 'split' ? getSplitBagNote(bag, gramsPerBag) : null;
+  const tone = getBagToneLabel(bag, gramsPerBag);
   const previousBag = bagIndex > 0 ? bags[bagIndex - 1] : null;
+  const hasUnassigned = bags.some((b) => b.splitMode === 'unassigned');
 
-  function commit(nextBags: BagAllocationDraft[], touchedPersonIds: string[] = []) {
+  function commit(nextBags: Bag[], touchedPersonIds: string[] = []) {
     onChange(nextBags, touchedPersonIds);
   }
 
-  function replaceCurrentBag(nextBag: BagAllocationDraft, touchedPersonIds: string[] = []) {
-    commit(bags.map((candidate) => (candidate.id === bag.id ? nextBag : candidate)), touchedPersonIds);
+  function replaceBag(nextBag: Bag, touchedPersonIds: string[] = []) {
+    commit(bags.map((b) => (b.id === bag.id ? nextBag : b)), touchedPersonIds);
   }
 
-  function setSingleOwner(personId: string) {
-    replaceCurrentBag(buildSingleOwnerBag(bag, personId, gramsPerBag), personId ? [personId] : []);
-  }
-
-  function splitBag() {
-    replaceCurrentBag({
+  // ── Smart assignment: select a single buyer → full bag ──
+  function assignFullBag(personId: string) {
+    if (!personId) {
+      replaceBag({ ...bag, splitMode: 'unassigned', buyers: [] });
+      return;
+    }
+    const fullBag = recalculateBagGrams({
       ...bag,
-      mode: 'split',
-      participants: bag.participants.length > 0
-        ? bag.participants
-        : [createParticipant('', 0)],
-    });
+      splitMode: 'full',
+      buyers: [{ id: genId(), personId, grams: gramsPerBag }],
+    }, gramsPerBag);
+    replaceBag(fullBag, [personId]);
+    setIsExpanded(false);
+  }
+
+  // ── Quick-assign: equal split with selected people ──
+  function startEqualSplit() {
+    const existingBuyers = bag.buyers.length >= 2 ? bag.buyers : [];
+    if (existingBuyers.length >= 2) {
+      const equalBag = recalculateBagGrams({ ...bag, splitMode: 'equal' }, gramsPerBag);
+      replaceBag(equalBag);
+    } else {
+      // Start with 2 empty buyer slots
+      replaceBag({
+        ...bag,
+        splitMode: 'equal',
+        buyers: [
+          { id: genId(), personId: '', grams: 0 },
+          { id: genId(), personId: '', grams: 0 },
+        ],
+      });
+    }
+    setIsExpanded(true);
+  }
+
+  function startCustomSplit() {
+    const currentBuyers = bag.buyers.length >= 2 ? bag.buyers : [
+      { id: genId(), personId: '', grams: 0 },
+      { id: genId(), personId: '', grams: 0 },
+    ];
+    replaceBag({ ...bag, splitMode: 'custom', buyers: currentBuyers });
+    setIsExpanded(true);
   }
 
   function copyPreviousBag() {
     if (!previousBag) return;
-    const cloned = copyBagDraft(previousBag, bag.bagIndex);
-    cloned.id = bag.id;
-    replaceCurrentBag(cloned, cloned.participants.map((participant) => participant.personId).filter(Boolean));
+    const cloned = duplicateBag(previousBag);
+    replaceBag({ ...cloned, id: bag.id }, cloned.buyers.map((b) => b.personId).filter(Boolean));
+    setIsExpanded(false);
   }
 
-  function assignAllRemainingBags() {
-    if (!selectedPersonId) return;
-    const nextBags = bags.map((candidate, candidateIndex) => {
-      if (candidateIndex < bagIndex) return candidate;
-      if (candidate.participants.length > 0) return candidate;
-      return buildSingleOwnerBag(candidate, selectedPersonId, gramsPerBag);
+  // ── Bulk: apply this bag's allocation to all unassigned ──
+  function applyToAllUnassigned() {
+    const nextBags = applyAllocationToBags(bag, bags);
+    commit(nextBags, bag.buyers.map((b) => b.personId).filter(Boolean));
+  }
+
+  // ── Bulk: assign all remaining unassigned bags to this person ──
+  function assignAllRemainingToOwner() {
+    if (bag.splitMode !== 'full' || !bag.buyers[0]?.personId) return;
+    const personId = bag.buyers[0].personId;
+    const nextBags = bags.map((b) => {
+      if (b.splitMode !== 'unassigned') return b;
+      return recalculateBagGrams({
+        ...b,
+        splitMode: 'full',
+        buyers: [{ id: genId(), personId, grams: gramsPerBag }],
+      }, gramsPerBag);
     });
-    commit(nextBags, [selectedPersonId]);
+    commit(nextBags, [personId]);
   }
 
-  function addSplitParticipant() {
-    const usedIds = new Set(bag.participants.map((participant) => participant.personId).filter(Boolean));
-    const nextPerson = orderedPeople.find((person) => !usedIds.has(person.id));
-    if (!nextPerson) return;
+  // ── Split: add a buyer row ──
+  function addBuyer() {
+    const usedIds = new Set(bag.buyers.map((b) => b.personId).filter(Boolean));
+    const nextPerson = orderedPeople.find((p) => !usedIds.has(p.id));
+    const newBuyer: BagBuyer = { id: genId(), personId: nextPerson?.id || '', grams: 0 };
+    const updatedBag: Bag = { ...bag, buyers: [...bag.buyers, newBuyer] };
 
-    const remainder = Math.max(0, gramsPerBag - getBagAllocatedGrams(bag));
-    replaceCurrentBag({
-      ...bag,
-      participants: [...bag.participants, createParticipant(nextPerson.id, remainder)],
-    }, [nextPerson.id]);
+    if (bag.splitMode === 'equal') {
+      replaceBag(recalculateBagGrams(updatedBag, gramsPerBag), nextPerson ? [nextPerson.id] : []);
+    } else {
+      replaceBag(updatedBag, nextPerson ? [nextPerson.id] : []);
+    }
   }
 
-  function updateSplitParticipant(participantId: string, field: 'personId' | 'shareGrams', value: string) {
-    const nextBag: BagAllocationDraft = {
+  // ── Split: update a buyer's person or grams ──
+  function updateBuyer(buyerId: string, field: 'personId' | 'grams', value: string) {
+    let updatedBag: Bag = {
       ...bag,
-      participants: bag.participants.map((participant) => {
-        if (participant.id !== participantId) return participant;
-        if (field === 'personId') {
-          return { ...participant, personId: value };
-        }
-        return { ...participant, shareGrams: parseInt(value, 10) || 0 };
+      buyers: bag.buyers.map((b) => {
+        if (b.id !== buyerId) return b;
+        if (field === 'personId') return { ...b, personId: value };
+        return { ...b, grams: parseInt(value, 10) || 0 };
       }),
     };
 
+    // Auto-infer mode when people change
+    if (field === 'personId' && bag.splitMode === 'equal') {
+      updatedBag = recalculateBagGrams(updatedBag, gramsPerBag);
+    }
+
     const touchedIds = field === 'personId' && value ? [value] : [];
-    replaceCurrentBag(nextBag, touchedIds);
+    replaceBag(updatedBag, touchedIds);
   }
 
-  function removeSplitParticipant(participantId: string) {
-    replaceCurrentBag({
-      ...bag,
-      participants: bag.participants.filter((participant) => participant.id !== participantId),
-    });
+  // ── Split: remove a buyer ──
+  function removeBuyer(buyerId: string) {
+    const remaining = bag.buyers.filter((b) => b.id !== buyerId);
+
+    // Smart mode inference after removal
+    if (remaining.length === 0) {
+      replaceBag({ ...bag, splitMode: 'unassigned', buyers: [] });
+      setIsExpanded(true);
+      return;
+    }
+    if (remaining.length === 1 && remaining[0].personId.trim()) {
+      // Drop back to full bag
+      const fullBag = recalculateBagGrams({
+        ...bag,
+        splitMode: 'full',
+        buyers: remaining,
+      }, gramsPerBag);
+      replaceBag(fullBag);
+      setIsExpanded(false);
+      return;
+    }
+
+    let updatedBag: Bag = { ...bag, buyers: remaining };
+    if (bag.splitMode === 'equal') {
+      updatedBag = recalculateBagGrams(updatedBag, gramsPerBag);
+    }
+    replaceBag(updatedBag);
   }
 
+  // ── Split: distribute equally ──
   function splitEqually() {
-    if (bag.participants.length === 0) return;
-    const validParticipants = bag.participants.filter((participant) => participant.personId.trim().length > 0);
-    if (validParticipants.length === 0) return;
-
-    const base = Math.floor(gramsPerBag / validParticipants.length);
-    const remainder = gramsPerBag - base * validParticipants.length;
-    let carry = remainder;
-
-    replaceCurrentBag({
-      ...bag,
-      participants: bag.participants.map((participant) => {
-        if (!participant.personId.trim()) return participant;
-        const nextShareGrams = base + (carry > 0 ? 1 : 0);
-        if (carry > 0) carry -= 1;
-        return { ...participant, shareGrams: nextShareGrams };
-      }),
-    });
+    replaceBag(recalculateBagGrams({ ...bag, splitMode: 'equal' }, gramsPerBag));
   }
 
+  // ── Split: assign remainder to last buyer ──
   function assignRemainder() {
-    if (bag.participants.length === 0) return;
-    const lastParticipant = [...bag.participants].reverse().find((participant) => participant.personId.trim().length > 0)
-      ?? bag.participants[bag.participants.length - 1];
-    const allocated = getBagAllocatedGrams(bag);
+    if (bag.buyers.length === 0) return;
+    const last = [...bag.buyers].reverse().find((b) => b.personId.trim()) ?? bag.buyers[bag.buyers.length - 1];
+    const allocated = bag.buyers.reduce((s, b) => s + b.grams, 0);
     const delta = gramsPerBag - allocated;
-
-    replaceCurrentBag({
+    replaceBag({
       ...bag,
-      participants: bag.participants.map((participant) => (
-        participant.id === lastParticipant.id
-          ? { ...participant, shareGrams: Math.max(0, participant.shareGrams + delta) }
-          : participant
+      buyers: bag.buyers.map((b) => (
+        b.id === last.id ? { ...b, grams: Math.max(0, b.grams + delta) } : b
       )),
     });
   }
 
-  function backToSingleOwner() {
-    if (bag.participants.length === 1 && bag.participants[0].personId.trim()) {
-      setSingleOwner(bag.participants[0].personId);
-      return;
-    }
-    replaceCurrentBag({ ...bag, mode: 'single', participants: [] });
+  // ── Collapsed view ──
+  if (!isExpanded && bag.splitMode !== 'unassigned') {
+    return (
+      <div className="bag-card bag-card-collapsed">
+        <div className="bag-card-header">
+          <div style={{ flex: 1 }}>
+            <div className="bag-card-title">Bag {bagIndex + 1}</div>
+            <div className="bag-card-meta">{getBagDisplayLabel(bag, gramsPerBag, people)}</div>
+          </div>
+          <StatusBadge tone={tone.tone} label={tone.label} compact />
+          <div className="bag-card-inline-actions">
+            <button className="btn btn-ghost btn-sm" onClick={() => setIsExpanded(true)}>Edit</button>
+            {canRemove && (
+              <button className="btn btn-ghost btn-icon" onClick={onRemove} title="Remove bag">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Bulk action hints for assigned bags */}
+        {tone.tone === 'complete' && hasUnassigned && (
+          <div className="wizard-chip-row" style={{ paddingTop: 'var(--space-2)' }}>
+            <button className="btn btn-ghost btn-sm" onClick={applyToAllUnassigned}>
+              Apply to all unassigned
+            </button>
+            {bag.splitMode === 'full' && (
+              <button className="btn btn-ghost btn-sm" onClick={assignAllRemainingToOwner}>
+                Assign all remaining to {people.find((p) => p.id === bag.buyers[0]?.personId)?.name || 'this buyer'}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
   }
 
+  // ── Expanded view ──
   return (
     <div className="bag-card">
       <div className="bag-card-header">
         <div>
-          <div className="bag-card-title">Bag {bag.bagIndex + 1}</div>
+          <div className="bag-card-title">Bag {bagIndex + 1}</div>
           <div className="bag-card-meta">{formatGrams(gramsPerBag)}</div>
         </div>
-        <StatusBadge tone={tone.tone} label={tone.label} compact />
+        <div className="bag-card-inline-actions">
+          <StatusBadge tone={tone.tone} label={tone.label} compact />
+          {bag.splitMode !== 'unassigned' && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setIsExpanded(false)}>Done</button>
+          )}
+          {canRemove && (
+            <button className="btn btn-ghost btn-icon" onClick={onRemove} title="Remove bag">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
-      {bag.mode === 'single' ? (
-        <div className="bag-card-body">
-          <div className="field">
-            <label className="field-label">Buyer</label>
-            <select
-              className="select"
-              value={selectedPersonId}
-              onChange={(e) => setSingleOwner(e.target.value)}
-            >
-              <option value="">Select a buyer</option>
-              {orderedPeople.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="wizard-chip-row">
-            <button className="btn btn-ghost btn-sm" onClick={onAddNewBuyer}>
-              Add new buyer
-            </button>
-            <button className="btn btn-ghost btn-sm" onClick={splitBag}>
-              Split bag
-            </button>
-            {previousBag && (
-              <button className="btn btn-ghost btn-sm" onClick={copyPreviousBag}>
-                Copy previous bag
-              </button>
-            )}
-            {selectedPersonId && bags.slice(bagIndex).some((candidate) => candidate.participants.length === 0) && (
-              <button className="btn btn-secondary btn-sm" onClick={assignAllRemainingBags}>
-                Assign all remaining bags to this buyer
-              </button>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="bag-card-body">
+      <div className="bag-card-body">
+        {bag.splitMode === 'unassigned' ? (
+          /* ── Unassigned: quick-assign buttons ── */
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            {bag.participants.map((participant) => (
-              <div key={participant.id} className="buyer-row">
+            <div className="field">
+              <label className="field-label">Quick assign — full bag</label>
+              <select
+                className="select"
+                value=""
+                onChange={(e) => assignFullBag(e.target.value)}
+              >
+                <option value="">Select a buyer (full bag)</option>
+                {orderedPeople.map((person) => (
+                  <option key={person.id} value={person.id}>{person.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="wizard-chip-row">
+              <button className="btn btn-secondary btn-sm" onClick={startEqualSplit}>
+                Split equally
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={startCustomSplit}>
+                Custom split
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={onAddNewBuyer}>
+                Add new buyer
+              </button>
+              {previousBag && (
+                <button className="btn btn-ghost btn-sm" onClick={copyPreviousBag}>
+                  Copy previous bag
+                </button>
+              )}
+            </div>
+          </div>
+        ) : bag.splitMode === 'full' ? (
+          /* ── Full bag: single buyer ── */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <div className="field">
+              <label className="field-label">Buyer (full bag)</label>
+              <select
+                className="select"
+                value={bag.buyers[0]?.personId ?? ''}
+                onChange={(e) => assignFullBag(e.target.value)}
+              >
+                <option value="">Select a buyer</option>
+                {orderedPeople.map((person) => (
+                  <option key={person.id} value={person.id}>{person.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="wizard-chip-row">
+              <button className="btn btn-ghost btn-sm" onClick={onAddNewBuyer}>Add new buyer</button>
+              <button className="btn btn-ghost btn-sm" onClick={startEqualSplit}>Split bag</button>
+              {previousBag && (
+                <button className="btn btn-ghost btn-sm" onClick={copyPreviousBag}>Copy previous bag</button>
+              )}
+              {bag.buyers[0]?.personId && hasUnassigned && (
+                <>
+                  <button className="btn btn-secondary btn-sm" onClick={assignAllRemainingToOwner}>
+                    Assign all remaining
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={applyToAllUnassigned}>
+                    Apply to all unassigned
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* ── Equal / Custom split ── */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <div className="bag-split-mode-indicator">
+              <span className={`wizard-badge ${bag.splitMode === 'equal' ? 'wizard-badge-accent' : 'wizard-badge-info'}`}>
+                {bag.splitMode === 'equal' ? 'Equal split' : 'Custom split'}
+              </span>
+              {bag.splitMode === 'equal' && (
+                <button className="btn btn-ghost btn-sm" onClick={startCustomSplit}>Switch to custom</button>
+              )}
+              {bag.splitMode === 'custom' && (
+                <button className="btn btn-ghost btn-sm" onClick={splitEqually}>Switch to equal</button>
+              )}
+            </div>
+
+            {bag.buyers.map((buyer) => (
+              <div key={buyer.id} className="buyer-row">
                 <select
                   className="select"
-                  value={participant.personId}
-                  onChange={(e) => updateSplitParticipant(participant.id, 'personId', e.target.value)}
+                  value={buyer.personId}
+                  onChange={(e) => updateBuyer(buyer.id, 'personId', e.target.value)}
                   style={{ flex: 1 }}
                 >
                   <option value="">Select a buyer</option>
@@ -964,74 +983,80 @@ export function BagAssignmentCard({
                     <option
                       key={person.id}
                       value={person.id}
-                      disabled={bag.participants.some((candidate) => candidate.id !== participant.id && candidate.personId === person.id)}
+                      disabled={bag.buyers.some((b) => b.id !== buyer.id && b.personId === person.id)}
                     >
                       {person.name}
                     </option>
                   ))}
                 </select>
 
-                <div className="buyer-grams-field">
-                  <input
-                    className="input"
-                    type="number"
-                    value={participant.shareGrams || ''}
-                    onChange={(e) => updateSplitParticipant(participant.id, 'shareGrams', e.target.value)}
-                    min="0"
-                    step="1"
-                    placeholder="g"
-                  />
-                  <span className="buyer-grams-suffix">g</span>
-                </div>
+                {bag.splitMode === 'custom' ? (
+                  <div className="buyer-grams-field">
+                    <input
+                      className="input"
+                      type="number"
+                      value={buyer.grams || ''}
+                      onChange={(e) => updateBuyer(buyer.id, 'grams', e.target.value)}
+                      min="0"
+                      step="1"
+                      placeholder="g"
+                    />
+                    <span className="buyer-grams-suffix">g</span>
+                  </div>
+                ) : (
+                  <div className="buyer-grams-display">
+                    {buyer.grams > 0 ? `${buyer.grams}g` : '—'}
+                  </div>
+                )}
 
-                <button className="btn btn-ghost btn-icon" onClick={() => removeSplitParticipant(participant.id)} title="Remove buyer">
+                <button className="btn btn-ghost btn-icon" onClick={() => removeBuyer(buyer.id)} title="Remove buyer">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M18 6L6 18M6 6l12 12" />
                   </svg>
                 </button>
               </div>
             ))}
-          </div>
 
-          <div className="wizard-chip-row">
-            {bag.participants.length < people.length && (
-              <button className="btn btn-secondary btn-sm" onClick={addSplitParticipant}>
-                Add buyer
-              </button>
-            )}
-            <button className="btn btn-ghost btn-sm" onClick={onAddNewBuyer}>
-              Add new buyer
-            </button>
-            {bag.participants.length > 0 && (
-              <button className="btn btn-ghost btn-sm" onClick={splitEqually}>
-                Split equally
-              </button>
-            )}
-            {bag.participants.length > 0 && (
-              <button className="btn btn-ghost btn-sm" onClick={assignRemainder}>
-                Assign remainder
-              </button>
-            )}
-            <button className="btn btn-ghost btn-sm" onClick={backToSingleOwner}>
-              Back to single owner
-            </button>
-            {previousBag && (
-              <button className="btn btn-ghost btn-sm" onClick={copyPreviousBag}>
-                Copy previous bag
-              </button>
-            )}
-          </div>
-
-          {splitNote && (
-            <div className={`wizard-inline-note bag-split-note is-${splitNote.tone}`}>
-              {splitNote.label}
+            <div className="wizard-chip-row">
+              {bag.buyers.length < people.length && (
+                <button className="btn btn-secondary btn-sm" onClick={addBuyer}>
+                  Add buyer
+                </button>
+              )}
+              <button className="btn btn-ghost btn-sm" onClick={onAddNewBuyer}>Add new buyer</button>
+              {bag.splitMode === 'custom' && bag.buyers.length > 0 && (
+                <button className="btn btn-ghost btn-sm" onClick={assignRemainder}>Assign remainder</button>
+              )}
+              {previousBag && (
+                <button className="btn btn-ghost btn-sm" onClick={copyPreviousBag}>Copy previous bag</button>
+              )}
+              {tone.tone === 'complete' && hasUnassigned && (
+                <button className="btn btn-ghost btn-sm" onClick={applyToAllUnassigned}>Apply to all unassigned</button>
+              )}
             </div>
-          )}
-        </div>
-      )}
+
+            {bag.splitMode === 'custom' && (() => {
+              const allocated = bag.buyers.reduce((s, b) => s + b.grams, 0);
+              const delta = gramsPerBag - allocated;
+              if (delta === 0 && bag.buyers.length >= 2 && bag.buyers.every((b) => b.personId.trim() && b.grams > 0)) {
+                return <div className="wizard-inline-note bag-split-note is-complete">Custom split balanced at {formatGrams(gramsPerBag)}.</div>;
+              }
+              if (delta > 0) {
+                return <div className="wizard-inline-note bag-split-note is-warning">{formatGrams(delta)} still need to be assigned.</div>;
+              }
+              if (delta < 0) {
+                return <div className="wizard-inline-note bag-split-note is-error">{formatGrams(Math.abs(delta))} over-assigned.</div>;
+              }
+              return null;
+            })()}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
+// ─── StatusBadge ──────────────────────────────────────────────
 
 function StatusBadge({
   tone,

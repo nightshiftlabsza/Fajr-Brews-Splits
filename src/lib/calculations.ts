@@ -7,8 +7,9 @@ import type {
   LotPersonBreakdown,
   FeePersonBreakdown,
   LotCalculation,
+  BagSplitMode,
 } from '../types';
-import { expandLotToBagDrafts } from './orderWizard';
+import { normalizeLotToBags } from './orderWizard';
 
 // ─── Validation ───────────────────────────────────────────────
 
@@ -20,10 +21,46 @@ function validateOrder(order: Order): string[] {
     return errors;
   }
 
-  const totalListForeign = order.lots.reduce(
-    (sum, lot) => sum + lot.foreignPricePerBag * lot.quantity,
-    0
-  );
+  for (const lot of order.lots) {
+    const bags = normalizeLotToBags(lot);
+    const quantity = bags.length;
+    const totalListForeignForLot = lot.foreignPricePerBag * quantity;
+
+    if (!lot.gramsPerBag || lot.gramsPerBag < 1 || !Number.isInteger(lot.gramsPerBag)) {
+      errors.push(`"${lot.name}": grams per bag must be an integer ≥ 1.`);
+    }
+    if (quantity < 1) {
+      errors.push(`"${lot.name}": quantity must be an integer ≥ 1.`);
+    }
+    if (!lot.foreignPricePerBag || lot.foreignPricePerBag <= 0) {
+      errors.push(`"${lot.name}": foreign price per bag must be > 0.`);
+    }
+
+    const lotTotalGrams = lot.gramsPerBag * quantity;
+    const buyerGramsSum = bags.reduce(
+      (s, bag) => s + bag.buyers.reduce((bs, b) => bs + b.grams, 0),
+      0,
+    );
+
+    if (buyerGramsSum !== lotTotalGrams) {
+      errors.push(
+        `"${lot.name}": buyer grams sum (${buyerGramsSum}g) ≠ lot total (${lotTotalGrams}g).`
+      );
+    }
+
+    for (const bag of bags) {
+      for (const buyer of bag.buyers) {
+        if (!Number.isInteger(buyer.grams) || buyer.grams < 1) {
+          errors.push(`"${lot.name}": each buyer share must be an integer ≥ 1g.`);
+        }
+      }
+    }
+  }
+
+  const totalListForeign = order.lots.reduce((sum, lot) => {
+    const quantity = normalizeLotToBags(lot).length;
+    return sum + lot.foreignPricePerBag * quantity;
+  }, 0);
 
   if (totalListForeign === 0) {
     errors.push('Total foreign list price is zero — cannot allocate goods.');
@@ -31,33 +68,6 @@ function validateOrder(order: Order): string[] {
 
   if (!order.goodsTotalZar || order.goodsTotalZar <= 0) {
     errors.push('Goods total (ZAR) must be greater than zero.');
-  }
-
-  for (const lot of order.lots) {
-    if (!lot.gramsPerBag || lot.gramsPerBag < 1 || !Number.isInteger(lot.gramsPerBag)) {
-      errors.push(`"${lot.name}": grams per bag must be an integer ≥ 1.`);
-    }
-    if (!lot.quantity || lot.quantity < 1 || !Number.isInteger(lot.quantity)) {
-      errors.push(`"${lot.name}": quantity must be an integer ≥ 1.`);
-    }
-    if (!lot.foreignPricePerBag || lot.foreignPricePerBag <= 0) {
-      errors.push(`"${lot.name}": foreign price per bag must be > 0.`);
-    }
-
-    const lotTotalGrams = lot.gramsPerBag * lot.quantity;
-    const shareSum = lot.shares.reduce((s, sh) => s + sh.shareGrams, 0);
-
-    if (shareSum !== lotTotalGrams) {
-      errors.push(
-        `"${lot.name}": share grams sum (${shareSum}g) ≠ lot total (${lotTotalGrams}g).`
-      );
-    }
-
-    for (const share of lot.shares) {
-      if (!Number.isInteger(share.shareGrams) || share.shareGrams < 1) {
-        errors.push(`"${lot.name}": each share must be an integer ≥ 1g.`);
-      }
-    }
   }
 
   return errors;
@@ -88,32 +98,38 @@ export function calculate(
   }
 
   // ── A. Lot foreign totals ────────────────────────────────────
-  const totalListForeignAll = order.lots.reduce(
-    (sum, lot) => sum + lot.foreignPricePerBag * lot.quantity,
-    0
-  );
+  const lotBagsCache = new Map<string, ReturnType<typeof normalizeLotToBags>>();
+  for (const lot of order.lots) {
+    lotBagsCache.set(lot.id, normalizeLotToBags(lot));
+  }
+
+  const totalListForeignAll = order.lots.reduce((sum, lot) => {
+    const quantity = lotBagsCache.get(lot.id)!.length;
+    return sum + lot.foreignPricePerBag * quantity;
+  }, 0);
 
   // lotId → allocated goods ZAR (full precision)
   const lotGoodsZar: Record<string, number> = {};
   for (const lot of order.lots) {
-    const lotTotalForeign = lot.foreignPricePerBag * lot.quantity;
+    const quantity = lotBagsCache.get(lot.id)!.length;
+    const lotTotalForeign = lot.foreignPricePerBag * quantity;
     lotGoodsZar[lot.id] = (lotTotalForeign / totalListForeignAll) * order.goodsTotalZar;
   }
 
   // ── B. Collect all participating person IDs ──────────────────
   const personIdSet = new Set<string>();
   for (const lot of order.lots) {
-    for (const bag of expandLotToBagDrafts(lot)) {
-      for (const participant of bag.participants) {
-        if (participant.personId.trim() && participant.shareGrams > 0) {
-          personIdSet.add(participant.personId);
+    for (const bag of lotBagsCache.get(lot.id)!) {
+      for (const buyer of bag.buyers) {
+        if (buyer.personId.trim() && buyer.grams > 0) {
+          personIdSet.add(buyer.personId);
         }
       }
     }
   }
   const personIds = Array.from(personIdSet);
 
-  // ── B. Per-person accumulators (full precision) ──────────────
+  // ── Per-person accumulators (full precision) ──────────────
   const personGoods: Record<string, number> = {};
   const personCoffeeValueForeign: Record<string, number> = {};
   const personLotBreakdowns: Record<string, LotPersonBreakdown[]> = {};
@@ -127,42 +143,48 @@ export function calculate(
   }
 
   for (const lot of order.lots) {
-    const lotTotalGrams = lot.gramsPerBag * lot.quantity;
-    const lotTotalForeign = lot.foreignPricePerBag * lot.quantity;
+    const bags = lotBagsCache.get(lot.id)!;
+    const quantity = bags.length;
+    const lotTotalGrams = lot.gramsPerBag * quantity;
+    const lotTotalForeign = lot.foreignPricePerBag * quantity;
     const lotGoodsZarForThisLot = lotGoodsZar[lot.id];
-    const lotBags = expandLotToBagDrafts(lot);
 
-    for (const bag of lotBags) {
-      const bagSplitWith = bag.participants
-        .filter((participant) => participant.personId.trim().length > 0 && participant.shareGrams > 0)
-        .map((participant) => participant.personId);
+    for (let bagIndex = 0; bagIndex < bags.length; bagIndex++) {
+      const bag = bags[bagIndex];
 
-      for (const participant of bag.participants) {
-        const pid = participant.personId;
-        if (!pid || participant.shareGrams <= 0 || !personIds.includes(pid)) continue;
+      const bagSplitWith = bag.buyers
+        .filter((buyer) => buyer.personId.trim().length > 0 && buyer.grams > 0)
+        .map((buyer) => buyer.personId);
 
-        // B. Goods ZAR for this share
-        const shareGoodsZar = (participant.shareGrams / lotTotalGrams) * lotGoodsZarForThisLot;
+      // Map BagSplitMode to the breakdown's bagMode
+      const bagMode: BagSplitMode = bag.splitMode;
+
+      for (const buyer of bag.buyers) {
+        const pid = buyer.personId;
+        if (!pid || buyer.grams <= 0 || !personIds.includes(pid)) continue;
+
+        // Goods ZAR for this share
+        const shareGoodsZar = (buyer.grams / lotTotalGrams) * lotGoodsZarForThisLot;
         personGoods[pid] += shareGoodsZar;
-        personTotalGrams[pid] += participant.shareGrams;
+        personTotalGrams[pid] += buyer.grams;
 
-        // C. Coffee value foreign (for value_based fees)
-        const shareForeign = (participant.shareGrams / lotTotalGrams) * lotTotalForeign;
+        // Coffee value foreign (for value_based fees)
+        const shareForeign = (buyer.grams / lotTotalGrams) * lotTotalForeign;
         personCoffeeValueForeign[pid] += shareForeign;
 
         const otherSharers = bagSplitWith
-          .filter((participantId) => participantId !== pid)
-          .map((participantId) => personNames[participantId] || 'Unknown');
+          .filter((buyerId) => buyerId !== pid)
+          .map((buyerId) => personNames[buyerId] || 'Unknown');
 
         personLotBreakdowns[pid].push({
-          id: `${lot.id}-${bag.bagIndex}-${participant.id}`,
+          id: `${lot.id}-${bagIndex}-${buyer.id}`,
           lotId: lot.id,
           lotName: lot.name,
-          bagIndex: bag.bagIndex,
-          bagMode: bag.mode,
-          shareGrams: participant.shareGrams,
+          bagIndex,
+          bagMode,
+          shareGrams: buyer.grams,
           gramsPerBag: lot.gramsPerBag,
-          lotQuantity: lot.quantity,
+          lotQuantity: quantity,
           goodsZar: shareGoodsZar,
           feesZar: 0,
           totalZar: shareGoodsZar,
@@ -226,8 +248,6 @@ export function calculate(
   }
 
   // Distribute each person's already-allocated fees down to their coffee lines.
-  // This keeps line items reconciling to person totals without changing the
-  // existing order-level fee models.
   for (const pid of personIds) {
     const lineItems = personLotBreakdowns[pid];
     if (lineItems.length === 0 || personGoods[pid] <= 0) {
@@ -249,12 +269,13 @@ export function calculate(
 
   const lotCalcMap = new Map<string, LotCalculation>();
   for (const lot of order.lots) {
+    const quantity = lotBagsCache.get(lot.id)!.length;
     lotCalcMap.set(lot.id, {
       lotId: lot.id,
       lotName: lot.name,
-      quantity: lot.quantity,
+      quantity,
       gramsPerBag: lot.gramsPerBag,
-      totalGrams: lot.gramsPerBag * lot.quantity,
+      totalGrams: lot.gramsPerBag * quantity,
       goodsZar: 0,
       feesZar: 0,
       totalZar: 0,
@@ -274,14 +295,15 @@ export function calculate(
 
   const lotCalcs = order.lots
     .map((lot) => {
+      const quantity = lotBagsCache.get(lot.id)!.length;
       const lotCalc = lotCalcMap.get(lot.id);
       if (!lotCalc) {
         return {
           lotId: lot.id,
           lotName: lot.name,
-          quantity: lot.quantity,
+          quantity,
           gramsPerBag: lot.gramsPerBag,
-          totalGrams: lot.gramsPerBag * lot.quantity,
+          totalGrams: lot.gramsPerBag * quantity,
           goodsZar: 0,
           feesZar: 0,
           totalZar: 0,
@@ -291,7 +313,7 @@ export function calculate(
 
       return {
         ...lotCalc,
-        finalZarPerBag: lot.quantity > 0 ? lotCalc.totalZar / lot.quantity : 0,
+        finalZarPerBag: quantity > 0 ? lotCalc.totalZar / quantity : 0,
       };
     });
 
@@ -325,8 +347,6 @@ export function calculate(
     personTotalsFinal[payerId] =
       Math.round((totalOrderZar - sumNonPayer) * 100) / 100;
   } else if (payerId && !personIds.includes(payerId)) {
-    // Payer is not in the order (unusual but possible)
-    // Just round normally
     personTotalsFinal[payerId ?? ''] = 0;
   }
 
@@ -367,18 +387,26 @@ export function calculate(
 
 // ─── Helpers ──────────────────────────────────────────────────
 
-/** Returns remaining grams for a lot (lot total − sum of shares) */
+/** Returns remaining grams for a lot (lot total − sum of buyer grams) */
 export function remainingGrams(lot: CoffeeLot): number {
-  const lotTotal = lot.gramsPerBag * lot.quantity;
-  const allocated = lot.shares.reduce((s, sh) => s + (sh.shareGrams || 0), 0);
+  const bags = normalizeLotToBags(lot);
+  const lotTotal = lot.gramsPerBag * bags.length;
+  const allocated = bags.reduce(
+    (s, bag) => s + bag.buyers.reduce((bs, b) => bs + (b.grams || 0), 0),
+    0,
+  );
   return lotTotal - allocated;
 }
 
-/** True if shares for every lot sum exactly to lot total grams */
+/** True if buyer grams for every lot sum exactly to lot total grams */
 export function allLotsBalanced(lots: CoffeeLot[]): boolean {
   return lots.every((lot) => {
-    const lotTotal = lot.gramsPerBag * lot.quantity;
-    const allocated = lot.shares.reduce((s, sh) => s + (sh.shareGrams || 0), 0);
+    const bags = normalizeLotToBags(lot);
+    const lotTotal = lot.gramsPerBag * bags.length;
+    const allocated = bags.reduce(
+      (s, bag) => s + bag.buyers.reduce((bs, b) => bs + (b.grams || 0), 0),
+      0,
+    );
     return allocated === lotTotal;
   });
 }

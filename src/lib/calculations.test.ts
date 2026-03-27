@@ -204,7 +204,7 @@ describe('calculate() - bag-level split context', () => {
 
     expect(result.isValid).toBe(true);
     expect(result.personCalcs[PERSON_A].lotBreakdowns).toHaveLength(1);
-    expect(result.personCalcs[PERSON_A].lotBreakdowns[0].bagMode).toBe('single');
+    expect(result.personCalcs[PERSON_A].lotBreakdowns[0].bagMode).toBe('full');
     expect(result.personCalcs[PERSON_A].lotBreakdowns[0].splitWith).toEqual([]);
     expect(result.personCalcs[PERSON_B].lotBreakdowns[0].splitWith).toEqual([]);
   });
@@ -245,8 +245,8 @@ describe('calculate() - bag-level split context', () => {
     const result = calculate(order, personNames);
 
     expect(result.personCalcs[PERSON_A].lotBreakdowns[0].splitWith).toEqual([]);
-    expect(result.personCalcs[PERSON_A].lotBreakdowns[0].bagMode).toBe('single');
-    expect(result.personCalcs[PERSON_B].lotBreakdowns[0].bagMode).toBe('split');
+    expect(result.personCalcs[PERSON_A].lotBreakdowns[0].bagMode).toBe('full');
+    expect(result.personCalcs[PERSON_B].lotBreakdowns[0].bagMode).toBe('equal');
     expect(result.personCalcs[PERSON_B].lotBreakdowns[0].splitWith).toEqual(['Person C']);
     expect(result.personCalcs[PERSON_C].lotBreakdowns[0].splitWith).toEqual(['Person B']);
   });

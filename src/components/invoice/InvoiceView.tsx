@@ -86,7 +86,7 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
                   <div>
                     <div className="invoice-lot-name">{lb.lotName}</div>
                     <div className="invoice-lot-meta">
-                      Bag {lb.bagIndex + 1} · {lb.shareGrams}g · {lb.bagMode === 'split' ? 'split bag' : 'own bag'}
+                      Bag {lb.bagIndex + 1} · {lb.shareGrams}g · {lb.bagMode === 'full' ? 'own bag' : lb.bagMode === 'unassigned' ? 'unassigned' : 'split bag'}
                     </div>
                     {lb.splitWith.length > 0 && (
                       <div className="invoice-lot-split">
