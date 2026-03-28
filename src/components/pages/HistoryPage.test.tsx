@@ -11,13 +11,17 @@ const mockStoreState = {
   deleteOrder: vi.fn(),
   createOrder: vi.fn(),
   updateOrder: vi.fn(),
-  setCurrentOrderId: vi.fn(),
   setOrderWizardStep: vi.fn(),
+  setOrderProtectionOpen: vi.fn(),
   exportJSON: vi.fn(() => '{}'),
   importJSON: vi.fn(),
   setLastExportDate: vi.fn(),
   verifyOrderPin: vi.fn(),
   unlockedOrderIds: new Set<string>(),
+  sessionUi: {
+    orderWizardSteps: {} as Record<string, 'setup' | 'coffees' | 'goods' | 'summary'>,
+    orderProtectionOpen: {} as Record<string, boolean>,
+  },
 };
 
 vi.mock('../../store/appStore', () => ({
@@ -113,13 +117,17 @@ describe('HistoryPage', () => {
     mockStoreState.deleteOrder = vi.fn();
     mockStoreState.createOrder = vi.fn();
     mockStoreState.updateOrder = vi.fn().mockResolvedValue(undefined);
-    mockStoreState.setCurrentOrderId = vi.fn();
     mockStoreState.setOrderWizardStep = vi.fn();
+    mockStoreState.setOrderProtectionOpen = vi.fn();
     mockStoreState.exportJSON = vi.fn(() => '{}');
     mockStoreState.importJSON = vi.fn();
     mockStoreState.setLastExportDate = vi.fn();
     mockStoreState.verifyOrderPin = vi.fn();
     mockStoreState.unlockedOrderIds = new Set<string>();
+    mockStoreState.sessionUi = {
+      orderWizardSteps: {},
+      orderProtectionOpen: {},
+    };
   });
 
   afterEach(() => {
@@ -131,23 +139,18 @@ describe('HistoryPage', () => {
     vi.unstubAllGlobals();
   });
 
-  it('reopens the same saved past order for editing instead of forcing a duplicate', async () => {
-    const onNavigateToOrder = vi.fn();
-
+  it('edits the same saved past order in place without moving it back to active orders', async () => {
     act(() => {
-      root.render(<HistoryPage onNavigateToOrder={onNavigateToOrder} />);
+      root.render(<HistoryPage />);
     });
 
-    clickButtonByText(container, 'View order');
     clickButtonByText(container, 'Edit order');
 
     await act(async () => {
       await Promise.resolve();
     });
 
-    expect(mockStoreState.updateOrder).toHaveBeenCalledWith('order-1', { isArchived: false });
-    expect(mockStoreState.setCurrentOrderId).toHaveBeenCalledWith('order-1');
-    expect(mockStoreState.setOrderWizardStep).toHaveBeenCalledWith('order-1', 'summary');
-    expect(onNavigateToOrder).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain('Editing saved order');
+    expect(mockStoreState.updateOrder).not.toHaveBeenCalledWith('order-1', { isArchived: false });
   });
 });

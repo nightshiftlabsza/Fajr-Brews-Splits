@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Order, Person } from '../../types';
 import { OrderSummary } from './OrderSummary';
+import { todayISO } from '../../lib/formatters';
 
 const mockStoreState = {
   people: [] as Person[],
@@ -179,7 +180,7 @@ describe('OrderSummary', () => {
         'person-2': {
           status: 'paid',
           amountPaid: 150,
-          datePaid: '2026-03-18',
+          datePaid: todayISO(),
         },
       },
     });
@@ -206,6 +207,32 @@ describe('OrderSummary', () => {
     expect(mockStoreState.updateOrder).toHaveBeenCalledWith('order-1', { isArchived: true });
     expect(mockStoreState.flushOrderWrites).toHaveBeenCalledWith('order-1');
     expect(mockStoreState.setCurrentOrderId).toHaveBeenCalledWith('order-2');
+    expect(onFinalize).toHaveBeenCalledTimes(1);
+  });
+
+  it('saves archived past-order corrections without unarchiving the order', async () => {
+    const onFinalize = vi.fn();
+
+    act(() => {
+      root.render(
+        <OrderSummary
+          order={makeOrder({ isArchived: true })}
+          onJumpToStep={() => undefined}
+          onFinalize={onFinalize}
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain('Save changes');
+    clickButtonByText(container, 'Save changes');
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockStoreState.flushOrderWrites).toHaveBeenCalledWith('order-1');
+    expect(mockStoreState.updateOrder).not.toHaveBeenCalledWith('order-1', { isArchived: true });
+    expect(mockStoreState.setCurrentOrderId).not.toHaveBeenCalled();
     expect(onFinalize).toHaveBeenCalledTimes(1);
   });
 });

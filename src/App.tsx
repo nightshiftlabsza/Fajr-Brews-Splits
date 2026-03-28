@@ -53,12 +53,19 @@ export function getAuthReinitializeOptions(isInitialized: boolean): { silent?: b
 }
 
 export default function App() {
-  const { initialize, isInitialized, isLoading, user, accessStatus, linkResolution, dismissLinkResolution } = useAppStore();
+  const { initialize, isInitialized, user, accessStatus, linkResolution, dismissLinkResolution } = useAppStore();
   const [currentTab, setCurrentTab] = useState<AppTab>('order');
   const [authMode, setAuthMode] = useState<'default' | 'recovery'>(() => (
     typeof window !== 'undefined' && isRecoveryHash(window.location.hash) ? 'recovery' : 'default'
   ));
   const [currentPath, setCurrentPath] = useState(getCurrentPath);
+  const previousTabRef = useRef<AppTab>('order');
+  const tabScrollPositionsRef = useRef<Record<AppTab, number>>({
+    order: 0,
+    people: 0,
+    history: 0,
+    settings: 0,
+  });
 
   useEffect(() => {
     const handlePopState = () => {
@@ -108,6 +115,27 @@ export default function App() {
     }
   }, [accessStatus, currentTab]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const previousTab = previousTabRef.current;
+    if (previousTab === currentTab) {
+      return;
+    }
+
+    tabScrollPositionsRef.current[previousTab] = window.scrollY;
+    previousTabRef.current = currentTab;
+
+    const nextScrollY = tabScrollPositionsRef.current[currentTab] ?? 0;
+    const frameId = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: nextScrollY, behavior: 'auto' });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [currentTab]);
+
   // Track mediaQuery listener for cleanup
   const modeListenerRef = useRef<((e: MediaQueryListEvent) => void) | null>(null);
   const modeMediaRef = useRef<MediaQueryList | null>(null);
@@ -153,7 +181,7 @@ export default function App() {
   }, []);
 
   // Loading splash
-  if (!isInitialized || isLoading) {
+  if (!isInitialized) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -238,7 +266,7 @@ export default function App() {
           </section>
         )}
         <section className={`app-page ${currentTab === 'history' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'history'}>
-          <HistoryPage onNavigateToOrder={() => setCurrentTab('order')} participantOnly={participantOnly} />
+          <HistoryPage participantOnly={participantOnly} />
         </section>
         <section className={`app-page ${currentTab === 'settings' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'settings'}>
           <SettingsPage />

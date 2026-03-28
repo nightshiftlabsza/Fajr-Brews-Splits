@@ -58,6 +58,11 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
         throw new Error(latestResult.validationErrors[0] ?? 'This order still has unsaved or incomplete data.');
       }
 
+      if (order.isArchived) {
+        onFinalize();
+        return;
+      }
+
       await updateOrder(order.id, { isArchived: true });
       await flushOrderWrites(order.id);
       const nextActiveOrderId = getNextActiveOrderId(useAppStore.getState().orders, order.id);
@@ -73,6 +78,7 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
   const payer = people.find((person) => person.id === order.payerId);
   const activeOrderCount = orders.filter((candidate) => !candidate.isArchived && candidate.id !== order.id).length;
   const orderStatus = getOrderStatus(order, result);
+  const savingPastOrder = order.isArchived;
 
   return (
     <div className="wizard-step-stack">
@@ -136,17 +142,21 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
       <section className="wizard-panel order-finalize-panel">
         <div className="wizard-card-header">
           <div>
-            <div className="wizard-card-title">Finalize order</div>
+            <div className="wizard-card-title">{savingPastOrder ? 'Save changes' : 'Finalize order'}</div>
             <p className="wizard-card-copy">
-              Save the latest order state first, then move it into Past Orders as a completed record.
+              {savingPastOrder
+                ? 'Save your corrections while keeping this order in Past Orders with its payment and invoice history intact.'
+                : 'Save the latest order state first, then move it into Past Orders as a completed record.'}
             </p>
           </div>
         </div>
 
         <div className="wizard-inline-note">
-          {activeOrderCount > 0
-            ? `Finalizing now will move this order to Past Orders and return you to your remaining ${activeOrderCount} active ${activeOrderCount === 1 ? 'order' : 'orders'}.`
-            : 'Finalizing now will move this order to Past Orders and clear it from the active drafting workspace.'}
+          {savingPastOrder
+            ? 'This saved order stays right here in Past Orders. Only the fields you changed will be updated.'
+            : activeOrderCount > 0
+              ? `Finalizing now will move this order to Past Orders and return you to your remaining ${activeOrderCount} active ${activeOrderCount === 1 ? 'order' : 'orders'}.`
+              : 'Finalizing now will move this order to Past Orders and clear it from the active drafting workspace.'}
         </div>
 
         {finalizeError && (
@@ -157,7 +167,7 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
 
         <div className="wizard-inline-actions" style={{ marginTop: 'var(--space-4)' }}>
           <button className="btn btn-primary" onClick={handleFinalizeOrder} disabled={finalizing}>
-            {finalizing ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Save to Past Orders'}
+            {finalizing ? <span className="spinner" style={{ width: 16, height: 16 }} /> : savingPastOrder ? 'Save changes' : 'Save to Past Orders'}
           </button>
         </div>
       </section>
