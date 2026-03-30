@@ -5,8 +5,10 @@ import { calculate } from '../../lib/calculations';
 import { formatZAR } from '../../lib/formatters';
 import { ORDER_WIZARD_STEPS, type OrderWizardStep } from '../../lib/orderWizard';
 import { getNextActiveOrderId } from '../../lib/orderLifecycle';
+import { resolveOrderRoaster } from '../../lib/roasters';
 import { SettlementPacks } from './SettlementPacks';
 import { CoffeeCostSummary } from './CoffeeCostSummary';
+import { RoasterAvatar } from '../roaster/RoasterAvatar';
 
 interface Props {
   order: Order;
@@ -15,9 +17,11 @@ interface Props {
 }
 
 export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
-  const { people, orders, updateOrder, setCurrentOrderId, flushOrderWrites } = useAppStore();
+  const { people, roasters, orders, updateOrder, deleteOrder, setCurrentOrderId, flushOrderWrites } = useAppStore();
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const personNames = Object.fromEntries(people.map((person) => [person.id, person.name]));
   const result = calculate(order, personNames);
@@ -75,7 +79,31 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
     }
   }
 
+  async function handleDeleteOrder() {
+    if (order.isArchived) {
+      return;
+    }
+
+    const confirmed = confirm(`Delete "${order.name}"? This cannot be undone.`);
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleting(true);
+    setDeleteError(null);
+
+    try {
+      await flushOrderWrites(order.id);
+      await deleteOrder(order.id);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'Failed to delete this order. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const payer = people.find((person) => person.id === order.payerId);
+  const orderRoaster = resolveOrderRoaster(order, roasters);
   const activeOrderCount = orders.filter((candidate) => !candidate.isArchived && candidate.id !== order.id).length;
   const orderStatus = getOrderStatus(order, result);
   const savingPastOrder = order.isArchived;
@@ -87,9 +115,21 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
           <div>
             <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Order overview</div>
             <div className="order-summary-title-row">
+              {orderRoaster && (
+                <RoasterAvatar
+                  name={orderRoaster.name}
+                  logoUrl={orderRoaster.logoUrl}
+                  size={42}
+                />
+              )}
               <h3 className="wizard-card-title">{order.name || 'Untitled order'}</h3>
               <span className={`summary-status-pill is-${orderStatus.tone}`}>{orderStatus.label}</span>
             </div>
+            {orderRoaster && (
+              <div className="field-hint" style={{ marginTop: 'var(--space-2)' }}>
+                Roaster: {orderRoaster.name}
+              </div>
+            )}
           </div>
 
           <div className="wizard-chip-row">
@@ -165,8 +205,19 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
           </div>
         )}
 
+        {deleteError && (
+          <div className="alert alert-error" style={{ marginTop: 'var(--space-4)' }}>
+            {deleteError}
+          </div>
+        )}
+
         <div className="wizard-inline-actions" style={{ marginTop: 'var(--space-4)' }}>
-          <button className="btn btn-primary" onClick={handleFinalizeOrder} disabled={finalizing}>
+          {!savingPastOrder && (
+            <button className="btn btn-danger" onClick={() => void handleDeleteOrder()} disabled={deleting || finalizing}>
+              {deleting ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Delete order'}
+            </button>
+          )}
+          <button className="btn btn-primary" onClick={handleFinalizeOrder} disabled={finalizing || deleting}>
             {finalizing ? <span className="spinner" style={{ width: 16, height: 16 }} /> : savingPastOrder ? 'Save changes' : 'Save to Past Orders'}
           </button>
         </div>

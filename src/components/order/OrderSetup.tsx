@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import type { Order, PayerBank, Person } from '../../types';
+import type { Order, PayerBank, Person, Roaster } from '../../types';
 import { todayISO } from '../../lib/formatters';
 import { dedupePeopleById } from '../../lib/storeState';
+import { createRoasterSnapshot } from '../../lib/roasters';
+import { RoasterPicker } from '../roaster/RoasterPicker';
 
 interface Props {
   order: Order;
@@ -50,7 +52,10 @@ function getIncludedPeople(order: Order, people: Person[]): Person[] {
 export function OrderSetup({ order, registerCommit }: Props) {
   const {
     people,
+    roasters,
+    orders,
     updateOrder,
+    createRoaster,
     setOrderPin,
     clearOrderPin,
     sessionUi,
@@ -59,6 +64,7 @@ export function OrderSetup({ order, registerCommit }: Props) {
 
   const [name, setName] = useState(order.name);
   const [orderDate, setOrderDate] = useState(order.orderDate || todayISO());
+  const [selectedRoasterId, setSelectedRoasterId] = useState(order.roasterId || '');
   const [payerId, setPayerId] = useState(order.payerId || '');
   const [bank, setBank] = useState<PayerBank>(normalizeBank(order.payerBank));
   const [bankOpen, setBankOpen] = useState(Boolean(
@@ -85,6 +91,7 @@ export function OrderSetup({ order, registerCommit }: Props) {
     bankHydrationRef.current = true;
     setName(order.name);
     setOrderDate(order.orderDate || todayISO());
+    setSelectedRoasterId(order.roasterId || '');
     setPayerId(order.payerId || '');
     setBank(normalizeBank(order.payerBank));
     setBankOpen(Boolean(
@@ -159,12 +166,18 @@ export function OrderSetup({ order, registerCommit }: Props) {
     const updates: Partial<Order> = {};
     const trimmedName = name.trim();
     const normalizedBank = normalizeBank(bank);
+    const selectedRoaster = roasters.find((roaster) => roaster.id === selectedRoasterId) ?? null;
+    const nextRoasterSnapshot = selectedRoaster ? createRoasterSnapshot(selectedRoaster) : null;
 
     if (trimmedName !== order.name) {
       updates.name = trimmedName;
     }
     if (orderDate !== order.orderDate) {
       updates.orderDate = orderDate;
+    }
+    if ((selectedRoasterId || null) !== order.roasterId) {
+      updates.roasterId = selectedRoasterId || null;
+      updates.roasterSnapshot = nextRoasterSnapshot;
     }
     if ((payerId || null) !== order.payerId) {
       updates.payerId = payerId || null;
@@ -193,6 +206,24 @@ export function OrderSetup({ order, registerCommit }: Props) {
   function handlePayerChange(nextPayerId: string) {
     setPayerId(nextPayerId);
     void updateOrder(order.id, { payerId: nextPayerId || null });
+  }
+
+  function handleRoasterSelect(roaster: Roaster | null) {
+    setSelectedRoasterId(roaster?.id ?? '');
+    void updateOrder(order.id, {
+      roasterId: roaster?.id ?? null,
+      roasterSnapshot: createRoasterSnapshot(roaster),
+    });
+  }
+
+  async function handleCreateRoaster(data: { name: string; logoFile?: File | null }) {
+    const roaster = await createRoaster(data);
+    await updateOrder(order.id, {
+      roasterId: roaster.id,
+      roasterSnapshot: createRoasterSnapshot(roaster),
+    });
+    setSelectedRoasterId(roaster.id);
+    return roaster;
   }
 
   function handleProtectionToggle() {
@@ -279,6 +310,14 @@ export function OrderSetup({ order, registerCommit }: Props) {
             />
           </div>
         </div>
+
+        <RoasterPicker
+          orders={orders}
+          roasters={roasters}
+          selectedRoasterId={selectedRoasterId || null}
+          onSelectRoaster={handleRoasterSelect}
+          onCreateRoaster={handleCreateRoaster}
+        />
 
         <div className="field">
           <label className="field-label" htmlFor="payer">Payer</label>

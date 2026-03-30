@@ -6,6 +6,7 @@ import { PendingAccess } from './components/auth/PendingAccess';
 import { Header } from './components/layout/Header';
 import { OrderPage } from './components/pages/OrderPage';
 import { PeoplePage } from './components/pages/PeoplePage';
+import { MyStatsPage } from './components/pages/MyStatsPage';
 import { HistoryPage } from './components/pages/HistoryPage';
 import { ResetPasswordPage } from './components/pages/ResetPasswordPage';
 import { SettingsPage } from './components/pages/SettingsPage';
@@ -63,6 +64,7 @@ export default function App() {
   const tabScrollPositionsRef = useRef<Record<AppTab, number>>({
     order: 0,
     people: 0,
+    'my-stats': 0,
     history: 0,
     settings: 0,
   });
@@ -111,7 +113,7 @@ export default function App() {
 
   useEffect(() => {
     if (accessStatus === 'participant' && (currentTab === 'order' || currentTab === 'people')) {
-      setCurrentTab('history');
+      setCurrentTab('my-stats');
     }
   }, [accessStatus, currentTab]);
 
@@ -265,6 +267,9 @@ export default function App() {
             <PeoplePage />
           </section>
         )}
+        <section className={`app-page ${currentTab === 'my-stats' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'my-stats'}>
+          <MyStatsPage />
+        </section>
         <section className={`app-page ${currentTab === 'history' ? 'is-active' : ''}`} aria-hidden={currentTab !== 'history'}>
           <HistoryPage participantOnly={participantOnly} />
         </section>

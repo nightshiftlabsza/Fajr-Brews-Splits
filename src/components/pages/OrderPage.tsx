@@ -16,6 +16,8 @@ import {
   validateSetupStep,
 } from '../../lib/orderWizard';
 import { formatDateShort, todayISO } from '../../lib/formatters';
+import { resolveOrderRoaster } from '../../lib/roasters';
+import { RoasterAvatar } from '../roaster/RoasterAvatar';
 
 const STEP_INDEX: Record<OrderWizardStep, number> = {
   setup: 0,
@@ -29,7 +31,7 @@ interface Props {
 }
 
 export function OrderPage({ onNavigateToHistory }: Props) {
-  const { orders, currentOrderId, createOrder, setCurrentOrderId, setOrderWizardStep, sessionUi } = useAppStore();
+  const { orders, roasters, currentOrderId, createOrder, setCurrentOrderId, setOrderWizardStep, sessionUi } = useAppStore();
   const activeOrders = useMemo(() => getActiveOrders(orders), [orders]);
   const currentOrder = useMemo(
     () => activeOrders.find((order) => order.id === currentOrderId) ?? activeOrders[0] ?? null,
@@ -64,6 +66,8 @@ export function OrderPage({ onNavigateToHistory }: Props) {
       const order = await createOrder({
         name: 'New Order',
         orderDate: todayISO(),
+        roasterId: null,
+        roasterSnapshot: null,
         payerId: null,
         payerBank: { bankName: '', accountNumber: '', beneficiary: '' },
         referenceTemplate: 'FAJR-{ORDER}-{NAME}',
@@ -160,6 +164,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
   }
 
   const showSummaryChrome = currentStep === 'summary';
+  const resolvedRoaster = resolveOrderRoaster(currentOrder, roasters);
 
   return (
     <div className="page-container wizard-page">
@@ -212,7 +217,23 @@ export function OrderPage({ onNavigateToHistory }: Props) {
             <div className="wizard-hero-top">
               <div>
                 <div className="wizard-kicker">Order creation</div>
-                <h2 className="wizard-page-title">{currentOrder.name || 'Untitled order'}</h2>
+                <div className="order-page-title-row">
+                  {resolvedRoaster && (
+                    <RoasterAvatar
+                      name={resolvedRoaster.name}
+                      logoUrl={resolvedRoaster.logoUrl}
+                      size={52}
+                    />
+                  )}
+                  <div>
+                    <h2 className="wizard-page-title">{currentOrder.name || 'Untitled order'}</h2>
+                    {resolvedRoaster && (
+                      <div className="field-hint" style={{ marginTop: 4 }}>
+                        Roaster: {resolvedRoaster.name}
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <p className="wizard-page-copy">
                   {formatDateShort(currentOrder.orderDate)} - move from setup into coffees, then fees, then final review.
                 </p>

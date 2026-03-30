@@ -11,11 +11,13 @@ interface HeaderProps {
 const FULL_TABS: { id: AppTab; label: string }[] = [
   { id: 'order', label: 'Order' },
   { id: 'people', label: 'People' },
+  { id: 'my-stats', label: 'My Stats' },
   { id: 'history', label: 'Past Orders' },
   { id: 'settings', label: 'Settings' },
 ];
 
 const PARTICIPANT_TABS: { id: AppTab; label: string }[] = [
+  { id: 'my-stats', label: 'My Stats' },
   { id: 'history', label: 'My Orders' },
   { id: 'settings', label: 'Settings' },
 ];

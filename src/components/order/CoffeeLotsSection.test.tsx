@@ -86,6 +86,8 @@ function makeOrder(lots: Order['lots']): Order {
     workspaceId: 'workspace-1',
     name: 'March Drop',
     orderDate: '2026-03-18',
+    roasterId: null,
+    roasterSnapshot: null,
     payerId: 'person-1',
     payerBank: { bankName: '', accountNumber: '', beneficiary: '' },
     referenceTemplate: 'FAJR-{ORDER}-{NAME}',

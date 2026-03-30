@@ -1,5 +1,5 @@
-import type { Order, Person, PersonCalculation } from '../types';
-import { formatZAR, formatDate, resolveReference, pdfFilename } from './formatters';
+import type { CalculationResult, Order, Person, PersonCalculation } from '../types';
+import { formatZAR, formatDate, orderPdfFilename, pdfFilename, resolveReference } from './formatters';
 
 // Dynamic import to keep initial bundle smaller
 async function getJsPDF() {
@@ -15,19 +15,20 @@ const WHITE = [255, 255, 255] as const;
 const BORDER = [229, 221, 212] as const;
 
 type RGB = readonly [number, number, number];
+type PdfDoc = InstanceType<Awaited<ReturnType<typeof getJsPDF>>>;
 
-function setFill(doc: InstanceType<Awaited<ReturnType<typeof getJsPDF>>>, rgb: RGB) {
+function setFill(doc: PdfDoc, rgb: RGB) {
   doc.setFillColor(rgb[0], rgb[1], rgb[2]);
 }
-function setTextColor(doc: InstanceType<Awaited<ReturnType<typeof getJsPDF>>>, rgb: RGB) {
+function setTextColor(doc: PdfDoc, rgb: RGB) {
   doc.setTextColor(rgb[0], rgb[1], rgb[2]);
 }
-function setDrawColor(doc: InstanceType<Awaited<ReturnType<typeof getJsPDF>>>, rgb: RGB) {
+function setDrawColor(doc: PdfDoc, rgb: RGB) {
   doc.setDrawColor(rgb[0], rgb[1], rgb[2]);
 }
 
 function hLine(
-  doc: InstanceType<Awaited<ReturnType<typeof getJsPDF>>>,
+  doc: PdfDoc,
   y: number,
   x1 = 20,
   x2 = 190
@@ -38,7 +39,7 @@ function hLine(
 }
 
 function sectionHeader(
-  doc: InstanceType<Awaited<ReturnType<typeof getJsPDF>>>,
+  doc: PdfDoc,
   label: string,
   y: number
 ): number {
@@ -52,7 +53,7 @@ function sectionHeader(
 }
 
 function row(
-  doc: InstanceType<Awaited<ReturnType<typeof getJsPDF>>>,
+  doc: PdfDoc,
   label: string,
   value: string,
   y: number,
@@ -65,6 +66,14 @@ function row(
   doc.setFont('helvetica', bold ? 'bold' : 'normal');
   doc.text(value, 186, y, { align: 'right' });
   return y + 5.5;
+}
+
+function ensurePageSpace(doc: PdfDoc, y: number, needed = 24): number {
+  if (y + needed <= 280) {
+    return y;
+  }
+  doc.addPage();
+  return 20;
 }
 
 export async function generateInvoicePDF(
@@ -248,4 +257,176 @@ export async function generateInvoicePDF(
   );
 
   doc.save(pdfFilename(order.name, person.name));
+}
+
+export async function generateOrderInvoicePDF(
+  order: Order,
+  people: Person[],
+  result: CalculationResult
+): Promise<void> {
+  const JsPDF = await getJsPDF();
+  const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageW = 210;
+  const peopleById = new Map(people.map((person) => [person.id, person]));
+
+  const lotAllocations = result.lotCalcs.map((lotCalc) => {
+    const allocations = result.personIds
+      .flatMap((personId) => {
+        const person = peopleById.get(personId);
+        const personCalc = result.personCalcs[personId];
+        if (!person || !personCalc) {
+          return [];
+        }
+
+        return personCalc.lotBreakdowns
+          .filter((breakdown) => breakdown.lotId === lotCalc.lotId)
+          .map((breakdown) => ({
+            key: breakdown.id,
+            label: `${person.name} · Bag ${breakdown.bagIndex + 1} · ${breakdown.shareGrams}g`,
+            detail:
+              breakdown.splitWith.length > 0
+                ? `${breakdown.bagMode === 'full' ? 'Own bag' : 'Split bag'} · Split with ${breakdown.splitWith.join(', ')}`
+                : breakdown.bagMode === 'full'
+                  ? 'Own bag'
+                  : breakdown.bagMode === 'unassigned'
+                    ? 'Unassigned bag'
+                    : 'Split bag',
+            total: breakdown.totalZar,
+            bagIndex: breakdown.bagIndex,
+          }));
+      })
+      .sort((left, right) => left.bagIndex - right.bagIndex || left.label.localeCompare(right.label));
+
+    return { lotCalc, allocations };
+  });
+
+  let y = 20;
+
+  setFill(doc, ACCENT);
+  doc.rect(0, 0, pageW, 28, 'F');
+
+  setTextColor(doc, WHITE);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text('FAJR BREWS', 20, 12);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text('COFFEE SPLITTER  ·  FULL ORDER INVOICE', 20, 18);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text(formatZAR(result.totalOrderZar), 190, 12, { align: 'right' });
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.text('ORDER TOTAL', 190, 17, { align: 'right' });
+
+  y = 36;
+
+  setTextColor(doc, DARK);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.text(order.name, 20, y);
+  y += 6;
+
+  setTextColor(doc, MID);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text(`${formatDate(order.orderDate)} · ${result.personIds.length} people · ${result.lotCalcs.length} coffee lots`, 20, y);
+  y += 4.5;
+  doc.text(`Generated for the whole order summary`, 20, y);
+  y += 10;
+
+  hLine(doc, y);
+  y += 6;
+
+  for (const { lotCalc, allocations } of lotAllocations) {
+    y = ensurePageSpace(doc, y, 42 + allocations.length * 10);
+    y = sectionHeader(doc, lotCalc.lotName, y);
+
+    y = row(doc, 'Bean cost', formatZAR(lotCalc.goodsZar), y);
+    y = row(doc, 'Allocated fees', formatZAR(lotCalc.feesZar), y);
+    y = row(doc, 'Lot total', formatZAR(lotCalc.totalZar), y, true);
+    y = row(doc, 'Per bag final cost', formatZAR(lotCalc.finalZarPerBag), y);
+    y += 2;
+
+    setTextColor(doc, MID);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text('ALLOCATIONS', 24, y);
+    y += 5;
+
+    if (allocations.length === 0) {
+      setTextColor(doc, MID);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.text('No participant allocations were recorded for this coffee.', 24, y);
+      y += 7;
+    } else {
+      for (const allocation of allocations) {
+        y = ensurePageSpace(doc, y, 12);
+        setTextColor(doc, DARK);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.8);
+        doc.text(allocation.label, 24, y);
+        doc.text(formatZAR(allocation.total), 186, y, { align: 'right' });
+        y += 4.2;
+
+        setTextColor(doc, MID);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.8);
+        const detailLines = doc.splitTextToSize(allocation.detail, 150);
+        doc.text(detailLines, 28, y);
+        y += detailLines.length * 4.1 + 2;
+      }
+    }
+
+    hLine(doc, y, 24, 186);
+    y += 7;
+  }
+
+  if (order.fees.length > 0) {
+    y = ensurePageSpace(doc, y, 18 + order.fees.length * 6);
+    y = sectionHeader(doc, 'Additional fees', y);
+    for (const fee of order.fees) {
+      y = row(
+        doc,
+        `${fee.label} (${fee.allocationType === 'value_based' ? 'value-based' : 'shared'})`,
+        formatZAR(fee.amountZar),
+        y,
+      );
+    }
+    y += 4;
+  }
+
+  y = ensurePageSpace(doc, y, 28);
+  hLine(doc, y);
+  y += 6;
+  y = sectionHeader(doc, 'Summary', y);
+  y = row(doc, 'Goods total', formatZAR(result.totalGoodsZar), y);
+  y = row(doc, 'Extra fees', formatZAR(result.totalFeesZar), y);
+
+  y += 2;
+  hLine(doc, y);
+  y += 6;
+
+  setFill(doc, ACCENT);
+  doc.rect(20, y - 2, 170, 9, 'F');
+  setTextColor(doc, WHITE);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('ORDER TOTAL', 24, y + 4);
+  doc.text(formatZAR(result.totalOrderZar), 186, y + 4, { align: 'right' });
+  y += 14;
+
+  setTextColor(doc, BORDER);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.text(
+    'Generated by Fajr Brews — Coffee Splitter',
+    pageW / 2,
+    287,
+    { align: 'center' }
+  );
+
+  doc.save(orderPdfFilename(order.name));
 }

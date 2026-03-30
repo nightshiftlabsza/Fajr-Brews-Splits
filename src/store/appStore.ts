@@ -9,8 +9,10 @@ import {
   sortPeopleByName,
   upsertOrderById,
   upsertPersonById,
+  upsertRoasterById,
 } from '../lib/storeState';
 import { getNextActiveOrderId, getPreferredActiveOrderId } from '../lib/orderLifecycle';
+import { createRoasterSnapshot, normalizeRoasterName } from '../lib/roasters';
 import type {
   Person,
   Order,
@@ -22,10 +24,12 @@ import type {
   WorkspaceMember,
   DbPerson,
   DbOrder,
+  DbRoaster,
   DbWorkspaceMember,
   PersonLinkResolution,
   PersonLinkCandidate,
   PersonMatchReason,
+  Roaster,
 } from '../types';
 
 // ─── Mappers (DB row → App type) ─────────────────────────────
@@ -49,6 +53,8 @@ function mapOrder(row: DbOrder & { pin_required?: boolean }): Order {
     workspaceId: row.workspace_id,
     name: row.name,
     orderDate: row.order_date,
+    roasterId: row.roaster_id ?? null,
+    roasterSnapshot: row.roaster_snapshot ?? null,
     payerId: row.payer_id,
     payerBank: row.payer_bank ?? { bankName: '', accountNumber: '', beneficiary: '' },
     referenceTemplate: row.reference_template,
@@ -67,6 +73,18 @@ function mapOrder(row: DbOrder & { pin_required?: boolean }): Order {
   };
 }
 
+function mapRoaster(row: DbRoaster): Roaster {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    name: row.name,
+    logoPath: row.logo_path ?? undefined,
+    logoUrl: row.logo_url ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 // ─── Store Interface ──────────────────────────────────────────
 
 interface AppStore {
@@ -80,6 +98,7 @@ interface AppStore {
 
   // ── Data ──────────────────────────────────────────────────
   people: Person[];
+  roasters: Roaster[];
   orders: Order[];
   currentOrderId: string | null;
 
@@ -112,6 +131,10 @@ interface AppStore {
   addPerson: (data: Omit<Person, 'id' | 'workspaceId' | 'createdAt' | 'updatedAt'>) => Promise<Person>;
   updatePerson: (id: string, data: Partial<Pick<Person, 'name' | 'phone' | 'email' | 'note'>>) => Promise<void>;
   deletePerson: (id: string) => Promise<void>;
+
+  // ── Roaster Actions ───────────────────────────────────────
+  createRoaster: (data: { name: string; logoFile?: File | null }) => Promise<Roaster>;
+  updateRoaster: (id: string, data: { name?: string; logoFile?: File | null; removeLogo?: boolean }) => Promise<Roaster>;
 
   // ── Order Actions ─────────────────────────────────────────
   createOrder: (data: Omit<Order, 'id' | 'workspaceId' | 'isArchived' | 'createdBy' | 'createdAt' | 'updatedAt'>) => Promise<Order | null>;
@@ -187,6 +210,11 @@ function normalizePhone(phone?: string): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function sanitizeLogoFilename(name: string): string {
+  const trimmed = name.trim().toLowerCase();
+  return trimmed.replace(/[^a-z0-9.-]+/g, '-').replace(/^-+|-+$/g, '') || 'logo';
+}
+
 const defaultLinkResolution: PersonLinkResolution = {
   status: 'idle',
   linkedPersonId: null,
@@ -258,6 +286,29 @@ function mapLinkResolution(payload: unknown): PersonLinkResolution {
   };
 }
 
+async function uploadRoasterLogo(roasterId: string, file: File): Promise<{ logoPath: string; logoUrl: string }> {
+  const extension = file.name.includes('.') ? file.name.split('.').pop() ?? 'png' : 'png';
+  const fileName = sanitizeLogoFilename(file.name.replace(/\.[^.]+$/, ''));
+  const logoPath = `workspace/${WORKSPACE_ID}/roasters/${roasterId}/${Date.now()}-${fileName}.${extension.toLowerCase()}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('roaster-logos')
+    .upload(logoPath, file, {
+      upsert: true,
+      contentType: file.type || undefined,
+    });
+
+  if (uploadError) {
+    throw new Error(uploadError.message);
+  }
+
+  const { data } = supabase.storage.from('roaster-logos').getPublicUrl(logoPath);
+  return {
+    logoPath,
+    logoUrl: data.publicUrl,
+  };
+}
+
 const orderWriteChains = new Map<string, Promise<void>>();
 const optimisticOrderSnapshots = new Map<string, Order>();
 
@@ -278,6 +329,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   linkResolution: defaultLinkResolution,
   workspaceMembers: [],
   people: [],
+  roasters: [],
   orders: [],
   currentOrderId: safeLocalStorage.getItem('fb_current_order_id'),
   settings: { theme: 'emerald', themeMode: 'light' },
@@ -313,6 +365,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           linkedPersonId: null,
           linkResolution: defaultLinkResolution,
           people: [],
+          roasters: [],
           orders: [],
           currentOrderId: null,
           isInitialized: true,
@@ -357,22 +410,30 @@ export const useAppStore = create<AppStore>((set, get) => ({
         get()._teardownRealtime();
       }
 
-      const [{ data: peopleRows }, { data: orderRows }] = hasWorkspaceAccess
+      const [{ data: peopleRows }, { data: roasterRows }, { data: orderRows }] = hasWorkspaceAccess
         ? await Promise.all([
           supabase
             .from('people')
             .select('*')
             .eq('workspace_id', WORKSPACE_ID)
             .order('name'),
+          memberRow
+            ? supabase
+              .from('roasters')
+              .select('*')
+              .eq('workspace_id', WORKSPACE_ID)
+              .order('updated_at', { ascending: false })
+            : Promise.resolve({ data: [] }),
           supabase
             .from('orders')
             .select('*')
             .eq('workspace_id', WORKSPACE_ID)
             .order('order_date', { ascending: false }),
         ])
-        : [{ data: [] }, { data: [] }];
+        : [{ data: [] }, { data: [] }, { data: [] }];
 
       const people = sortPeopleByName(dedupePeopleById((peopleRows as DbPerson[] | null ?? []).map(mapPerson)));
+      const roasters = (roasterRows as DbRoaster[] | null ?? []).map(mapRoaster);
       const orders = (orderRows as DbOrder[] | null ?? []).map(mapOrder);
 
       await get()._loadSettings(session.user.id);
@@ -401,6 +462,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         linkedPersonId,
         linkResolution,
         people,
+        roasters,
         orders,
         currentOrderId,
         isInitialized: true,
@@ -482,6 +544,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       linkedPersonId: null,
       linkResolution: defaultLinkResolution,
       people: [],
+      roasters: [],
       orders: [],
       currentOrderId: null,
       sessionUi: {
@@ -571,6 +634,119 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set((s) => ({ people: s.people.filter((p) => p.id !== id) }));
   },
 
+  // ── Roasters ──────────────────────────────────────────────
+  createRoaster: async ({ name, logoFile }) => {
+    const trimmedName = name.trim().replace(/\s+/g, ' ');
+    if (!trimmedName) {
+      throw new Error('Roaster name is required.');
+    }
+
+    const duplicate = get().roasters.find((roaster) => normalizeRoasterName(roaster.name) === normalizeRoasterName(trimmedName));
+    if (duplicate) {
+      throw new Error(`A roaster named "${duplicate.name}" already exists.`);
+    }
+
+    const { data: row, error } = await supabase
+      .from('roasters')
+      .insert({
+        workspace_id: WORKSPACE_ID,
+        name: trimmedName,
+      })
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    let roaster = mapRoaster(row as DbRoaster);
+
+    if (logoFile) {
+      try {
+        const upload = await uploadRoasterLogo(roaster.id, logoFile);
+        const { data: updatedRow, error: updateError } = await supabase
+          .from('roasters')
+          .update({
+            logo_path: upload.logoPath,
+            logo_url: upload.logoUrl,
+          })
+          .eq('id', roaster.id)
+          .select()
+          .single();
+
+        if (updateError) throw new Error(updateError.message);
+        roaster = mapRoaster(updatedRow as DbRoaster);
+      } catch (uploadError) {
+        console.error('createRoaster: logo upload failed, keeping roaster without logo', uploadError);
+      }
+    }
+
+    set((state) => ({ roasters: upsertRoasterById(state.roasters, roaster) }));
+    return roaster;
+  },
+
+  updateRoaster: async (id, data) => {
+    const currentRoaster = get().roasters.find((roaster) => roaster.id === id);
+    if (!currentRoaster) {
+      throw new Error('Roaster not found.');
+    }
+
+    const nextName = data.name?.trim().replace(/\s+/g, ' ') || currentRoaster.name;
+    const duplicate = get().roasters.find((roaster) => (
+      roaster.id !== id &&
+      normalizeRoasterName(roaster.name) === normalizeRoasterName(nextName)
+    ));
+
+    if (duplicate) {
+      throw new Error(`A roaster named "${duplicate.name}" already exists.`);
+    }
+
+    const dbPatch: Record<string, unknown> = {};
+    if (data.name !== undefined) dbPatch.name = nextName;
+
+    let nextLogoPath = currentRoaster.logoPath ?? null;
+    let nextLogoUrl = currentRoaster.logoUrl ?? null;
+
+    if (data.removeLogo) {
+      if (currentRoaster.logoPath) {
+        await supabase.storage.from('roaster-logos').remove([currentRoaster.logoPath]);
+      }
+      nextLogoPath = null;
+      nextLogoUrl = null;
+    } else if (data.logoFile) {
+      if (currentRoaster.logoPath) {
+        await supabase.storage.from('roaster-logos').remove([currentRoaster.logoPath]);
+      }
+      const upload = await uploadRoasterLogo(id, data.logoFile);
+      nextLogoPath = upload.logoPath;
+      nextLogoUrl = upload.logoUrl;
+    }
+
+    if (data.removeLogo || data.logoFile) {
+      dbPatch.logo_path = nextLogoPath;
+      dbPatch.logo_url = nextLogoUrl;
+    }
+
+    const { data: row, error } = await supabase
+      .from('roasters')
+      .update(dbPatch)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    const roaster = mapRoaster(row as DbRoaster);
+    set((state) => ({
+      roasters: upsertRoasterById(state.roasters, roaster),
+      orders: state.orders.map((order) => (
+        order.roasterId === roaster.id
+          ? { ...order, roasterSnapshot: createRoasterSnapshot(roaster) }
+          : order
+      )),
+    }));
+
+    return roaster;
+  },
+
   // ── Orders ────────────────────────────────────────────────
   createOrder: async (data) => {
     const userId = get().user?.id;
@@ -580,6 +756,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         workspace_id: WORKSPACE_ID,
         name: data.name,
         order_date: data.orderDate,
+        roaster_id: data.roasterId,
+        roaster_snapshot: data.roasterSnapshot,
         payer_id: data.payerId,
         payer_bank: data.payerBank,
         reference_template: data.referenceTemplate,
@@ -619,6 +797,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const dbData: Record<string, unknown> = {};
     if (data.name !== undefined) dbData.name = data.name;
     if (data.orderDate !== undefined) dbData.order_date = data.orderDate;
+    if (data.roasterId !== undefined) dbData.roaster_id = data.roasterId;
+    if (data.roasterSnapshot !== undefined) dbData.roaster_snapshot = data.roasterSnapshot;
     if (data.payerId !== undefined) dbData.payer_id = data.payerId;
     if (data.payerBank !== undefined) dbData.payer_bank = data.payerBank;
     if (data.referenceTemplate !== undefined) dbData.reference_template = data.referenceTemplate;
@@ -825,20 +1005,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // ── Export / Import ───────────────────────────────────────
   exportJSON: () => {
-    const { people, orders, settings } = get();
+    const { people, roasters, orders, settings } = get();
     // Strip PIN fields — they are security-sensitive and meaningless without the server-side hash
     const cleanOrders = orders.map((o) => {
       const { pinRequired: _pr, ...rest } = o;
       return rest;
     });
-    return JSON.stringify({ version: '1', people, orders: cleanOrders, settings, exportedAt: new Date().toISOString() }, null, 2);
+    return JSON.stringify({ version: '2', people, roasters, orders: cleanOrders, settings, exportedAt: new Date().toISOString() }, null, 2);
   },
 
   importJSON: async (json) => {
     const parsed = JSON.parse(json);
 
-    if (parsed.version !== '1') {
-      throw new Error('Unsupported export format. Expected version 1.');
+    if (parsed.version !== '1' && parsed.version !== '2') {
+      throw new Error('Unsupported export format. Expected version 1 or 2.');
     }
 
     if (parsed.people && Array.isArray(parsed.people)) {
@@ -860,14 +1040,50 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }
     }
 
+    const importedRoasterIdMap = new Map<string, Roaster>();
+    if (parsed.version === '2' && parsed.roasters && Array.isArray(parsed.roasters)) {
+      for (const r of parsed.roasters) {
+        if (!r || typeof r.name !== 'string') continue;
+        try {
+          const existing = get().roasters.find((roaster) => normalizeRoasterName(roaster.name) === normalizeRoasterName(String(r.name)));
+          const roaster = existing ?? await get().createRoaster({
+            name: String(r.name),
+          });
+          if (typeof r.id === 'string') {
+            importedRoasterIdMap.set(r.id, roaster);
+          }
+        } catch (err) {
+          console.error('importJSON: skipping roaster due to error', r.name, err);
+        }
+      }
+    }
+
     if (parsed.orders && Array.isArray(parsed.orders)) {
       for (const o of parsed.orders) {
         if (!o || typeof o.id !== 'string') continue;
         try {
           if (!get().orders.find((ex) => ex.id === o.id)) {
+            const importedRoaster = typeof o.roasterId === 'string' ? importedRoasterIdMap.get(o.roasterId) : undefined;
+            const importedSnapshotName = o.roasterSnapshot && typeof o.roasterSnapshot === 'object'
+              ? String(o.roasterSnapshot.name ?? importedRoaster?.name ?? '').trim()
+              : importedRoaster?.name ?? '';
+            const roasterSnapshot = importedSnapshotName
+              ? {
+                id: o.roasterSnapshot && typeof o.roasterSnapshot === 'object' && typeof o.roasterSnapshot.id === 'string'
+                  ? o.roasterSnapshot.id
+                  : importedRoaster?.id ?? null,
+                name: importedSnapshotName,
+                logoUrl: o.roasterSnapshot && typeof o.roasterSnapshot === 'object' && typeof o.roasterSnapshot.logoUrl === 'string'
+                  ? o.roasterSnapshot.logoUrl
+                  : importedRoaster?.logoUrl,
+              }
+              : null;
+
             await get().createOrder({
               name: String(o.name ?? 'Imported Order'),
               orderDate: String(o.orderDate ?? new Date().toISOString().split('T')[0]),
+              roasterId: importedRoaster?.id ?? null,
+              roasterSnapshot,
               payerId: o.payerId ? String(o.payerId) : null,
               payerBank: o.payerBank && typeof o.payerBank === 'object' ? o.payerBank : { bankName: '', accountNumber: '', beneficiary: '' },
               referenceTemplate: String(o.referenceTemplate ?? 'FAJR-{ORDER}-{NAME}'),
@@ -975,6 +1191,38 @@ export const useAppStore = create<AppStore>((set, get) => ({
               }
           } catch (err) {
             console.error('Realtime orders error:', err);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'roasters', filter: `workspace_id=eq.${workspaceId}` },
+        (payload) => {
+          try {
+              const { eventType, new: newRow, old: oldRow } = payload;
+              if (eventType === 'INSERT') {
+                const roaster = mapRoaster(newRow as DbRoaster);
+                set((s) => ({
+                  roasters: upsertRoasterById(s.roasters, roaster),
+                }));
+              } else if (eventType === 'UPDATE') {
+                const roaster = mapRoaster(newRow as DbRoaster);
+                set((s) => ({
+                  roasters: upsertRoasterById(s.roasters, roaster),
+                  orders: s.orders.map((order) => (
+                    order.roasterId === roaster.id
+                      ? { ...order, roasterSnapshot: createRoasterSnapshot(roaster) }
+                      : order
+                  )),
+                }));
+              } else if (eventType === 'DELETE') {
+                const deletedRoasterId = (oldRow as DbRoaster).id;
+                set((s) => ({
+                  roasters: s.roasters.filter((roaster) => roaster.id !== deletedRoasterId),
+                }));
+              }
+          } catch (err) {
+            console.error('Realtime roasters error:', err);
           }
         }
       )

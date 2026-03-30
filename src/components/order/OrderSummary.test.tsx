@@ -9,8 +9,10 @@ import { todayISO } from '../../lib/formatters';
 
 const mockStoreState = {
   people: [] as Person[],
+  roasters: [],
   orders: [] as Order[],
   updateOrder: vi.fn(),
+  deleteOrder: vi.fn(),
   setCurrentOrderId: vi.fn(),
   flushOrderWrites: vi.fn(),
 };
@@ -47,6 +49,8 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
     workspaceId: 'workspace-1',
     name: overrides.name || 'March Drop',
     orderDate: overrides.orderDate || '2026-03-18',
+    roasterId: overrides.roasterId ?? null,
+    roasterSnapshot: overrides.roasterSnapshot ?? null,
     payerId: overrides.payerId ?? 'person-1',
     payerBank: overrides.payerBank ?? { bankName: '', accountNumber: '', beneficiary: '' },
     referenceTemplate: overrides.referenceTemplate || 'FAJR-{ORDER}-{NAME}',
@@ -104,6 +108,7 @@ describe('OrderSummary', () => {
     mockStoreState.people = people;
     mockStoreState.orders = [makeOrder(), makeOrder({ id: 'order-2', name: 'April Drop' })];
     mockStoreState.updateOrder = vi.fn().mockResolvedValue(undefined);
+    mockStoreState.deleteOrder = vi.fn().mockResolvedValue(undefined);
     mockStoreState.setCurrentOrderId = vi.fn();
     mockStoreState.flushOrderWrites = vi.fn().mockResolvedValue(undefined);
   });
@@ -114,6 +119,7 @@ describe('OrderSummary', () => {
     });
     container.remove();
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('renders the summary step as the three-zone settlement hub', () => {
@@ -131,6 +137,7 @@ describe('OrderSummary', () => {
     expect(container.textContent).toContain('People settlement');
     expect(container.textContent).toContain('Finalize order');
     expect(container.textContent).toContain('Save to Past Orders');
+    expect(container.textContent).toContain('Delete order');
     expect(container.textContent).not.toContain('Payment state');
     expect(container.textContent).not.toContain('Invoices and sharing');
     expect(container.textContent).toContain('Download PDF');
@@ -168,7 +175,6 @@ describe('OrderSummary', () => {
       );
     });
 
-    clickButtonByText(container, 'View details');
     clickButtonByText(container, 'Paid');
 
     await act(async () => {
@@ -184,6 +190,58 @@ describe('OrderSummary', () => {
         },
       },
     });
+  });
+
+  it('supports partial payment quick-edit controls without expanding details first', async () => {
+    act(() => {
+      root.render(
+        <OrderSummary
+          order={makeOrder()}
+          onJumpToStep={() => undefined}
+          onFinalize={() => undefined}
+        />,
+      );
+    });
+
+    clickButtonByText(container, 'Partial');
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockStoreState.updateOrder).toHaveBeenCalledWith('order-1', {
+      payments: {
+        'person-2': {
+          status: 'partial',
+          amountPaid: 0,
+          datePaid: todayISO(),
+        },
+      },
+    });
+
+    act(() => {
+      root.render(
+        <OrderSummary
+          order={makeOrder({
+            payments: {
+              'person-2': {
+                status: 'partial',
+                amountPaid: 25,
+                datePaid: todayISO(),
+              },
+            },
+          })}
+          onJumpToStep={() => undefined}
+          onFinalize={() => undefined}
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain('Amount paid (ZAR)');
+    expect(container.textContent).toContain('Outstanding:');
+    const dateInput = container.querySelector('input[type="date"]') as HTMLInputElement | null;
+    expect(dateInput?.value).toBe(todayISO());
+    expect(container.querySelector('input[type="number"]')).toBeTruthy();
   });
 
   it('finalizes the order into Past Orders and advances to the next active order', async () => {
@@ -210,6 +268,30 @@ describe('OrderSummary', () => {
     expect(onFinalize).toHaveBeenCalledTimes(1);
   });
 
+  it('deletes the active order from the main summary after confirmation', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true));
+
+    act(() => {
+      root.render(
+        <OrderSummary
+          order={makeOrder()}
+          onJumpToStep={() => undefined}
+          onFinalize={() => undefined}
+        />,
+      );
+    });
+
+    clickButtonByText(container, 'Delete order');
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(globalThis.confirm).toHaveBeenCalledWith('Delete "March Drop"? This cannot be undone.');
+    expect(mockStoreState.flushOrderWrites).toHaveBeenCalledWith('order-1');
+    expect(mockStoreState.deleteOrder).toHaveBeenCalledWith('order-1');
+  });
+
   it('saves archived past-order corrections without unarchiving the order', async () => {
     const onFinalize = vi.fn();
 
@@ -224,6 +306,7 @@ describe('OrderSummary', () => {
     });
 
     expect(container.textContent).toContain('Save changes');
+    expect(container.textContent).not.toContain('Delete order');
     clickButtonByText(container, 'Save changes');
 
     await act(async () => {

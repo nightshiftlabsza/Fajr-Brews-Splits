@@ -14,6 +14,8 @@ function makeOrder(id: string, orderDate: string, isArchived: boolean): Order {
     workspaceId: 'workspace-1',
     name: id,
     orderDate,
+    roasterId: null,
+    roasterSnapshot: null,
     payerId: null,
     payerBank: { bankName: '', accountNumber: '', beneficiary: '' },
     referenceTemplate: 'FAJR-{ORDER}-{NAME}',

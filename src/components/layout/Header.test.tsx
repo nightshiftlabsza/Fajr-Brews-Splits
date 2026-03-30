@@ -45,8 +45,24 @@ describe('Header navigation', () => {
       .filter(Boolean);
 
     expect(labels).toContain('Order');
+    expect(labels).toContain('My Stats');
     expect(labels).toContain('Past Orders');
     expect(labels).not.toContain('Invoices');
+  });
+
+  it('shows My Stats and My Orders for participant-only navigation', () => {
+    act(() => {
+      root.render(<Header currentTab="my-stats" onTabChange={() => undefined} participantOnly />);
+    });
+
+    const labels = Array.from(container.querySelectorAll('button'))
+      .map((button) => button.textContent?.trim())
+      .filter(Boolean);
+
+    expect(labels).toContain('My Stats');
+    expect(labels).toContain('My Orders');
+    expect(labels).not.toContain('Order');
+    expect(labels).not.toContain('People');
   });
 
   it('opens the profile menu in the top-right and signs out from there', async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { Order, Person } from '../types';
+import type { Order, Person, Roaster } from '../types';
 import { calculate } from './calculations';
-import { applyOrderPatches, upsertPersonById } from './storeState';
+import { applyOrderPatches, upsertPersonById, upsertRoasterById } from './storeState';
 
 function makePerson(id: string, name: string): Person {
   return {
@@ -13,11 +13,23 @@ function makePerson(id: string, name: string): Person {
   };
 }
 
+function makeRoaster(id: string, name: string, updatedAt = '2026-03-18T00:00:00.000Z'): Roaster {
+  return {
+    id,
+    workspaceId: 'workspace-1',
+    name,
+    createdAt: '2026-03-18T00:00:00.000Z',
+    updatedAt,
+  };
+}
+
 const baseOrder: Order = {
   id: 'order-1',
   workspaceId: 'workspace-1',
   name: 'Fresh Order',
   orderDate: '2026-03-18',
+  roasterId: null,
+  roasterSnapshot: null,
   payerId: 'person-1',
   payerBank: { bankName: '', accountNumber: '', beneficiary: '' },
   referenceTemplate: 'FAJR-{ORDER}-{NAME}',
@@ -44,6 +56,16 @@ describe('store state helpers', () => {
     expect(once).toHaveLength(1);
     expect(twice).toHaveLength(1);
     expect(twice[0].id).toBe('person-1');
+  });
+
+  it('upsertRoasterById keeps the newest roaster first and replaces same-id updates', () => {
+    const first = upsertRoasterById([], makeRoaster('roaster-1', 'Father Coffee'));
+    const second = upsertRoasterById(first, makeRoaster('roaster-1', 'Father Coffee', '2026-03-19T00:00:00.000Z'));
+    const third = upsertRoasterById(second, makeRoaster('roaster-2', 'Rosetta', '2026-03-20T00:00:00.000Z'));
+
+    expect(second).toHaveLength(1);
+    expect(third[0].id).toBe('roaster-2');
+    expect(third[1].updatedAt).toBe('2026-03-19T00:00:00.000Z');
   });
 
   it('preserves lots, goods total, and fees through summary-style re-reads', () => {

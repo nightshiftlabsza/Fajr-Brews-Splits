@@ -1,4 +1,4 @@
-import type { Order, Person } from '../types';
+import type { Order, Person, Roaster } from '../types';
 
 export function dedupePeopleById(people: Person[]): Person[] {
   const seen = new Set<string>();
@@ -17,6 +17,22 @@ export function upsertPersonById(people: Person[], person: Person): Person[] {
   return sortPeopleByName([
     ...dedupePeopleById(people).filter((candidate) => candidate.id !== person.id),
     person,
+  ]);
+}
+
+export function sortRoasters(roasters: Roaster[]): Roaster[] {
+  return [...roasters].sort((left, right) => {
+    if (left.updatedAt !== right.updatedAt) {
+      return right.updatedAt.localeCompare(left.updatedAt);
+    }
+    return left.name.localeCompare(right.name);
+  });
+}
+
+export function upsertRoasterById(roasters: Roaster[], roaster: Roaster): Roaster[] {
+  return sortRoasters([
+    ...roasters.filter((candidate) => candidate.id !== roaster.id),
+    roaster,
   ]);
 }
 

@@ -28,6 +28,23 @@ export interface Person {
   updatedAt: string;
 }
 
+// ─── Roasters ─────────────────────────────────────────────────
+export interface Roaster {
+  id: string;
+  workspaceId: string;
+  name: string;
+  logoPath?: string;
+  logoUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RoasterSnapshot {
+  id?: string | null;
+  name: string;
+  logoUrl?: string;
+}
+
 // ─── Coffee Lots ──────────────────────────────────────────────
 export interface ShareLine {
   id: string;
@@ -98,6 +115,8 @@ export interface Order {
   workspaceId: string;
   name: string;
   orderDate: string;         // ISO date string (YYYY-MM-DD)
+  roasterId: string | null;
+  roasterSnapshot: RoasterSnapshot | null;
   payerId: string | null;    // references people.id
   payerBank: PayerBank;
   referenceTemplate: string; // e.g. "FAJR-{ORDER}-{NAME}"
@@ -127,6 +146,8 @@ export interface DbOrder {
   workspace_id: string;
   name: string;
   order_date: string;
+  roaster_id: string | null;
+  roaster_snapshot: RoasterSnapshot | null;
   payer_id: string | null;
   payer_bank: PayerBank;
   reference_template: string;
@@ -151,6 +172,16 @@ export interface DbPerson {
   linked_user_id?: string | null;
   linked_at?: string | null;
   link_source?: 'email' | 'phone' | 'name' | 'manual' | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbRoaster {
+  id: string;
+  workspace_id: string;
+  name: string;
+  logo_path: string | null;
+  logo_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -299,4 +330,4 @@ export interface AuthUser {
 }
 
 // ─── App Tab Navigation ───────────────────────────────────────
-export type AppTab = 'order' | 'people' | 'history' | 'settings';
+export type AppTab = 'order' | 'people' | 'my-stats' | 'history' | 'settings';

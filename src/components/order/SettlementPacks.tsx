@@ -69,6 +69,19 @@ export function SettlementPacks({
                 </div>
               </div>
 
+              {paymentEditingEnabled && onPaymentChange && (
+                <div className="summary-payment-card">
+                  <PaymentEditor
+                    personName={person.name}
+                    totalDue={calc.totalFinal}
+                    payment={payment}
+                    isPayer={personId === order.payerId}
+                    onChange={(record) => onPaymentChange(personId, record)}
+                    compact
+                  />
+                </div>
+              )}
+
               <div className="settlement-pack-toolbar">
                 <div className="settlement-pack-actions">
                   <InvoiceActions
@@ -104,17 +117,7 @@ export function SettlementPacks({
                         </button>
                       </div>
 
-                      {paymentEditingEnabled && onPaymentChange ? (
-                        <PaymentEditor
-                          personName={person.name}
-                          totalDue={calc.totalFinal}
-                          payment={payment}
-                          isPayer={personId === order.payerId}
-                          onChange={(record) => onPaymentChange(personId, record)}
-                        />
-                      ) : (
-                        <PaymentReadout payment={payment} totalDue={calc.totalFinal} />
-                      )}
+                      <PaymentReadout payment={payment} totalDue={calc.totalFinal} />
                     </div>
 
                     <div className="settlement-pack-detail-panel">
@@ -159,9 +162,10 @@ interface PaymentEditorProps {
   payment?: PaymentRecord;
   isPayer: boolean;
   onChange: (record: PaymentRecord) => void;
+  compact?: boolean;
 }
 
-function PaymentEditor({ personName, totalDue, payment, isPayer, onChange }: PaymentEditorProps) {
+function PaymentEditor({ personName, totalDue, payment, isPayer, onChange, compact = false }: PaymentEditorProps) {
   const status = payment?.status || 'unpaid';
   const datePaid = payment?.datePaid || todayISO();
 
@@ -181,9 +185,11 @@ function PaymentEditor({ personName, totalDue, payment, isPayer, onChange }: Pay
     <div className="settlement-payment-card">
       <div className="summary-payment-header">
         <div>
-          <div style={{ fontWeight: 600, fontSize: '0.9375rem' }}>{personName}</div>
+          <div style={{ fontWeight: 600, fontSize: '0.9375rem' }}>
+            {compact ? 'Quick payment update' : personName}
+          </div>
           <div className="wizard-card-copy" style={{ marginTop: 'var(--space-1)' }}>
-            {formatZAR(totalDue)} due {isPayer && <span className="wizard-inline-meta">Payer</span>}
+            {compact ? `${personName} · ${formatZAR(totalDue)} due` : formatZAR(totalDue)} {isPayer && <span className="wizard-inline-meta">Payer</span>}
           </div>
         </div>
 
@@ -244,7 +250,7 @@ function PaymentReadout({ payment, totalDue }: { payment?: PaymentRecord; totalD
   if (!payment || payment.status === 'unpaid') {
     return (
       <div className="settlement-payment-note">
-        No payment recorded yet. Use the quick actions above when you are ready to send the request.
+        No payment recorded yet.
       </div>
     );
   }

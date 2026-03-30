@@ -9,7 +9,7 @@ const mockStoreState = {
   isInitialized: true,
   isLoading: false,
   user: { id: 'user-1', email: 'owner@example.com' },
-  accessStatus: 'member' as const,
+  accessStatus: 'member' as 'checking' | 'member' | 'participant' | 'none' | 'error',
   linkResolution: {
     status: 'idle' as const,
     linkedPersonId: null,
@@ -61,6 +61,10 @@ vi.mock('./components/pages/OrderPage', () => ({
 
 vi.mock('./components/pages/PeoplePage', () => ({
   PeoplePage: () => <div>PeoplePage</div>,
+}));
+
+vi.mock('./components/pages/MyStatsPage', () => ({
+  MyStatsPage: () => <div>MyStatsPage</div>,
 }));
 
 vi.mock('./components/pages/HistoryPage', () => ({
@@ -128,6 +132,7 @@ describe('App loading shell', () => {
 
     expect(container.textContent).toContain('Header');
     expect(container.textContent).toContain('OrderPage');
+    expect(container.textContent).toContain('MyStatsPage');
     expect(container.textContent).not.toContain('Fajr Brews');
   });
 
@@ -140,5 +145,18 @@ describe('App loading shell', () => {
     });
 
     expect(container.textContent).toContain('Fajr Brews');
+  });
+
+  it('routes participant-only users to My Stats instead of the order workbench', async () => {
+    mockStoreState.accessStatus = 'participant';
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('MyStatsPage');
+    expect(container.textContent).toContain('HistoryPage');
+    expect(container.textContent).not.toContain('OrderPage');
   });
 });

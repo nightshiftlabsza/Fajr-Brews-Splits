@@ -7,6 +7,8 @@ const baseOrder: Order = {
   workspaceId: 'workspace-1',
   name: 'April Order',
   orderDate: '2026-04-01',
+  roasterId: null,
+  roasterSnapshot: null,
   payerId: 'person-1',
   payerBank: { bankName: '', accountNumber: '', beneficiary: '' },
   referenceTemplate: 'FAJR-{ORDER}-{NAME}',

@@ -6,11 +6,14 @@ import { calculate } from '../../lib/calculations';
 import { getActiveOrders, getPastOrders } from '../../lib/orderLifecycle';
 import { getPastOrderSummary } from '../../lib/pastOrderSummary';
 import { SettlementPacks } from '../order/SettlementPacks';
-import { CoffeeCostSummary } from '../order/CoffeeCostSummary';
 import { OrderSetup } from '../order/OrderSetup';
 import { CoffeeLotsSection } from '../order/CoffeeLotsSection';
 import { GoodsAndFees } from '../order/GoodsAndFees';
 import { OrderSummary } from '../order/OrderSummary';
+import { generateOrderInvoicePDF } from '../../lib/pdf';
+import { getParticipantScopedOrders } from '../../lib/myStats';
+import { resolveOrderRoaster } from '../../lib/roasters';
+import { RoasterAvatar } from '../roaster/RoasterAvatar';
 import {
   ORDER_WIZARD_STEPS,
   type OrderWizardStep,
@@ -42,6 +45,8 @@ export function HistoryPage({ participantOnly = false }: Props) {
   const {
     orders,
     people,
+    roasters,
+    linkedPersonId,
     deleteOrder,
     createOrder,
     exportJSON,
@@ -58,18 +63,22 @@ export function HistoryPage({ participantOnly = false }: Props) {
   const [pinVerifying, setPinVerifying] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [downloadingOrderInvoice, setDownloadingOrderInvoice] = useState(false);
+  const [orderInvoiceError, setOrderInvoiceError] = useState<string | null>(null);
 
   const personNames = useMemo(
     () => Object.fromEntries(people.map((person) => [person.id, person.name])),
     [people],
   );
-  const activeOrders = getActiveOrders(orders);
-  const pastOrders = getPastOrders(orders);
+  const scopedOrders = participantOnly ? getParticipantScopedOrders(orders, linkedPersonId) : orders;
+  const activeOrders = getActiveOrders(scopedOrders);
+  const pastOrders = getPastOrders(scopedOrders);
   const pinOrder = pinRequest ? pastOrders.find((order) => order.id === pinRequest.orderId) ?? null : null;
   const selectedOrder = selectedOrderId ? pastOrders.find((order) => order.id === selectedOrderId) ?? null : null;
   const editingOrder = editingOrderId ? pastOrders.find((order) => order.id === editingOrderId) ?? null : null;
   const selectedOrderSummary = selectedOrder ? getPastOrderSummary(selectedOrder, personNames) : null;
   const selectedOrderResult = selectedOrder ? calculate(selectedOrder, personNames) : null;
+  const selectedOrderRoaster = selectedOrder ? resolveOrderRoaster(selectedOrder, roasters) : null;
 
   useEffect(() => {
     if (selectedOrderId && !pastOrders.some((order) => order.id === selectedOrderId)) {
@@ -90,12 +99,14 @@ export function HistoryPage({ participantOnly = false }: Props) {
   function openPastOrder(order: Order) {
     setSelectedOrderId(order.id);
     setEditingOrderId(null);
+    setOrderInvoiceError(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function openPastOrderEditor(order: Order) {
     setSelectedOrderId(order.id);
     setEditingOrderId(order.id);
+    setOrderInvoiceError(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -191,6 +202,23 @@ export function HistoryPage({ participantOnly = false }: Props) {
     anchor.click();
     URL.revokeObjectURL(url);
     setLastExportDate(new Date().toISOString());
+  }
+
+  async function handleDownloadOrderInvoice() {
+    if (!selectedOrder || !selectedOrderResult?.isValid) {
+      return;
+    }
+
+    setDownloadingOrderInvoice(true);
+    setOrderInvoiceError(null);
+
+    try {
+      await generateOrderInvoicePDF(selectedOrder, people, selectedOrderResult);
+    } catch (error) {
+      setOrderInvoiceError(error instanceof Error ? error.message : 'Failed to generate the full order invoice.');
+    } finally {
+      setDownloadingOrderInvoice(false);
+    }
   }
 
   async function handleImport() {
@@ -318,18 +346,37 @@ export function HistoryPage({ participantOnly = false }: Props) {
             <div className="wizard-card-header" style={{ alignItems: 'flex-start', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
               <div>
                 <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Saved order</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                  {selectedOrderRoaster && (
+                    <RoasterAvatar
+                      name={selectedOrderRoaster.name}
+                      logoUrl={selectedOrderRoaster.logoUrl}
+                      size={42}
+                    />
+                  )}
                   <div className="wizard-card-title">{selectedOrder.name}</div>
                   <span className="wizard-badge wizard-badge-accent">Finalized</span>
                 </div>
                 <p className="wizard-card-copy" style={{ marginTop: 'var(--space-2)' }}>
                   Finalized on {formatDateShort(selectedOrder.orderDate)}.
                 </p>
+                {selectedOrderRoaster && (
+                  <div className="field-hint" style={{ marginTop: 4 }}>
+                    Roaster: {selectedOrderRoaster.name}
+                  </div>
+                )}
               </div>
 
               <div className="wizard-chip-row">
                 <button className="btn btn-secondary btn-sm" onClick={() => setSelectedOrderId(null)}>
                   Back to list
+                </button>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => void handleDownloadOrderInvoice()}
+                  disabled={!selectedOrderResult?.isValid || downloadingOrderInvoice}
+                >
+                  {downloadingOrderInvoice ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Download full order invoice'}
                 </button>
                 {!participantOnly && (
                   <button className="btn btn-primary btn-sm" onClick={() => void handleEdit(selectedOrder)}>
@@ -369,6 +416,12 @@ export function HistoryPage({ participantOnly = false }: Props) {
               </div>
             )}
 
+            {orderInvoiceError && (
+              <div className="alert alert-error" style={{ marginTop: 'var(--space-4)' }}>
+                {orderInvoiceError}
+              </div>
+            )}
+
             {!participantOnly && (
               <div className="wizard-inline-note" style={{ marginTop: 'var(--space-4)' }}>
                 Edit order opens this same saved order inside Past Orders, so you can correct mistakes without moving it back into the active order tab.
@@ -377,20 +430,13 @@ export function HistoryPage({ participantOnly = false }: Props) {
           </section>
 
           {selectedOrderResult?.isValid && (
-            <>
-              <CoffeeCostSummary
-                result={selectedOrderResult}
-                title="Saved coffee totals"
-                description="Each coffee keeps its fee-inclusive final cost, including the per-bag amount saved with this order."
-              />
-              <SettlementPacks
-                order={selectedOrder}
-                people={people}
-                result={selectedOrderResult}
-                title="Saved order details"
-                description="Review the full settlement, payment state, and invoice/share actions exactly as saved."
-              />
-            </>
+            <SettlementPacks
+              order={selectedOrder}
+              people={people}
+              result={selectedOrderResult}
+              title="Saved order details"
+              description="Review the full settlement, payment state, and invoice/share actions exactly as saved."
+            />
           )}
         </div>
       )}
@@ -407,18 +453,31 @@ export function HistoryPage({ participantOnly = false }: Props) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             {activeOrders.map((order) => {
               const summary = getPastOrderSummary(order, personNames);
+              const orderRoaster = resolveOrderRoaster(order, roasters);
 
               return (
                 <div key={order.id} className="card">
                   <div className="card-padded" style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                        {orderRoaster && (
+                          <RoasterAvatar
+                            name={orderRoaster.name}
+                            logoUrl={orderRoaster.logoUrl}
+                            size={32}
+                          />
+                        )}
                         <div style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{order.name}</div>
                         <span className="wizard-badge wizard-badge-info">In progress</span>
                       </div>
                       <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
                         {formatDateShort(order.orderDate)} · {summary.participantCount} participant{summary.participantCount !== 1 ? 's' : ''} · {summary.lotCount} lot{summary.lotCount !== 1 ? 's' : ''}
                       </div>
+                      {orderRoaster && (
+                        <div className="field-hint" style={{ marginTop: 4 }}>
+                          Roaster: {orderRoaster.name}
+                        </div>
+                      )}
                     </div>
                     <div style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{formatZAR(summary.totalZar)}</div>
                   </div>
@@ -440,6 +499,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
         {pastOrders.map((order) => {
           const summary = getPastOrderSummary(order, personNames);
+          const orderRoaster = resolveOrderRoaster(order, roasters);
           const isSelected = selectedOrderId === order.id;
           const isLocked = order.pinRequired && !unlockedOrderIds.has(order.id);
           const isEditing = editingOrderId === order.id;
@@ -466,6 +526,13 @@ export function HistoryPage({ participantOnly = false }: Props) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap', marginBottom: 6 }}>
+                        {orderRoaster && (
+                          <RoasterAvatar
+                            name={orderRoaster.name}
+                            logoUrl={orderRoaster.logoUrl}
+                            size={34}
+                          />
+                        )}
                         <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--color-text-primary)' }}>
                           {order.name}
                         </div>
@@ -477,6 +544,11 @@ export function HistoryPage({ participantOnly = false }: Props) {
                       <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
                         {formatDateShort(order.orderDate)} · {summary.participantCount} participant{summary.participantCount !== 1 ? 's' : ''} · {summary.lotCount} lot{summary.lotCount !== 1 ? 's' : ''}
                       </div>
+                      {orderRoaster && (
+                        <div className="field-hint" style={{ marginTop: 4 }}>
+                          Roaster: {orderRoaster.name}
+                        </div>
+                      )}
 
                       <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap', marginTop: 'var(--space-3)', fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
                         <span><strong>{formatZAR(summary.totalZar)}</strong> total</span>
@@ -519,10 +591,11 @@ export function HistoryPage({ participantOnly = false }: Props) {
 }
 
 function PastOrderEditor({ order, onClose }: { order: Order; onClose: () => void }) {
-  const { sessionUi, setOrderWizardStep } = useAppStore();
+  const { sessionUi, setOrderWizardStep, roasters } = useAppStore();
   const commitStepRef = useRef<(() => Promise<void>) | null>(null);
   const currentStep = sessionUi.orderWizardSteps[order.id] ?? getSuggestedWizardStep(order);
   const savedStep = sessionUi.orderWizardSteps[order.id];
+  const orderRoaster = resolveOrderRoaster(order, roasters);
 
   useEffect(() => {
     if (savedStep) {
@@ -608,7 +681,23 @@ function PastOrderEditor({ order, onClose }: { order: Order; onClose: () => void
         <div className="wizard-hero-top">
           <div>
             <div className="wizard-kicker">Past order correction</div>
-            <h2 className="wizard-page-title">{order.name || 'Untitled order'}</h2>
+            <div className="order-page-title-row">
+              {orderRoaster && (
+                <RoasterAvatar
+                  name={orderRoaster.name}
+                  logoUrl={orderRoaster.logoUrl}
+                  size={48}
+                />
+              )}
+              <div>
+                <h2 className="wizard-page-title">{order.name || 'Untitled order'}</h2>
+                {orderRoaster && (
+                  <div className="field-hint" style={{ marginTop: 4 }}>
+                    Roaster: {orderRoaster.name}
+                  </div>
+                )}
+              </div>
+            </div>
             <p className="wizard-page-copy">
               {formatDateShort(order.orderDate)} - update setup, coffees, fees, and settlement details while keeping this record finalized.
             </p>

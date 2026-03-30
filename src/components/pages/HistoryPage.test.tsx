@@ -4,10 +4,13 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Order, Person } from '../../types';
+import { generateOrderInvoicePDF } from '../../lib/pdf';
 
 const mockStoreState = {
   orders: [] as Order[],
   people: [] as Person[],
+  roasters: [],
+  linkedPersonId: null as string | null,
   deleteOrder: vi.fn(),
   createOrder: vi.fn(),
   updateOrder: vi.fn(),
@@ -26,6 +29,10 @@ const mockStoreState = {
 
 vi.mock('../../store/appStore', () => ({
   useAppStore: () => mockStoreState,
+}));
+
+vi.mock('../../lib/pdf', () => ({
+  generateOrderInvoicePDF: vi.fn(),
 }));
 
 import { HistoryPage } from './HistoryPage';
@@ -53,6 +60,8 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
     workspaceId: 'workspace-1',
     name: overrides.name || 'Saved March Drop',
     orderDate: overrides.orderDate || '2026-03-18',
+    roasterId: overrides.roasterId ?? null,
+    roasterSnapshot: overrides.roasterSnapshot ?? null,
     payerId: overrides.payerId ?? 'person-1',
     payerBank: overrides.payerBank ?? { bankName: '', accountNumber: '', beneficiary: '' },
     referenceTemplate: overrides.referenceTemplate || 'FAJR-{ORDER}-{NAME}',
@@ -113,6 +122,8 @@ describe('HistoryPage', () => {
     root = createRoot(container);
     vi.stubGlobal('scrollTo', vi.fn());
     mockStoreState.people = people;
+    mockStoreState.roasters = [];
+    mockStoreState.linkedPersonId = null;
     mockStoreState.orders = [makeOrder()];
     mockStoreState.deleteOrder = vi.fn();
     mockStoreState.createOrder = vi.fn();
@@ -152,5 +163,68 @@ describe('HistoryPage', () => {
 
     expect(container.textContent).toContain('Editing saved order');
     expect(mockStoreState.updateOrder).not.toHaveBeenCalledWith('order-1', { isArchived: false });
+  });
+
+  it('removes the coffee summary card from past-order details and shows the full order invoice action', async () => {
+    act(() => {
+      root.render(<HistoryPage />);
+    });
+
+    clickButtonByText(container, 'Open order');
+
+    expect(container.textContent).not.toContain('Saved coffee totals');
+    expect(container.textContent).toContain('Download full order invoice');
+  });
+
+  it('downloads the full order invoice from past-order details', async () => {
+    act(() => {
+      root.render(<HistoryPage />);
+    });
+
+    clickButtonByText(container, 'Open order');
+    clickButtonByText(container, 'Download full order invoice');
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(generateOrderInvoicePDF).toHaveBeenCalledTimes(1);
+    expect(generateOrderInvoicePDF).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'order-1' }),
+      people,
+      expect.objectContaining({
+        totalOrderZar: expect.any(Number),
+      }),
+    );
+  });
+
+  it('keeps participant-only history scoped to the linked person record', () => {
+    mockStoreState.linkedPersonId = 'person-1';
+    mockStoreState.orders = [
+      makeOrder({ id: 'order-1', isArchived: true }),
+      makeOrder({
+        id: 'order-2',
+        name: 'Hidden Order',
+        isArchived: true,
+        payerId: 'person-2',
+        lots: [
+          {
+            id: 'lot-2',
+            name: 'Other',
+            foreignPricePerBag: 12,
+            gramsPerBag: 250,
+            quantity: 1,
+            shares: [{ id: 'share-3', personId: 'person-2', shareGrams: 250, bagIndex: 0 }],
+          },
+        ],
+      }),
+    ];
+
+    act(() => {
+      root.render(<HistoryPage participantOnly />);
+    });
+
+    expect(container.textContent).toContain('Saved March Drop');
+    expect(container.textContent).not.toContain('Hidden Order');
   });
 });

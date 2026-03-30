@@ -11,6 +11,17 @@ export function formatZARShort(amount: number): string {
   return formatZAR(amount);
 }
 
+export function formatCurrency(amount: number): string {
+  return formatZAR(amount);
+}
+
+export function formatNumber(value: number, maximumFractionDigits = 0): string {
+  return new Intl.NumberFormat('en-ZA', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits,
+  }).format(value);
+}
+
 // ─── Date ─────────────────────────────────────────────────────
 
 export function formatDate(isoDate: string): string {
@@ -85,4 +96,13 @@ export function pdfFilename(orderName: string, personName: string): string {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
   return `fajr-brews-invoice-${clean(orderName)}-${clean(personName)}.pdf`;
+}
+
+export function orderPdfFilename(orderName: string): string {
+  const clean = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  return `fajr-brews-order-invoice-${clean(orderName)}.pdf`;
 }

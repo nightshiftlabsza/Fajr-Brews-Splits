@@ -39,6 +39,8 @@ const testOrder: Order = {
   workspaceId: 'ws-1',
   name: 'Test Order',
   orderDate: '2025-03-01',
+  roasterId: null,
+  roasterSnapshot: null,
   payerId: PERSON_B,
   payerBank: { bankName: 'FNB', accountNumber: '1234567890', beneficiary: 'Person B' },
   referenceTemplate: 'FAJR-{ORDER}-{NAME}',
