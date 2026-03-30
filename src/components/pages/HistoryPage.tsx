@@ -29,11 +29,6 @@ interface Props {
   participantOnly?: boolean;
 }
 
-interface PinRequest {
-  orderId: string;
-  action: 'view' | 'edit';
-}
-
 const STEP_INDEX: Record<OrderWizardStep, number> = {
   setup: 0,
   coffees: 1,
@@ -47,20 +42,14 @@ export function HistoryPage({ participantOnly = false }: Props) {
     people,
     roasters,
     linkedPersonId,
+    linkResolution,
     deleteOrder,
     createOrder,
     exportJSON,
     importJSON,
     setLastExportDate,
-    verifyOrderPin,
-    unlockedOrderIds,
   } = useAppStore();
 
-  const [pinRequest, setPinRequest] = useState<PinRequest | null>(null);
-  const [pin, setPin] = useState('');
-  const [pinError, setPinError] = useState('');
-  const [pinAttempts, setPinAttempts] = useState(0);
-  const [pinVerifying, setPinVerifying] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [downloadingOrderInvoice, setDownloadingOrderInvoice] = useState(false);
@@ -70,10 +59,18 @@ export function HistoryPage({ participantOnly = false }: Props) {
     () => Object.fromEntries(people.map((person) => [person.id, person.name])),
     [people],
   );
+  const participantArchiveState = participantOnly
+    ? linkedPersonId
+      ? 'ready'
+      : linkResolution.status === 'needs-confirmation'
+        ? 'needs-confirmation'
+        : linkResolution.status === 'ambiguous'
+          ? 'ambiguous'
+          : 'unlinked'
+    : 'ready';
   const scopedOrders = participantOnly ? getParticipantScopedOrders(orders, linkedPersonId) : orders;
   const activeOrders = getActiveOrders(scopedOrders);
   const pastOrders = getPastOrders(scopedOrders);
-  const pinOrder = pinRequest ? pastOrders.find((order) => order.id === pinRequest.orderId) ?? null : null;
   const selectedOrder = selectedOrderId ? pastOrders.find((order) => order.id === selectedOrderId) ?? null : null;
   const editingOrder = editingOrderId ? pastOrders.find((order) => order.id === editingOrderId) ?? null : null;
   const selectedOrderSummary = selectedOrder ? getPastOrderSummary(selectedOrder, personNames) : null;
@@ -90,12 +87,6 @@ export function HistoryPage({ participantOnly = false }: Props) {
     }
   }, [editingOrderId, pastOrders, selectedOrderId]);
 
-  function resetPinPrompt() {
-    setPin('');
-    setPinError('');
-    setPinAttempts(0);
-  }
-
   function openPastOrder(order: Order) {
     setSelectedOrderId(order.id);
     setEditingOrderId(null);
@@ -110,65 +101,8 @@ export function HistoryPage({ participantOnly = false }: Props) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  function requestPastOrderAccess(order: Order, action: PinRequest['action']) {
-    if (order.pinRequired && !unlockedOrderIds.has(order.id)) {
-      setPinRequest({ orderId: order.id, action });
-      resetPinPrompt();
-      return;
-    }
-
-    if (action === 'edit') {
-      openPastOrderEditor(order);
-      return;
-    }
-
-    openPastOrder(order);
-  }
-
   async function handleOpenOrder(order: Order) {
-    requestPastOrderAccess(order, 'view');
-  }
-
-  async function handlePinSubmit() {
-    if (!pinRequest) return;
-    if (pinAttempts >= 5) return;
-    if (pin.length < 4 || pin.length > 6) {
-      setPinError('PIN must be 4-6 digits.');
-      return;
-    }
-
-    setPinVerifying(true);
-    setPinError('');
-
-    try {
-      const ok = await verifyOrderPin(pinRequest.orderId, pin);
-      if (ok) {
-        const unlockedOrder = pastOrders.find((order) => order.id === pinRequest.orderId);
-        const nextRequest = pinRequest;
-        setPinRequest(null);
-
-        if (unlockedOrder) {
-          if (nextRequest.action === 'edit') {
-            openPastOrderEditor(unlockedOrder);
-          } else {
-            openPastOrder(unlockedOrder);
-          }
-        }
-      } else {
-        const nextAttempts = pinAttempts + 1;
-        setPinAttempts(nextAttempts);
-        setPinError(
-          nextAttempts >= 5
-            ? 'Too many incorrect attempts. Please try again later.'
-            : `Incorrect PIN. ${5 - nextAttempts} attempt${5 - nextAttempts === 1 ? '' : 's'} remaining.`,
-        );
-        setPin('');
-      }
-    } catch {
-      setPinError('Verification failed. Please try again.');
-    } finally {
-      setPinVerifying(false);
-    }
+    openPastOrder(order);
   }
 
   async function handleDuplicate(order: Order) {
@@ -177,12 +111,11 @@ export function HistoryPage({ participantOnly = false }: Props) {
       name: `${order.name} (copy)`,
       orderDate: todayISO(),
       payments: {},
-      pinRequired: false,
     });
   }
 
   async function handleEdit(order: Order) {
-    requestPastOrderAccess(order, 'edit');
+    openPastOrderEditor(order);
   }
 
   async function handleDelete(order: Order) {
@@ -241,69 +174,6 @@ export function HistoryPage({ participantOnly = false }: Props) {
 
   return (
     <div className="page-container">
-      {pinRequest && pinOrder && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 1000,
-          background: 'rgba(0,0,0,0.5)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: 'var(--space-4)',
-        }}>
-          <div className="card card-padded" style={{ width: '100%', maxWidth: 380 }}>
-            <div style={{ textAlign: 'center', marginBottom: 'var(--space-4)' }}>
-              <div style={{ fontSize: '2rem', marginBottom: 'var(--space-2)' }}>🔒</div>
-              <div style={{ fontWeight: 700, fontSize: '1.0625rem', color: 'var(--color-text-primary)' }}>
-                Enter PIN
-              </div>
-              <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
-                "{pinOrder.name}" requires a PIN to {pinRequest.action === 'edit' ? 'edit' : 'view'}.
-              </div>
-            </div>
-
-            <div className="field" style={{ marginBottom: 'var(--space-4)' }}>
-              <input
-                className="input"
-                type="number"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder="Enter 4-6 digit PIN"
-                value={pin}
-                onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                onKeyDown={(event) => event.key === 'Enter' && !pinVerifying && pinAttempts < 5 && handlePinSubmit()}
-                autoFocus
-                style={{ textAlign: 'center', fontSize: '1.25rem', letterSpacing: '0.3em' }}
-                disabled={pinAttempts >= 5 || pinVerifying}
-              />
-            </div>
-
-            {pinError && (
-              <div className="alert alert-error" style={{ marginBottom: 'var(--space-4)', fontSize: '0.8125rem' }}>
-                {pinError}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
-              <button
-                className="btn btn-primary"
-                style={{ flex: 1 }}
-                onClick={() => void handlePinSubmit()}
-                disabled={pinVerifying || pinAttempts >= 5 || pin.length < 4}
-              >
-                {pinVerifying ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Unlock'}
-              </button>
-              <button
-                className="btn btn-ghost"
-                onClick={() => {
-                  setPinRequest(null);
-                  resetPinPrompt();
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div>
           <h2 style={{ marginBottom: 4 }}>{participantOnly ? 'My Orders' : 'Past Orders'}</h2>
@@ -488,11 +358,41 @@ export function HistoryPage({ participantOnly = false }: Props) {
         </section>
       )}
 
-      {pastOrders.length === 0 && (
+      {participantOnly && participantArchiveState === 'unlinked' && (
+        <div className="empty-state">
+          <div className="empty-state-icon">☕</div>
+          <h3>Confirm your profile to see orders you joined</h3>
+          <p>
+            We could not match this account to a participant record yet. Once your profile is linked, finalized orders you were part of will appear here automatically.
+          </p>
+        </div>
+      )}
+
+      {participantOnly && participantArchiveState === 'needs-confirmation' && (
+        <div className="empty-state">
+          <div className="empty-state-icon">👤</div>
+          <h3>We found a possible match for your account</h3>
+          <p>
+            Confirm your participant profile to see the finalized orders you joined. The app waits for confirmation before showing personal archive data.
+          </p>
+        </div>
+      )}
+
+      {participantOnly && participantArchiveState === 'ambiguous' && (
+        <div className="empty-state">
+          <div className="empty-state-icon">?</div>
+          <h3>We found more than one possible profile</h3>
+          <p>
+            Choose your participant record first so the archive only shows the orders that belong to you.
+          </p>
+        </div>
+      )}
+
+      {participantArchiveState === 'ready' && pastOrders.length === 0 && (
         <div className="empty-state">
           <div className="empty-state-icon">📂</div>
           <h3>No past orders yet</h3>
-          <p>{participantOnly ? 'Completed orders you were included in will appear here automatically.' : 'Finalize an order and it will appear here as a saved record.'}</p>
+          <p>{participantOnly ? 'You are linked correctly, but there are no finalized orders including you yet.' : 'Finalize an order and it will appear here as a saved record.'}</p>
         </div>
       )}
 
@@ -501,7 +401,6 @@ export function HistoryPage({ participantOnly = false }: Props) {
           const summary = getPastOrderSummary(order, personNames);
           const orderRoaster = resolveOrderRoaster(order, roasters);
           const isSelected = selectedOrderId === order.id;
-          const isLocked = order.pinRequired && !unlockedOrderIds.has(order.id);
           const isEditing = editingOrderId === order.id;
 
           return (
@@ -538,7 +437,6 @@ export function HistoryPage({ participantOnly = false }: Props) {
                         </div>
                         <span className="wizard-badge wizard-badge-accent">Finalized</span>
                         {isEditing && <span className="wizard-badge wizard-badge-info">Editing</span>}
-                        {isLocked && <span title="PIN protected" style={{ fontSize: '0.875rem' }}>🔒</span>}
                       </div>
 
                       <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>

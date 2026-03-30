@@ -30,6 +30,7 @@ import type {
   PersonLinkCandidate,
   PersonMatchReason,
   Roaster,
+  RoasterFeatureStatus,
 } from '../types';
 
 // ─── Mappers (DB row → App type) ─────────────────────────────
@@ -47,7 +48,7 @@ function mapPerson(row: DbPerson): Person {
   };
 }
 
-function mapOrder(row: DbOrder & { pin_required?: boolean }): Order {
+function mapOrder(row: DbOrder): Order {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -66,7 +67,6 @@ function mapOrder(row: DbOrder & { pin_required?: boolean }): Order {
       ? row.payments
       : {},
     isArchived: row.is_archived,
-    pinRequired: row.pin_required ?? false,
     createdBy: row.created_by ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -101,6 +101,8 @@ interface AppStore {
   roasters: Roaster[];
   orders: Order[];
   currentOrderId: string | null;
+  roasterFeatureStatus: RoasterFeatureStatus;
+  roasterFeatureMessage: string | null;
 
   // ── Settings ──────────────────────────────────────────────
   settings: AppSettings;
@@ -142,7 +144,6 @@ interface AppStore {
   deleteOrder: (id: string) => Promise<void>;
   setCurrentOrderId: (id: string | null) => void;
   setOrderWizardStep: (orderId: string, step: OrderWizardStep) => void;
-  setOrderProtectionOpen: (orderId: string, open: boolean) => void;
   flushOrderWrites: (orderId: string) => Promise<void>;
 
   // ── Workspace member actions ──────────────────────────────
@@ -154,12 +155,6 @@ interface AppStore {
   setTheme: (theme: Theme) => Promise<void>;
   setThemeMode: (mode: ThemeMode) => Promise<void>;
   setLastExportDate: (date: string) => Promise<void>;
-
-  // ── PIN / Order Access Actions ────────────────────────────
-  unlockedOrderIds: Set<string>;
-  verifyOrderPin: (orderId: string, pin: string) => Promise<boolean>;
-  setOrderPin: (orderId: string, pin: string) => Promise<void>;
-  clearOrderPin: (orderId: string) => Promise<void>;
 
   // ── Import/Export ─────────────────────────────────────────
   exportJSON: () => string;
@@ -213,6 +208,125 @@ function normalizePhone(phone?: string): string | undefined {
 function sanitizeLogoFilename(name: string): string {
   const trimmed = name.trim().toLowerCase();
   return trimmed.replace(/[^a-z0-9.-]+/g, '-').replace(/^-+|-+$/g, '') || 'logo';
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+function getErrorCode(error: unknown): string | null {
+  if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'string') {
+    return error.code;
+  }
+
+  return null;
+}
+
+function isRoasterBackendUnavailableError(error: unknown): boolean {
+  const message = getErrorMessage(error).toLowerCase();
+  const code = getErrorCode(error);
+
+  return (
+    code === 'PGRST205' ||
+    code === '42P01' ||
+    message.includes("public.roasters") ||
+    message.includes("table 'public.roasters'") ||
+    message.includes('relation "public.roasters" does not exist') ||
+    message.includes('schema cache')
+  );
+}
+
+function isRoasterDuplicateError(error: unknown): boolean {
+  const message = getErrorMessage(error).toLowerCase();
+  const code = getErrorCode(error);
+
+  return (
+    code === '23505' ||
+    message.includes('roasters_workspace_normalized_name_key') ||
+    message.includes('duplicate key value')
+  );
+}
+
+function isRoasterLogoStorageUnavailableError(error: unknown): boolean {
+  const message = getErrorMessage(error).toLowerCase();
+
+  return (
+    message.includes('roaster-logos') ||
+    message.includes('bucket') ||
+    message.includes('storage') ||
+    message.includes('object not found')
+  );
+}
+
+function isRoasterPermissionError(error: unknown): boolean {
+  const message = getErrorMessage(error).toLowerCase();
+
+  return (
+    message.includes('row-level security') ||
+    message.includes('permission denied') ||
+    message.includes('not allowed')
+  );
+}
+
+function getRoasterBackendUnavailableMessage(): string {
+  return 'Roaster saving is not available yet because the database migration has not been applied.';
+}
+
+function normalizeRoasterMutationError(error: unknown, options: { roasterName?: string } = {}): Error {
+  if (isRoasterBackendUnavailableError(error)) {
+    return new Error(getRoasterBackendUnavailableMessage());
+  }
+
+  if (isRoasterDuplicateError(error)) {
+    const safeName = options.roasterName?.trim();
+    return new Error(safeName ? `A roaster named "${safeName}" already exists.` : 'That roaster already exists.');
+  }
+
+  if (isRoasterPermissionError(error)) {
+    return new Error('You do not have permission to manage roasters in this workspace.');
+  }
+
+  return new Error(getErrorMessage(error));
+}
+
+function getRoasterLoadFailureMessage(error: unknown): string {
+  if (isRoasterBackendUnavailableError(error)) {
+    return 'Roasters are unavailable because the Supabase roaster migration has not been applied yet.';
+  }
+
+  if (isRoasterPermissionError(error)) {
+    return 'Roasters could not be loaded because this account does not have permission to read them.';
+  }
+
+  return 'Roasters could not be loaded right now. Check the Supabase roaster table and policies.';
+}
+
+function getRoasterLogoFailureMessage(error: unknown): string {
+  if (isRoasterLogoStorageUnavailableError(error)) {
+    return 'The roaster was saved, but its logo could not be uploaded because the roaster logo storage is not configured in Supabase yet.';
+  }
+
+  if (isRoasterPermissionError(error)) {
+    return 'The roaster was saved, but the logo could not be uploaded because this account cannot access roaster logo storage.';
+  }
+
+  return 'The roaster was saved, but its logo could not be uploaded. Check the roaster logo bucket and policies in Supabase.';
+}
+
+async function deleteRoasterLogoBestEffort(logoPath: string): Promise<void> {
+  try {
+    await supabase.storage.from('roaster-logos').remove([logoPath]);
+  } catch (error) {
+    console.error('deleteRoasterLogoBestEffort failed', error);
+  }
 }
 
 const defaultLinkResolution: PersonLinkResolution = {
@@ -332,6 +446,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   roasters: [],
   orders: [],
   currentOrderId: safeLocalStorage.getItem('fb_current_order_id'),
+  roasterFeatureStatus: 'idle',
+  roasterFeatureMessage: null,
   settings: { theme: 'emerald', themeMode: 'light' },
   isInitialized: false,
   isLoading: false,
@@ -341,7 +457,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
     orderProtectionOpen: {},
   },
   _realtimeChannel: null,
-  unlockedOrderIds: new Set<string>(),
 
   // ── Initialize ────────────────────────────────────────────
   initialize: async (options) => {
@@ -368,6 +483,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
           roasters: [],
           orders: [],
           currentOrderId: null,
+          roasterFeatureStatus: 'idle',
+          roasterFeatureMessage: null,
           isInitialized: true,
           isLoading: false,
         });
@@ -410,31 +527,61 @@ export const useAppStore = create<AppStore>((set, get) => ({
         get()._teardownRealtime();
       }
 
-      const [{ data: peopleRows }, { data: roasterRows }, { data: orderRows }] = hasWorkspaceAccess
-        ? await Promise.all([
+      let peopleRows: DbPerson[] | null = [];
+      let orderRows: DbOrder[] | null = [];
+      let roasters: Roaster[] = [];
+      let roasterFeatureStatus: RoasterFeatureStatus = memberRow
+        ? 'empty'
+        : linkedPersonId
+          ? 'unsupported-for-user'
+          : 'idle';
+      let roasterFeatureMessage: string | null = null;
+
+      if (hasWorkspaceAccess) {
+        const [{ data: fetchedPeopleRows, error: peopleError }, { data: fetchedOrderRows, error: orderError }] = await Promise.all([
           supabase
             .from('people')
             .select('*')
             .eq('workspace_id', WORKSPACE_ID)
             .order('name'),
-          memberRow
-            ? supabase
-              .from('roasters')
-              .select('*')
-              .eq('workspace_id', WORKSPACE_ID)
-              .order('updated_at', { ascending: false })
-            : Promise.resolve({ data: [] }),
           supabase
             .from('orders')
             .select('*')
             .eq('workspace_id', WORKSPACE_ID)
             .order('order_date', { ascending: false }),
-        ])
-        : [{ data: [] }, { data: [] }, { data: [] }];
+        ]);
 
-      const people = sortPeopleByName(dedupePeopleById((peopleRows as DbPerson[] | null ?? []).map(mapPerson)));
-      const roasters = (roasterRows as DbRoaster[] | null ?? []).map(mapRoaster);
-      const orders = (orderRows as DbOrder[] | null ?? []).map(mapOrder);
+        if (peopleError) {
+          throw new Error(getErrorMessage(peopleError));
+        }
+
+        if (orderError) {
+          throw new Error(getErrorMessage(orderError));
+        }
+
+        peopleRows = fetchedPeopleRows as DbPerson[] | null;
+        orderRows = fetchedOrderRows as DbOrder[] | null;
+
+        if (memberRow) {
+          const { data: fetchedRoasterRows, error: roasterError } = await supabase
+            .from('roasters')
+            .select('*')
+            .eq('workspace_id', WORKSPACE_ID)
+            .order('updated_at', { ascending: false });
+
+          if (roasterError) {
+            console.error('initialize: failed to load roasters', roasterError);
+            roasterFeatureStatus = 'unavailable';
+            roasterFeatureMessage = getRoasterLoadFailureMessage(roasterError);
+          } else {
+            roasters = (fetchedRoasterRows as DbRoaster[] | null ?? []).map(mapRoaster);
+            roasterFeatureStatus = roasters.length > 0 ? 'ready' : 'empty';
+          }
+        }
+      }
+
+      const people = sortPeopleByName(dedupePeopleById((peopleRows ?? []).map(mapPerson)));
+      const orders = (orderRows ?? []).map(mapOrder);
 
       await get()._loadSettings(session.user.id);
 
@@ -465,6 +612,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         roasters,
         orders,
         currentOrderId,
+        roasterFeatureStatus,
+        roasterFeatureMessage,
         isInitialized: true,
         isLoading: false,
       });
@@ -537,9 +686,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
     orderWriteChains.clear();
     optimisticOrderSnapshots.clear();
     await supabase.auth.signOut();
-    set({
-      user: null,
-      accessStatus: 'none',
+      set({
+        user: null,
+        accessStatus: 'none',
       memberRole: null,
       linkedPersonId: null,
       linkResolution: defaultLinkResolution,
@@ -547,11 +696,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
       roasters: [],
       orders: [],
       currentOrderId: null,
+      roasterFeatureStatus: 'idle',
+      roasterFeatureMessage: null,
       sessionUi: {
         orderWizardSteps: {},
         orderProtectionOpen: {},
       },
-      unlockedOrderIds: new Set<string>(),
     });
   },
 
@@ -641,6 +791,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
       throw new Error('Roaster name is required.');
     }
 
+    if (get().accessStatus !== 'member') {
+      throw new Error('Only workspace members can manage roasters.');
+    }
+
+    if (get().roasterFeatureStatus === 'unavailable') {
+      throw new Error(getRoasterBackendUnavailableMessage());
+    }
+
     const duplicate = get().roasters.find((roaster) => normalizeRoasterName(roaster.name) === normalizeRoasterName(trimmedName));
     if (duplicate) {
       throw new Error(`A roaster named "${duplicate.name}" already exists.`);
@@ -655,9 +813,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
       .select()
       .single();
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error('createRoaster: failed to insert roaster', error);
+      const normalizedError = normalizeRoasterMutationError(error, { roasterName: trimmedName });
+      if (isRoasterBackendUnavailableError(error)) {
+        set({
+          roasterFeatureStatus: 'unavailable',
+          roasterFeatureMessage: normalizedError.message,
+        });
+      }
+      throw normalizedError;
+    }
 
     let roaster = mapRoaster(row as DbRoaster);
+    let roasterFeatureMessage: string | null = null;
 
     if (logoFile) {
       try {
@@ -672,18 +841,34 @@ export const useAppStore = create<AppStore>((set, get) => ({
           .select()
           .single();
 
-        if (updateError) throw new Error(updateError.message);
+        if (updateError) {
+          await deleteRoasterLogoBestEffort(upload.logoPath);
+          throw updateError;
+        }
         roaster = mapRoaster(updatedRow as DbRoaster);
       } catch (uploadError) {
-        console.error('createRoaster: logo upload failed, keeping roaster without logo', uploadError);
+        console.error('createRoaster: logo upload/update failed, keeping roaster without logo', uploadError);
+        roasterFeatureMessage = getRoasterLogoFailureMessage(uploadError);
       }
     }
 
-    set((state) => ({ roasters: upsertRoasterById(state.roasters, roaster) }));
+    set((state) => ({
+      roasters: upsertRoasterById(state.roasters, roaster),
+      roasterFeatureStatus: 'ready',
+      roasterFeatureMessage,
+    }));
     return roaster;
   },
 
   updateRoaster: async (id, data) => {
+    if (get().accessStatus !== 'member') {
+      throw new Error('Only workspace members can manage roasters.');
+    }
+
+    if (get().roasterFeatureStatus === 'unavailable') {
+      throw new Error(getRoasterBackendUnavailableMessage());
+    }
+
     const currentRoaster = get().roasters.find((roaster) => roaster.id === id);
     if (!currentRoaster) {
       throw new Error('Roaster not found.');
@@ -702,27 +887,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const dbPatch: Record<string, unknown> = {};
     if (data.name !== undefined) dbPatch.name = nextName;
 
-    let nextLogoPath = currentRoaster.logoPath ?? null;
-    let nextLogoUrl = currentRoaster.logoUrl ?? null;
+    let uploadedLogo: { logoPath: string; logoUrl: string } | null = null;
 
     if (data.removeLogo) {
-      if (currentRoaster.logoPath) {
-        await supabase.storage.from('roaster-logos').remove([currentRoaster.logoPath]);
-      }
-      nextLogoPath = null;
-      nextLogoUrl = null;
+      dbPatch.logo_path = null;
+      dbPatch.logo_url = null;
     } else if (data.logoFile) {
-      if (currentRoaster.logoPath) {
-        await supabase.storage.from('roaster-logos').remove([currentRoaster.logoPath]);
+      try {
+        uploadedLogo = await uploadRoasterLogo(id, data.logoFile);
+      } catch (error) {
+        console.error('updateRoaster: failed to upload replacement logo', error);
+        throw new Error(getRoasterLogoFailureMessage(error));
       }
-      const upload = await uploadRoasterLogo(id, data.logoFile);
-      nextLogoPath = upload.logoPath;
-      nextLogoUrl = upload.logoUrl;
-    }
-
-    if (data.removeLogo || data.logoFile) {
-      dbPatch.logo_path = nextLogoPath;
-      dbPatch.logo_url = nextLogoUrl;
+      dbPatch.logo_path = uploadedLogo.logoPath;
+      dbPatch.logo_url = uploadedLogo.logoUrl;
     }
 
     const { data: row, error } = await supabase
@@ -732,11 +910,34 @@ export const useAppStore = create<AppStore>((set, get) => ({
       .select()
       .single();
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error('updateRoaster: failed to update roaster', error);
+      if (uploadedLogo?.logoPath) {
+        await deleteRoasterLogoBestEffort(uploadedLogo.logoPath);
+      }
+      const normalizedError = normalizeRoasterMutationError(error, { roasterName: nextName });
+      if (isRoasterBackendUnavailableError(error)) {
+        set({
+          roasterFeatureStatus: 'unavailable',
+          roasterFeatureMessage: normalizedError.message,
+        });
+      }
+      throw normalizedError;
+    }
+
+    if (data.removeLogo && currentRoaster.logoPath) {
+      await deleteRoasterLogoBestEffort(currentRoaster.logoPath);
+    }
+
+    if (uploadedLogo?.logoPath && currentRoaster.logoPath && currentRoaster.logoPath !== uploadedLogo.logoPath) {
+      await deleteRoasterLogoBestEffort(currentRoaster.logoPath);
+    }
 
     const roaster = mapRoaster(row as DbRoaster);
     set((state) => ({
       roasters: upsertRoasterById(state.roasters, roaster),
+      roasterFeatureStatus: 'ready',
+      roasterFeatureMessage: null,
       orders: state.orders.map((order) => (
         order.roasterId === roaster.id
           ? { ...order, roasterSnapshot: createRoasterSnapshot(roaster) }
@@ -840,17 +1041,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
       if (currentOrderId) safeLocalStorage.setItem('fb_current_order_id', currentOrderId);
       else safeLocalStorage.removeItem('fb_current_order_id');
       const { [id]: _removedStep, ...orderWizardSteps } = s.sessionUi.orderWizardSteps;
-      const { [id]: _removedProtection, ...orderProtectionOpen } = s.sessionUi.orderProtectionOpen;
-      const unlockedOrderIds = new Set(s.unlockedOrderIds);
-      unlockedOrderIds.delete(id);
       return {
         orders,
         currentOrderId,
-        unlockedOrderIds,
         sessionUi: {
           ...s.sessionUi,
           orderWizardSteps,
-          orderProtectionOpen,
         },
       };
     });
@@ -869,18 +1065,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
         orderWizardSteps: {
           ...s.sessionUi.orderWizardSteps,
           [orderId]: step,
-        },
-      },
-    }));
-  },
-
-  setOrderProtectionOpen: (orderId, open) => {
-    set((s) => ({
-      sessionUi: {
-        ...s.sessionUi,
-        orderProtectionOpen: {
-          ...s.sessionUi.orderProtectionOpen,
-          [orderId]: open,
         },
       },
     }));
@@ -1006,12 +1190,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // ── Export / Import ───────────────────────────────────────
   exportJSON: () => {
     const { people, roasters, orders, settings } = get();
-    // Strip PIN fields — they are security-sensitive and meaningless without the server-side hash
-    const cleanOrders = orders.map((o) => {
-      const { pinRequired: _pr, ...rest } = o;
-      return rest;
-    });
-    return JSON.stringify({ version: '2', people, roasters, orders: cleanOrders, settings, exportedAt: new Date().toISOString() }, null, 2);
+    return JSON.stringify({ version: '2', people, roasters, orders, settings, exportedAt: new Date().toISOString() }, null, 2);
   },
 
   importJSON: async (json) => {
@@ -1101,43 +1280,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
-  // ── PIN / Order Access ────────────────────────────────────
-  verifyOrderPin: async (orderId, pin) => {
-    const { data, error } = await supabase.rpc('verify_order_pin', {
-      p_order_id: orderId,
-      p_pin: pin,
-    });
-    if (error) throw new Error(error.message);
-    const success = data === true;
-    if (success) {
-      set((s) => ({ unlockedOrderIds: new Set([...s.unlockedOrderIds, orderId]) }));
-    }
-    return success;
-  },
-
-  setOrderPin: async (orderId, pin) => {
-    const { error } = await supabase.rpc('set_order_pin', {
-      p_order_id: orderId,
-      p_pin: pin,
-    });
-    if (error) throw new Error(error.message);
-    // Update local state to reflect pin is now required
-    set((s) => ({
-      orders: s.orders.map((o) => (o.id === orderId ? { ...o, pinRequired: true } : o)),
-      // The order is now unlocked for this session since we just set it
-      unlockedOrderIds: new Set([...s.unlockedOrderIds, orderId]),
-    }));
-  },
-
-  clearOrderPin: async (orderId) => {
-    const { error } = await supabase.rpc('clear_order_pin', { p_order_id: orderId });
-    if (error) throw new Error(error.message);
-    set((s) => ({
-      orders: s.orders.map((o) => (o.id === orderId ? { ...o, pinRequired: false } : o)),
-    }));
-  },
-
-
   // ── Realtime ──────────────────────────────────────────────
   _setupRealtime: (workspaceId) => {
     const existing = get()._realtimeChannel;
@@ -1204,11 +1346,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
                 const roaster = mapRoaster(newRow as DbRoaster);
                 set((s) => ({
                   roasters: upsertRoasterById(s.roasters, roaster),
+                  roasterFeatureStatus: 'ready',
+                  roasterFeatureMessage: null,
                 }));
               } else if (eventType === 'UPDATE') {
                 const roaster = mapRoaster(newRow as DbRoaster);
                 set((s) => ({
                   roasters: upsertRoasterById(s.roasters, roaster),
+                  roasterFeatureStatus: 'ready',
+                  roasterFeatureMessage: null,
                   orders: s.orders.map((order) => (
                     order.roasterId === roaster.id
                       ? { ...order, roasterSnapshot: createRoasterSnapshot(roaster) }
@@ -1219,6 +1365,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
                 const deletedRoasterId = (oldRow as DbRoaster).id;
                 set((s) => ({
                   roasters: s.roasters.filter((roaster) => roaster.id !== deletedRoasterId),
+                  roasterFeatureStatus: s.roasters.length <= 1 ? 'empty' : 'ready',
+                  roasterFeatureMessage: null,
                 }));
               }
           } catch (err) {

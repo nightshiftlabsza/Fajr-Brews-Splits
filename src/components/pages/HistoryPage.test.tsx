@@ -3,7 +3,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Order, Person } from '../../types';
+import type { Order, Person, PersonLinkResolution } from '../../types';
 import { generateOrderInvoicePDF } from '../../lib/pdf';
 
 const mockStoreState = {
@@ -11,19 +11,22 @@ const mockStoreState = {
   people: [] as Person[],
   roasters: [],
   linkedPersonId: null as string | null,
+  linkResolution: {
+    status: 'none',
+    linkedPersonId: null,
+    matchedBy: null,
+    person: null,
+    candidates: [],
+  } as PersonLinkResolution,
   deleteOrder: vi.fn(),
   createOrder: vi.fn(),
   updateOrder: vi.fn(),
   setOrderWizardStep: vi.fn(),
-  setOrderProtectionOpen: vi.fn(),
   exportJSON: vi.fn(() => '{}'),
   importJSON: vi.fn(),
   setLastExportDate: vi.fn(),
-  verifyOrderPin: vi.fn(),
-  unlockedOrderIds: new Set<string>(),
   sessionUi: {
     orderWizardSteps: {} as Record<string, 'setup' | 'coffees' | 'goods' | 'summary'>,
-    orderProtectionOpen: {} as Record<string, boolean>,
   },
 };
 
@@ -124,20 +127,23 @@ describe('HistoryPage', () => {
     mockStoreState.people = people;
     mockStoreState.roasters = [];
     mockStoreState.linkedPersonId = null;
+    mockStoreState.linkResolution = {
+      status: 'none',
+      linkedPersonId: null,
+      matchedBy: null,
+      person: null,
+      candidates: [],
+    };
     mockStoreState.orders = [makeOrder()];
     mockStoreState.deleteOrder = vi.fn();
     mockStoreState.createOrder = vi.fn();
     mockStoreState.updateOrder = vi.fn().mockResolvedValue(undefined);
     mockStoreState.setOrderWizardStep = vi.fn();
-    mockStoreState.setOrderProtectionOpen = vi.fn();
     mockStoreState.exportJSON = vi.fn(() => '{}');
     mockStoreState.importJSON = vi.fn();
     mockStoreState.setLastExportDate = vi.fn();
-    mockStoreState.verifyOrderPin = vi.fn();
-    mockStoreState.unlockedOrderIds = new Set<string>();
     mockStoreState.sessionUi = {
       orderWizardSteps: {},
-      orderProtectionOpen: {},
     };
   });
 
@@ -176,6 +182,18 @@ describe('HistoryPage', () => {
     expect(container.textContent).toContain('Download full order invoice');
   });
 
+  it('opens a finalized order directly without showing a PIN prompt', () => {
+    act(() => {
+      root.render(<HistoryPage />);
+    });
+
+    clickButtonByText(container, 'Open order');
+
+    expect(container.textContent).toContain('Saved order');
+    expect(container.textContent).not.toContain('Enter PIN');
+    expect(container.textContent).not.toContain('Unlock');
+  });
+
   it('downloads the full order invoice from past-order details', async () => {
     act(() => {
       root.render(<HistoryPage />);
@@ -200,6 +218,13 @@ describe('HistoryPage', () => {
 
   it('keeps participant-only history scoped to the linked person record', () => {
     mockStoreState.linkedPersonId = 'person-1';
+    mockStoreState.linkResolution = {
+      status: 'linked',
+      linkedPersonId: 'person-1',
+      matchedBy: 'email',
+      person: null,
+      candidates: [],
+    };
     mockStoreState.orders = [
       makeOrder({ id: 'order-1', isArchived: true }),
       makeOrder({
@@ -226,5 +251,63 @@ describe('HistoryPage', () => {
 
     expect(container.textContent).toContain('Saved March Drop');
     expect(container.textContent).not.toContain('Hidden Order');
+  });
+
+  it('shows linking guidance instead of a misleading empty archive when participant access is unresolved', () => {
+    act(() => {
+      root.render(<HistoryPage participantOnly />);
+    });
+
+    expect(container.textContent).toContain('Confirm your profile to see orders you joined');
+    expect(container.textContent).not.toContain('Completed orders you were included in will appear here automatically.');
+  });
+
+  it('shows confirmation guidance for a single safe name match', () => {
+    mockStoreState.linkResolution = {
+      status: 'needs-confirmation',
+      linkedPersonId: null,
+      matchedBy: 'name',
+      person: null,
+      candidates: [
+        {
+          personId: 'person-1',
+          name: 'Alice',
+          matchReason: 'name',
+        },
+      ],
+    };
+
+    act(() => {
+      root.render(<HistoryPage participantOnly />);
+    });
+
+    expect(container.textContent).toContain('We found a possible match for your account');
+  });
+
+  it('shows ambiguity guidance instead of guessing the participant profile', () => {
+    mockStoreState.linkResolution = {
+      status: 'ambiguous',
+      linkedPersonId: null,
+      matchedBy: null,
+      person: null,
+      candidates: [
+        {
+          personId: 'person-1',
+          name: 'Alice',
+          matchReason: 'name',
+        },
+        {
+          personId: 'person-2',
+          name: 'Alicia',
+          matchReason: 'name',
+        },
+      ],
+    };
+
+    act(() => {
+      root.render(<HistoryPage participantOnly />);
+    });
+
+    expect(container.textContent).toContain('We found more than one possible profile');
   });
 });

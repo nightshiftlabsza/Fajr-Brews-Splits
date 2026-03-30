@@ -3,20 +3,17 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Order, Person, Roaster } from '../../types';
+import type { Order, Person, Roaster, RoasterFeatureStatus } from '../../types';
 
 const mockStoreState = {
   people: [] as Person[],
   roasters: [] as Roaster[],
   orders: [] as Order[],
+  accessStatus: 'member' as 'checking' | 'member' | 'participant' | 'none' | 'error',
+  roasterFeatureStatus: 'ready' as RoasterFeatureStatus,
+  roasterFeatureMessage: null as string | null,
   updateOrder: vi.fn(),
   createRoaster: vi.fn(),
-  setOrderPin: vi.fn(),
-  clearOrderPin: vi.fn(),
-  sessionUi: {
-    orderProtectionOpen: {} as Record<string, boolean>,
-  },
-  setOrderProtectionOpen: vi.fn(),
 };
 
 vi.mock('../../store/appStore', () => ({
@@ -41,7 +38,6 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
     fees: overrides.fees ?? [],
     payments: overrides.payments ?? {},
     isArchived: overrides.isArchived ?? false,
-    pinRequired: overrides.pinRequired ?? false,
     createdAt: overrides.createdAt ?? '2026-03-18T00:00:00.000Z',
     updatedAt: overrides.updatedAt ?? '2026-03-18T00:00:00.000Z',
   };
@@ -75,6 +71,9 @@ describe('OrderSetup roaster flow', () => {
       },
     ];
     mockStoreState.orders = [makeOrder()];
+    mockStoreState.accessStatus = 'member';
+    mockStoreState.roasterFeatureStatus = 'ready';
+    mockStoreState.roasterFeatureMessage = null;
     mockStoreState.updateOrder = vi.fn().mockResolvedValue(undefined);
     mockStoreState.createRoaster = vi.fn().mockResolvedValue({
       id: 'roaster-2',
@@ -83,12 +82,6 @@ describe('OrderSetup roaster flow', () => {
       createdAt: '2026-03-18T00:00:00.000Z',
       updatedAt: '2026-03-18T00:00:00.000Z',
     });
-    mockStoreState.setOrderPin = vi.fn().mockResolvedValue(undefined);
-    mockStoreState.clearOrderPin = vi.fn().mockResolvedValue(undefined);
-    mockStoreState.setOrderProtectionOpen = vi.fn();
-    mockStoreState.sessionUi = {
-      orderProtectionOpen: {},
-    };
   });
 
   afterEach(() => {
@@ -149,5 +142,32 @@ describe('OrderSetup roaster flow', () => {
         logoUrl: undefined,
       },
     });
+  });
+
+  it('shows privacy guidance instead of PIN controls', () => {
+    act(() => {
+      root.render(<OrderSetup order={makeOrder()} />);
+    });
+
+    expect(container.textContent).toContain('Finalized order visibility');
+    expect(container.textContent).toContain('No extra PIN is needed to view them.');
+    expect(container.textContent).not.toContain('Order PIN');
+    expect(container.textContent).not.toContain('Enable PIN protection');
+  });
+
+  it('shows a graceful roaster warning when the backend migration is missing', () => {
+    mockStoreState.roasterFeatureStatus = 'unavailable';
+    mockStoreState.roasterFeatureMessage = 'Roaster saving is not available yet because the database migration has not been applied.';
+
+    act(() => {
+      root.render(<OrderSetup order={makeOrder()} />);
+    });
+
+    expect(container.textContent).toContain('Roaster saving is not available yet because the database migration has not been applied.');
+    expect(container.textContent).not.toContain("Could not find the table 'public.roasters' in the schema cache");
+
+    const addButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Add roaster');
+    expect(addButton).toBeTruthy();
+    expect(addButton?.getAttribute('disabled')).not.toBeNull();
   });
 });

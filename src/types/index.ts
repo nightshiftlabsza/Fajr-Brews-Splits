@@ -45,6 +45,13 @@ export interface RoasterSnapshot {
   logoUrl?: string;
 }
 
+export type RoasterFeatureStatus =
+  | 'idle'
+  | 'ready'
+  | 'empty'
+  | 'unavailable'
+  | 'unsupported-for-user';
+
 // ─── Coffee Lots ──────────────────────────────────────────────
 export interface ShareLine {
   id: string;
@@ -126,7 +133,6 @@ export interface Order {
   fees: Fee[];
   payments: Record<string, PaymentRecord>; // personId → PaymentRecord
   isArchived: boolean;
-  pinRequired?: boolean;     // true if a PIN is set on this order
   createdBy?: string;
   createdAt: string;
   updatedAt: string;

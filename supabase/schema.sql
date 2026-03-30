@@ -670,7 +670,9 @@ END;
 $$;
 
 -- ============================================================
--- MIGRATION 004 - Roasters + Order Roaster Snapshots
+-- FEATURE PATCH - Roasters + Order Roaster Snapshots
+-- Kept here for fresh installs. Existing live projects should
+-- also run supabase/migrations/20260330_roaster_support.sql.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS public.roasters (
@@ -757,7 +759,7 @@ CREATE POLICY "Authenticated users can delete roaster logos"
   );
 
 -- ============================================================
--- MIGRATION 003 - Persistent Person Linking + Historical Access
+-- FEATURE PATCH - Persistent Person Linking + Historical Access
 -- ============================================================
 
 ALTER TABLE public.profiles
@@ -954,9 +956,26 @@ BEGIN
     WHERE o.payer_id = p_person_id
       OR EXISTS (
         SELECT 1
-        FROM jsonb_array_elements(o.lots) lot
+        FROM jsonb_array_elements(coalesce(o.lots, '[]'::jsonb)) lot
         CROSS JOIN LATERAL jsonb_array_elements(coalesce(lot->'shares', '[]'::jsonb)) share
-        WHERE share->>'personId' = p_person_id::text
+        WHERE coalesce((share->>'shareGrams')::integer, 0) > 0
+          AND share->>'personId' = p_person_id::text
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(coalesce(o.lots, '[]'::jsonb)) lot
+        CROSS JOIN LATERAL jsonb_array_elements(coalesce(lot->'bagAllocations', '[]'::jsonb)) allocation
+        CROSS JOIN LATERAL jsonb_array_elements(coalesce(allocation->'participants', '[]'::jsonb)) participant
+        WHERE coalesce((participant->>'shareGrams')::integer, 0) > 0
+          AND participant->>'personId' = p_person_id::text
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(coalesce(o.lots, '[]'::jsonb)) lot
+        CROSS JOIN LATERAL jsonb_array_elements(coalesce(lot->'bags', '[]'::jsonb)) bag
+        CROSS JOIN LATERAL jsonb_array_elements(coalesce(bag->'buyers', '[]'::jsonb)) buyer
+        WHERE coalesce((buyer->>'grams')::integer, 0) > 0
+          AND buyer->>'personId' = p_person_id::text
       )
   LOOP
     PERFORM public.sync_order_participants(v_order_id);
@@ -1122,22 +1141,95 @@ BEGIN
 END;
 $$;
 
+-- Finalized-order access now depends on workspace membership or identity-linked
+-- participation only. Keep legacy PIN columns for compatibility, but drop the
+-- old PIN RPCs so the final schema surface does not expose them.
+DROP FUNCTION IF EXISTS public.set_order_pin(uuid, text);
+DROP FUNCTION IF EXISTS public.clear_order_pin(uuid);
+DROP FUNCTION IF EXISTS public.verify_order_pin(uuid, text);
+DROP FUNCTION IF EXISTS public.can_access_order(uuid, uuid, boolean);
+
+COMMENT ON COLUMN public.orders.pin_required IS
+  'Deprecated compatibility column. Finalized-order access no longer depends on PIN state.';
+
+COMMENT ON COLUMN public.orders.pin_hash IS
+  'Deprecated compatibility column. Finalized-order access no longer depends on PIN state.';
+
+CREATE OR REPLACE FUNCTION public.order_participant_people(
+  p_payer_id uuid,
+  p_lots jsonb
+)
+RETURNS TABLE (person_id uuid)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT DISTINCT participant_ids.person_id
+  FROM (
+    SELECT p_payer_id AS person_id
+    WHERE p_payer_id IS NOT NULL
+
+    UNION ALL
+
+    SELECT NULLIF(share->>'personId', '')::uuid AS person_id
+    FROM jsonb_array_elements(coalesce(p_lots, '[]'::jsonb)) lot
+    CROSS JOIN LATERAL jsonb_array_elements(coalesce(lot->'shares', '[]'::jsonb)) share
+    WHERE coalesce((share->>'shareGrams')::integer, 0) > 0
+      AND NULLIF(share->>'personId', '') IS NOT NULL
+
+    UNION ALL
+
+    SELECT NULLIF(participant->>'personId', '')::uuid AS person_id
+    FROM jsonb_array_elements(coalesce(p_lots, '[]'::jsonb)) lot
+    CROSS JOIN LATERAL jsonb_array_elements(coalesce(lot->'bagAllocations', '[]'::jsonb)) allocation
+    CROSS JOIN LATERAL jsonb_array_elements(coalesce(allocation->'participants', '[]'::jsonb)) participant
+    WHERE coalesce((participant->>'shareGrams')::integer, 0) > 0
+      AND NULLIF(participant->>'personId', '') IS NOT NULL
+
+    UNION ALL
+
+    SELECT NULLIF(buyer->>'personId', '')::uuid AS person_id
+    FROM jsonb_array_elements(coalesce(p_lots, '[]'::jsonb)) lot
+    CROSS JOIN LATERAL jsonb_array_elements(coalesce(lot->'bags', '[]'::jsonb)) bag
+    CROSS JOIN LATERAL jsonb_array_elements(coalesce(bag->'buyers', '[]'::jsonb)) buyer
+    WHERE coalesce((buyer->>'grams')::integer, 0) > 0
+      AND NULLIF(buyer->>'personId', '') IS NOT NULL
+  ) participant_ids
+  WHERE participant_ids.person_id IS NOT NULL;
+$$;
+
+CREATE OR REPLACE FUNCTION public.order_includes_person(
+  p_payer_id uuid,
+  p_lots jsonb,
+  p_person_id uuid
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.order_participant_people(p_payer_id, p_lots) participant_people
+    WHERE participant_people.person_id = p_person_id
+  );
+$$;
+
 CREATE OR REPLACE FUNCTION public.can_access_order(
   p_workspace_id uuid,
-  p_order_id uuid,
-  p_pin_required boolean
+  p_order_id uuid
 )
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT
+    public.is_workspace_member(p_workspace_id)
+    OR
     EXISTS (
       SELECT 1
       FROM public.order_participants op
       WHERE op.order_id = p_order_id
         AND op.user_id = auth.uid()
-    )
-    OR (
-      public.is_workspace_member(p_workspace_id)
-      AND NOT coalesce(p_pin_required, false)
     );
 $$;
 
@@ -1161,15 +1253,7 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS
         ON o.id = op.order_id
        AND o.workspace_id = p_workspace_id
       WHERE op.user_id = auth.uid()
-        AND (
-          o.payer_id = p_person_id
-          OR EXISTS (
-            SELECT 1
-            FROM jsonb_array_elements(o.lots) lot
-            CROSS JOIN LATERAL jsonb_array_elements(coalesce(lot->'shares', '[]'::jsonb)) share
-            WHERE share->>'personId' = p_person_id::text
-          )
-        )
+        AND public.order_includes_person(o.payer_id, o.lots, p_person_id)
     );
 $$;
 
@@ -1192,28 +1276,10 @@ BEGIN
         FROM public.orders
         WHERE id = p_order_id
       ),
-      participant_people AS (
-        SELECT DISTINCT participant_ids.person_id
-        FROM (
-          SELECT payer_id AS person_id
-          FROM order_row
-          WHERE payer_id IS NOT NULL
-
-          UNION ALL
-
-          SELECT NULLIF(share->>'personId', '')::uuid AS person_id
-          FROM order_row o
-          CROSS JOIN LATERAL jsonb_array_elements(o.lots) lot
-          CROSS JOIN LATERAL jsonb_array_elements(coalesce(lot->'shares', '[]'::jsonb)) share
-          WHERE coalesce((share->>'shareGrams')::integer, 0) > 0
-            AND NULLIF(share->>'personId', '') IS NOT NULL
-        ) participant_ids
-        WHERE participant_ids.person_id IS NOT NULL
-      ),
       participant_users AS (
         SELECT DISTINCT o.id AS order_id, p.linked_user_id AS user_id
         FROM order_row o
-        JOIN participant_people pp ON true
+        JOIN LATERAL public.order_participant_people(o.payer_id, o.lots) pp ON true
         JOIN public.people p
           ON p.id = pp.person_id
          AND p.workspace_id = o.workspace_id
@@ -1231,28 +1297,10 @@ BEGIN
     FROM public.orders
     WHERE id = p_order_id
   ),
-  participant_people AS (
-    SELECT DISTINCT participant_ids.person_id
-    FROM (
-      SELECT payer_id AS person_id
-      FROM order_row
-      WHERE payer_id IS NOT NULL
-
-      UNION ALL
-
-      SELECT NULLIF(share->>'personId', '')::uuid AS person_id
-      FROM order_row o
-      CROSS JOIN LATERAL jsonb_array_elements(o.lots) lot
-      CROSS JOIN LATERAL jsonb_array_elements(coalesce(lot->'shares', '[]'::jsonb)) share
-      WHERE coalesce((share->>'shareGrams')::integer, 0) > 0
-        AND NULLIF(share->>'personId', '') IS NOT NULL
-    ) participant_ids
-    WHERE participant_ids.person_id IS NOT NULL
-  ),
   participant_users AS (
     SELECT DISTINCT o.id AS order_id, p.linked_user_id AS user_id
     FROM order_row o
-    JOIN participant_people pp ON true
+    JOIN LATERAL public.order_participant_people(o.payer_id, o.lots) pp ON true
     JOIN public.people p
       ON p.id = pp.person_id
      AND p.workspace_id = o.workspace_id
@@ -1278,15 +1326,7 @@ BEGIN
     SELECT o.id
     FROM public.orders o
     WHERE o.workspace_id = v_workspace_id
-      AND (
-        o.payer_id = v_person_id
-        OR EXISTS (
-          SELECT 1
-          FROM jsonb_array_elements(o.lots) lot
-          CROSS JOIN LATERAL jsonb_array_elements(coalesce(lot->'shares', '[]'::jsonb)) share
-          WHERE share->>'personId' = v_person_id::text
-        )
-      )
+      AND public.order_includes_person(o.payer_id, o.lots, v_person_id)
   LOOP
     PERFORM public.sync_order_participants(v_order_id);
   END LOOP;
@@ -1321,16 +1361,16 @@ DROP POLICY IF EXISTS "Members can delete orders" ON public.orders;
 
 CREATE POLICY "Members can view orders"
   ON public.orders FOR SELECT
-  USING (public.can_access_order(workspace_id, id, pin_required));
+  USING (public.can_access_order(workspace_id, id));
 
 CREATE POLICY "Members can update orders"
   ON public.orders FOR UPDATE
-  USING (public.is_workspace_member(workspace_id) AND public.can_access_order(workspace_id, id, pin_required))
+  USING (public.is_workspace_member(workspace_id) AND public.can_access_order(workspace_id, id))
   WITH CHECK (public.is_workspace_member(workspace_id));
 
 CREATE POLICY "Members can delete orders"
   ON public.orders FOR DELETE
-  USING (public.is_workspace_member(workspace_id) AND public.can_access_order(workspace_id, id, pin_required));
+  USING (public.is_workspace_member(workspace_id) AND public.can_access_order(workspace_id, id));
 
 DO $$
 DECLARE

@@ -67,7 +67,7 @@ export function PendingAccess() {
               We found a possible match for you in Fajr Brews records.
             </div>
             <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
-              Link your account to <strong>{linkResolution.candidates[0].name}</strong> to unlock the older orders you were part of.
+              Link your account to <strong>{linkResolution.candidates[0].name}</strong> so we can show only the finalized orders you joined.
             </div>
             <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: 'var(--space-4)' }}>
               Match signal: {formatCandidateDetail(linkResolution.candidates[0])}
@@ -114,7 +114,7 @@ export function PendingAccess() {
 
         {!hasCandidates && (
           <p style={{ marginBottom: 'var(--space-6)', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-            We could not match this account to any existing Fajr Brews person record yet. If you should already be in older orders, ask an admin to check the email, phone number, or name saved for you.
+            We could not match this account to any existing Fajr Brews person record yet. If you should already be in archived orders, ask an admin to check the email, phone number, or name saved for you.
           </p>
         )}
 

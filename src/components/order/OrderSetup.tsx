@@ -54,12 +54,11 @@ export function OrderSetup({ order, registerCommit }: Props) {
     people,
     roasters,
     orders,
+    accessStatus,
+    roasterFeatureStatus,
+    roasterFeatureMessage,
     updateOrder,
     createRoaster,
-    setOrderPin,
-    clearOrderPin,
-    sessionUi,
-    setOrderProtectionOpen,
   } = useAppStore();
 
   const [name, setName] = useState(order.name);
@@ -73,13 +72,6 @@ export function OrderSetup({ order, registerCommit }: Props) {
     order.payerBank?.beneficiary ||
     order.payerBank?.branch
   ));
-  const [newPin, setNewPin] = useState('');
-  const [confirmPin, setConfirmPin] = useState('');
-  const [pinSaving, setPinSaving] = useState(false);
-  const [pinError, setPinError] = useState('');
-  const [pinSuccess, setPinSuccess] = useState('');
-
-  const protectionOpen = sessionUi.orderProtectionOpen[order.id] ?? Boolean(order.pinRequired);
   const hydrationRef = useRef(true);
   const bankHydrationRef = useRef(true);
 
@@ -100,14 +92,6 @@ export function OrderSetup({ order, registerCommit }: Props) {
       order.payerBank?.beneficiary ||
       order.payerBank?.branch
     ));
-    setNewPin('');
-    setConfirmPin('');
-    setPinError('');
-    setPinSuccess('');
-
-    if (sessionUi.orderProtectionOpen[order.id] === undefined) {
-      setOrderProtectionOpen(order.id, Boolean(order.pinRequired));
-    }
   }, [order.id]);
 
   useEffect(() => {
@@ -226,52 +210,6 @@ export function OrderSetup({ order, registerCommit }: Props) {
     return roaster;
   }
 
-  function handleProtectionToggle() {
-    setOrderProtectionOpen(order.id, !protectionOpen);
-  }
-
-  async function handleSetPin() {
-    if (newPin.length < 4 || newPin.length > 6) {
-      setPinError('PIN must be 4-6 digits.');
-      return;
-    }
-    if (newPin !== confirmPin) {
-      setPinError('PINs do not match.');
-      return;
-    }
-    setPinSaving(true);
-    setPinError('');
-    setPinSuccess('');
-    try {
-      await setOrderPin(order.id, newPin);
-      setOrderProtectionOpen(order.id, true);
-      setNewPin('');
-      setConfirmPin('');
-      setPinSuccess('PIN enabled for this order.');
-    } catch {
-      setPinError('Failed to set PIN. Please try again.');
-    } finally {
-      setPinSaving(false);
-    }
-  }
-
-  async function handleClearPin() {
-    if (!confirm('Remove PIN protection from this order?')) return;
-    setPinSaving(true);
-    setPinError('');
-    setPinSuccess('');
-    try {
-      await clearOrderPin(order.id);
-      setPinSuccess('PIN removed.');
-      setNewPin('');
-      setConfirmPin('');
-    } catch {
-      setPinError('Failed to remove PIN. Please try again.');
-    } finally {
-      setPinSaving(false);
-    }
-  }
-
   return (
     <div className="wizard-step-stack">
       <section className="wizard-panel">
@@ -315,6 +253,10 @@ export function OrderSetup({ order, registerCommit }: Props) {
           orders={orders}
           roasters={roasters}
           selectedRoasterId={selectedRoasterId || null}
+          selectedRoasterSnapshot={order.roasterSnapshot}
+          featureStatus={roasterFeatureStatus}
+          featureMessage={roasterFeatureMessage}
+          canManageRoasters={accessStatus === 'member'}
           onSelectRoaster={handleRoasterSelect}
           onCreateRoaster={handleCreateRoaster}
         />
@@ -392,14 +334,15 @@ export function OrderSetup({ order, registerCommit }: Props) {
         </div>
       </CollapsiblePanel>
 
-      <CollapsiblePanel
-        open={protectionOpen}
-        onToggle={handleProtectionToggle}
-        title="Order protection"
-        summary={order.pinRequired ? 'PIN required for included people' : 'Optional'}
-      >
+      <section className="wizard-panel">
+        <div className="wizard-card-header">
+          <div>
+            <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Privacy</div>
+            <div className="wizard-card-title">Finalized order visibility</div>
+          </div>
+        </div>
         <p className="wizard-card-copy">
-          If PIN protection is enabled, only people included in this order can open it, and the PIN will be required.
+          Finalized orders are visible to workspace members and the people included in this order. No extra PIN is needed to view them.
         </p>
 
         <div className="wizard-inline-note">
@@ -422,59 +365,9 @@ export function OrderSetup({ order, registerCommit }: Props) {
         )}
 
         <span className="field-hint">
-          Access is matched automatically using saved email, phone, or a cautious confirmed name match on each included person. People without matching app accounts will still appear in the order, but they will not be able to open a PIN-protected order yet.
+          Participant visibility is matched automatically using saved email first, then phone, then a cautious confirmed name match as a last resort. People without a linked app account will still appear in the order, but they will need to confirm their profile before the archive becomes visible.
         </span>
-
-        {order.pinRequired ? (
-          <div className="wizard-inline-actions">
-            <button className="btn btn-secondary" onClick={handleClearPin} disabled={pinSaving}>
-              {pinSaving ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Remove PIN'}
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="wizard-card-grid">
-              <div className="field">
-                <label className="field-label">Order PIN</label>
-                <input
-                  className="input"
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={newPin}
-                  onChange={(event) => setNewPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="4 to 6 digits"
-                />
-              </div>
-              <div className="field">
-                <label className="field-label">Confirm PIN</label>
-                <input
-                  className="input"
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={confirmPin}
-                  onChange={(event) => setConfirmPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="Repeat PIN"
-                />
-              </div>
-            </div>
-
-            <div className="wizard-inline-actions">
-              <button
-                className="btn btn-primary"
-                onClick={handleSetPin}
-                disabled={pinSaving || newPin.length < 4 || newPin !== confirmPin}
-              >
-                {pinSaving ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Enable PIN protection'}
-              </button>
-            </div>
-          </>
-        )}
-
-        {pinError && <div className="alert alert-error">{pinError}</div>}
-        {pinSuccess && <div className="alert alert-success">{pinSuccess}</div>}
-      </CollapsiblePanel>
+      </section>
     </div>
   );
 }
