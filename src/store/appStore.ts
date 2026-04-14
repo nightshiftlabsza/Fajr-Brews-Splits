@@ -433,6 +433,22 @@ export const getCurrentOrder = (state: AppStore): Order | null => {
   return state.orders.find((o) => o.id === state.currentOrderId) ?? null;
 };
 
+// ─── Check for a cached Supabase session (skips splash on tab restore) ──────
+const hasCachedSession = (() => {
+  try {
+    const key = Object.keys(localStorage).find(
+      (k) => k.startsWith('sb-') && k.endsWith('-auth-token'),
+    );
+    if (!key) return false;
+    const raw = localStorage.getItem(key);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return Boolean(parsed?.access_token);
+  } catch {
+    return false;
+  }
+})();
+
 // ─── Store ────────────────────────────────────────────────────
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -449,7 +465,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   roasterFeatureStatus: 'idle',
   roasterFeatureMessage: null,
   settings: { theme: 'emerald', themeMode: 'light' },
-  isInitialized: false,
+  isInitialized: hasCachedSession,
   isLoading: false,
   error: null,
   sessionUi: {
@@ -1283,7 +1299,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // ── Realtime ──────────────────────────────────────────────
   _setupRealtime: (workspaceId) => {
     const existing = get()._realtimeChannel;
-    if (existing) existing.unsubscribe();
+    // Already subscribed — no need to rebuild the WebSocket channel
+    if (existing) return;
 
     const channel = supabase
       .channel(`workspace:${workspaceId}`)

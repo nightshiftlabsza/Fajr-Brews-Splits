@@ -354,13 +354,12 @@ export function recalculateBagGrams(bag: Bag, gramsPerBag: number): Bag {
   }
   if (bag.splitMode === 'equal') {
     const n = bag.buyers.length;
-    const base = Math.floor(gramsPerBag / n);
-    const remainder = gramsPerBag - base * n;
+    const base = Math.round(gramsPerBag / n);
     return {
       ...bag,
       buyers: bag.buyers.map((b, i) => ({
         ...b,
-        grams: i === n - 1 ? base + remainder : base,
+        grams: i === n - 1 ? gramsPerBag - base * (n - 1) : base,
       })),
     };
   }

@@ -27,7 +27,7 @@ When your group imports specialty coffee, the roaster applies tax deductions and
 | State | Zustand |
 | Backend | Supabase (Postgres + Auth + Realtime) |
 | PDF | jsPDF |
-| Deploy | Vercel (static) |
+| Deploy | Cloudflare Pages |
 
 ---
 
@@ -59,6 +59,8 @@ Open your Supabase project → **SQL Editor** → paste the full contents of `su
 
 This creates all tables, RLS policies, realtime publications, and seeds the Fajr Brews workspace.
 
+If your Supabase project was already running before the roaster feature was added, also run the dedicated patch in `supabase/migrations/20260330_roaster_support.sql`. That file safely adds the `roasters` table, `orders.roaster_id`, `orders.roaster_snapshot`, the `roaster-logos` bucket, and the related policies without rerunning the whole schema.
+
 ### 4. Add yourself as the first workspace member
 
 After running the schema, you need to:
@@ -84,10 +86,11 @@ After running the schema, you need to:
 
 After running `schema.sql`, confirm these in the Supabase Dashboard:
 
-1. **Database → Replication**: Confirm `people` and `orders` tables appear in the `supabase_realtime` publication. If not, enable them manually.
-2. **Database → Tables**: Confirm all 6 tables exist (`profiles`, `workspaces`, `workspace_members`, `people`, `orders`, `user_settings`)
-3. **Auth → Settings**: Optionally disable email confirmation for easier testing (`Auth → Settings → Disable email confirmations`)
-4. **Auth → Users**: After signing up, add your UUID to `workspace_members` via SQL Editor (step 4 above)
+1. **Database → Replication**: Confirm `people`, `orders`, and `roasters` appear in the `supabase_realtime` publication. If not, enable them manually.
+2. **Database → Tables**: Confirm the main app tables exist, including `roasters`.
+3. **Storage → Buckets**: Confirm the public `roaster-logos` bucket exists.
+4. **Auth → Settings**: Optionally disable email confirmation for easier testing (`Auth → Settings → Disable email confirmations`)
+5. **Auth → Users**: After signing up, add your UUID to `workspace_members` via SQL Editor (step 4 above)
 
 ---
 
@@ -101,29 +104,22 @@ npm run build
 
 Output goes to `dist/`.
 
-### Deploy to Vercel
+### Deploy to Cloudflare Pages
 
-**Option A: Vercel CLI**
+Use Cloudflare Pages with these settings:
 
-```bash
-npx vercel --prod
-```
+- Build command: `npm run build`
+- Build output directory: `dist`
+- Production branch: `main`
 
-Set these environment variables in Vercel Dashboard → Settings → Environment Variables:
+Set these environment variables in Cloudflare Pages:
 
 ```
 VITE_SUPABASE_URL=https://evukrughkgpzjftwkinh.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_NHzJCQi5M_ghXCwZp92jEg_kmlutoe1
 ```
 
-**Option B: GitHub + Vercel**
-
-1. Push to GitHub
-2. Import the repo in vercel.com
-3. Set the two env vars above
-4. Deploy
-
-The `vercel.json` handles SPA routing (all paths → `index.html`).
+For client-side routes such as password reset, make sure Cloudflare Pages serves `index.html` for app routes instead of returning a 404.
 
 ---
 
@@ -261,7 +257,7 @@ This is a safety net. Supabase is the primary source of truth.
 
 The `src/data/defaultDirectory.ts` file contains placeholder people with dummy phone numbers. These are only used as fallback seed data — in production they are replaced by the real People table data in Supabase.
 
-**If you bundle real contact details** into this file, be aware that anyone who can access your Vercel deployment (or the source code) will be able to read those details. Only do this if the group is comfortable with that.
+**If you bundle real contact details** into this file, be aware that anyone who can access your public deployment (or the source code) will be able to read those details. Only do this if the group is comfortable with that.
 
 ---
 

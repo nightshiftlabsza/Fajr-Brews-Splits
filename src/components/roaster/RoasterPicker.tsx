@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Order, Roaster } from '../../types';
+import type { Order, Roaster, RoasterFeatureStatus, RoasterSnapshot } from '../../types';
 import { isValidRoasterLogoFile, normalizeRoasterName } from '../../lib/roasters';
 import { RoasterAvatar } from './RoasterAvatar';
 
@@ -9,6 +9,10 @@ interface RoasterPickerProps {
   orders: Order[];
   roasters: Roaster[];
   selectedRoasterId: string | null;
+  selectedRoasterSnapshot?: RoasterSnapshot | null;
+  featureStatus: RoasterFeatureStatus;
+  featureMessage?: string | null;
+  canManageRoasters: boolean;
   onSelectRoaster: (roaster: Roaster | null) => void;
   onCreateRoaster: (data: { name: string; logoFile?: File | null }) => Promise<Roaster>;
 }
@@ -17,6 +21,10 @@ export function RoasterPicker({
   orders,
   roasters,
   selectedRoasterId,
+  selectedRoasterSnapshot,
+  featureStatus,
+  featureMessage,
+  canManageRoasters,
   onSelectRoaster,
   onCreateRoaster,
 }: RoasterPickerProps) {
@@ -28,6 +36,22 @@ export function RoasterPicker({
   const [submitting, setSubmitting] = useState(false);
 
   const selectedRoaster = roasters.find((roaster) => roaster.id === selectedRoasterId) ?? null;
+  const selectedRoasterDisplay = selectedRoaster ?? (
+    selectedRoasterSnapshot?.name
+      ? {
+        id: selectedRoasterSnapshot.id ?? 'snapshot',
+        name: selectedRoasterSnapshot.name,
+        logoUrl: selectedRoasterSnapshot.logoUrl,
+      }
+      : null
+  );
+  const creationAvailable = canManageRoasters && (featureStatus === 'ready' || featureStatus === 'empty');
+  const pickerDisabled = featureStatus === 'unavailable' || !canManageRoasters;
+  const inlineWarning = featureStatus === 'unavailable'
+    ? (featureMessage ?? 'Roasters are unavailable until the Supabase roaster migration is applied.')
+    : (!canManageRoasters && featureStatus === 'unsupported-for-user')
+      ? 'Only workspace members can create or manage saved roasters.'
+      : featureMessage ?? '';
 
   const roasterUsage = useMemo(() => {
     const usage = new Map<string, string>();
@@ -145,6 +169,7 @@ export function RoasterPicker({
             value={selectedRoasterId ?? ''}
             onChange={(event) => handleSelectChange(event.target.value)}
             aria-label="Select roaster"
+            disabled={pickerDisabled}
           >
             <option value="">No roaster selected</option>
             {visibleRoasters.map((roaster) => (
@@ -153,28 +178,37 @@ export function RoasterPicker({
               </option>
             ))}
           </select>
-          <button
-            className="btn btn-secondary btn-sm"
-            type="button"
-            onClick={() => setCreateOpen((current) => !current)}
-          >
-            {createOpen ? 'Close' : 'Add roaster'}
-          </button>
+          {canManageRoasters && (
+            <button
+              className="btn btn-secondary btn-sm"
+              type="button"
+              onClick={() => setCreateOpen((current) => !current)}
+              disabled={!creationAvailable}
+            >
+              {createOpen ? 'Close' : 'Add roaster'}
+            </button>
+          )}
         </div>
 
-        {selectedRoaster && (
+        {selectedRoasterDisplay && (
           <div className="roaster-selected-card">
             <RoasterAvatar
-              name={selectedRoaster.name}
-              logoUrl={selectedRoaster.logoUrl}
+              name={selectedRoasterDisplay.name}
+              logoUrl={selectedRoasterDisplay.logoUrl}
               size={40}
             />
             <div>
-              <div className="roaster-selected-name">{selectedRoaster.name}</div>
-              <div className="field-hint">This roaster will be saved on the order separately from the order name.</div>
+              <div className="roaster-selected-name">{selectedRoasterDisplay.name}</div>
+              <div className="field-hint">
+                {selectedRoaster
+                  ? 'This roaster will be saved on the order separately from the order name.'
+                  : 'This order still keeps its saved roaster snapshot even while live roasters are unavailable.'}
+              </div>
             </div>
           </div>
         )}
+
+        {inlineWarning && <div className="alert alert-warning">{inlineWarning}</div>}
 
         {createOpen && (
           <div className="roaster-create-panel">
@@ -237,7 +271,7 @@ export function RoasterPicker({
                 className="btn btn-primary"
                 type="button"
                 onClick={() => void handleCreateRoaster()}
-                disabled={submitting}
+                disabled={submitting || !creationAvailable}
               >
                 {submitting ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Save roaster'}
               </button>

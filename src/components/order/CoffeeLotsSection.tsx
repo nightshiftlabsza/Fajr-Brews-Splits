@@ -743,15 +743,13 @@ export function BagCard({
 
   // ── Split: add a buyer row ──
   function addBuyer() {
-    const usedIds = new Set(bag.buyers.map((b) => b.personId).filter(Boolean));
-    const nextPerson = orderedPeople.find((p) => !usedIds.has(p.id));
-    const newBuyer: BagBuyer = { id: genId(), personId: nextPerson?.id || '', grams: 0 };
+    const newBuyer: BagBuyer = { id: genId(), personId: '', grams: 0 };
     const updatedBag: Bag = { ...bag, buyers: [...bag.buyers, newBuyer] };
 
     if (bag.splitMode === 'equal') {
-      replaceBag(recalculateBagGrams(updatedBag, gramsPerBag), nextPerson ? [nextPerson.id] : []);
+      replaceBag(recalculateBagGrams(updatedBag, gramsPerBag));
     } else {
-      replaceBag(updatedBag, nextPerson ? [nextPerson.id] : []);
+      replaceBag(updatedBag);
     }
   }
 

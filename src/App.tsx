@@ -88,6 +88,9 @@ export default function App() {
     void initialize();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      // Token refresh doesn't change user identity or data — skip re-init
+      if (event === 'TOKEN_REFRESHED') return;
+
       if (event === 'PASSWORD_RECOVERY') {
         setAuthMode('recovery');
         updatePath(RESET_PASSWORD_PATH, {
