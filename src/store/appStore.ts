@@ -11,6 +11,7 @@ import {
   upsertPersonById,
   upsertRoasterById,
 } from '../lib/storeState';
+import { assertCanPersistOrder } from '../lib/orderIntegrity';
 import { getNextActiveOrderId, getPreferredActiveOrderId } from '../lib/orderLifecycle';
 import { createRoasterSnapshot, normalizeRoasterName } from '../lib/roasters';
 import type {
@@ -67,6 +68,7 @@ function mapOrder(row: DbOrder): Order {
       ? row.payments
       : {},
     isArchived: row.is_archived,
+    ownerId: row.owner_id ?? row.created_by ?? undefined,
     createdBy: row.created_by ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -110,6 +112,7 @@ interface AppStore {
   // ── UI ────────────────────────────────────────────────────
   isInitialized: boolean;
   isLoading: boolean;
+  isSyncing: boolean;
   error: string | null;
   sessionUi: {
     orderWizardSteps: Record<string, OrderWizardStep>;
@@ -425,6 +428,7 @@ async function uploadRoasterLogo(roasterId: string, file: File): Promise<{ logoP
 
 const orderWriteChains = new Map<string, Promise<void>>();
 const optimisticOrderSnapshots = new Map<string, Order>();
+let initializePromise: Promise<void> | null = null;
 
 // ─── Computed getter ─────────────────────────────────────────
 
@@ -467,6 +471,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   settings: { theme: 'emerald', themeMode: 'light' },
   isInitialized: hasCachedSession,
   isLoading: false,
+  isSyncing: false,
   error: null,
   sessionUi: {
     orderWizardSteps: {},
@@ -476,13 +481,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // ── Initialize ────────────────────────────────────────────
   initialize: async (options) => {
+    if (initializePromise) {
+      return initializePromise;
+    }
+
+    initializePromise = (async () => {
     const silent = options?.silent ?? false;
     const shouldBlock = !silent || !get().isInitialized;
 
     if (shouldBlock) {
-      set({ isLoading: true, error: null });
+      set({ isLoading: true, isSyncing: false, error: null });
     } else {
-      set({ error: null });
+      set({ isSyncing: true, error: null });
     }
 
     try {
@@ -503,6 +513,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           roasterFeatureMessage: null,
           isInitialized: true,
           isLoading: false,
+          isSyncing: false,
         });
         return;
       }
@@ -536,7 +547,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const linkedPersonId = linkResolution.linkedPersonId ?? linkResolution.person?.personId ?? null;
       const hasWorkspaceAccess = Boolean(memberRow) || Boolean(linkedPersonId);
 
-      if (hasWorkspaceAccess) {
+      if (memberRow) {
         // Setup Realtime before fetch so no events are missed during the fetch window
         get()._setupRealtime(WORKSPACE_ID);
       } else {
@@ -554,29 +565,64 @@ export const useAppStore = create<AppStore>((set, get) => ({
       let roasterFeatureMessage: string | null = null;
 
       if (hasWorkspaceAccess) {
-        const [{ data: fetchedPeopleRows, error: peopleError }, { data: fetchedOrderRows, error: orderError }] = await Promise.all([
-          supabase
-            .from('people')
-            .select('*')
-            .eq('workspace_id', WORKSPACE_ID)
-            .order('name'),
-          supabase
-            .from('orders')
-            .select('*')
-            .eq('workspace_id', WORKSPACE_ID)
-            .order('order_date', { ascending: false }),
-        ]);
+        const { data: fetchedPeopleRows, error: peopleError } = await supabase
+          .from('people')
+          .select('*')
+          .eq('workspace_id', WORKSPACE_ID)
+          .order('name');
 
         if (peopleError) {
           throw new Error(getErrorMessage(peopleError));
         }
 
-        if (orderError) {
-          throw new Error(getErrorMessage(orderError));
+        peopleRows = fetchedPeopleRows as DbPerson[] | null;
+
+        const canFetchAllOrders = memberRow?.role === 'owner' || memberRow?.role === 'admin';
+        const fetchedOrdersById = new Map<string, DbOrder>();
+
+        if (canFetchAllOrders) {
+          const { data: fetchedOrderRows, error: orderError } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('workspace_id', WORKSPACE_ID)
+            .order('order_date', { ascending: false });
+
+          if (orderError) {
+            throw new Error(getErrorMessage(orderError));
+          }
+
+          for (const row of (fetchedOrderRows as DbOrder[] | null) ?? []) {
+            fetchedOrdersById.set(row.id, row);
+          }
+        } else if (memberRow) {
+          const { data: ownedOrderRows, error: ownedOrderError } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('workspace_id', WORKSPACE_ID)
+            .or(`owner_id.eq.${session.user.id},created_by.eq.${session.user.id}`)
+            .order('order_date', { ascending: false });
+
+          if (ownedOrderError) {
+            throw new Error(getErrorMessage(ownedOrderError));
+          }
+
+          for (const row of (ownedOrderRows as DbOrder[] | null) ?? []) {
+            fetchedOrdersById.set(row.id, row);
+          }
+        } else if (linkedPersonId) {
+          const { data: scopedOrderRows, error: scopedOrderError } = await supabase
+            .rpc('get_my_participant_orders');
+
+          if (scopedOrderError) {
+            throw new Error(getErrorMessage(scopedOrderError));
+          }
+
+          for (const row of (scopedOrderRows as DbOrder[] | null) ?? []) {
+            fetchedOrdersById.set(row.id, row);
+          }
         }
 
-        peopleRows = fetchedPeopleRows as DbPerson[] | null;
-        orderRows = fetchedOrderRows as DbOrder[] | null;
+        orderRows = Array.from(fetchedOrdersById.values());
 
         if (memberRow) {
           const { data: fetchedRoasterRows, error: roasterError } = await supabase
@@ -632,10 +678,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
         roasterFeatureMessage,
         isInitialized: true,
         isLoading: false,
+        isSyncing: false,
       });
     } catch (err) {
-      set({ error: String(err), isInitialized: true, isLoading: false });
+      set({ error: String(err), isInitialized: true, isLoading: false, isSyncing: false });
+    } finally {
+      initializePromise = null;
     }
+    })();
+
+    return initializePromise;
   },
 
   // ── Auth ──────────────────────────────────────────────────
@@ -714,6 +766,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       currentOrderId: null,
       roasterFeatureStatus: 'idle',
       roasterFeatureMessage: null,
+      isInitialized: true,
+      isLoading: false,
+      isSyncing: false,
       sessionUi: {
         orderWizardSteps: {},
         orderProtectionOpen: {},
@@ -984,6 +1039,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         fees: data.fees,
         payments: data.payments,
         is_archived: false,
+        owner_id: userId ?? null,
         created_by: userId ?? null,
       })
       .select()
@@ -1000,31 +1056,41 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   updateOrder: async (id, data) => {
-    const currentOrder = get().orders.find((order) => order.id === id);
-    if (!currentOrder) {
+    const targetOrder = get().orders.find((order) => order.id === id);
+    if (!targetOrder) {
       return;
     }
 
-    const optimisticOrder = mergeOrderPatch(currentOrder, data);
+    if (targetOrder.isArchived && data.isArchived === false) {
+      throw new Error('Saved historical orders cannot be moved back to the current order flow.');
+    }
+
+    const mergedOrder = mergeOrderPatch(targetOrder, data);
+    const strictIntegrity = targetOrder.isArchived || mergedOrder.isArchived;
+    const optimisticOrder = assertCanPersistOrder(mergedOrder, {
+      people: get().people,
+      strict: strictIntegrity,
+    });
     optimisticOrderSnapshots.set(id, optimisticOrder);
     set((s) => ({
       orders: s.orders.map((order) => (order.id === id ? optimisticOrder : order)),
     }));
 
     const dbData: Record<string, unknown> = {};
-    if (data.name !== undefined) dbData.name = data.name;
-    if (data.orderDate !== undefined) dbData.order_date = data.orderDate;
-    if (data.roasterId !== undefined) dbData.roaster_id = data.roasterId;
-    if (data.roasterSnapshot !== undefined) dbData.roaster_snapshot = data.roasterSnapshot;
-    if (data.payerId !== undefined) dbData.payer_id = data.payerId;
-    if (data.payerBank !== undefined) dbData.payer_bank = data.payerBank;
-    if (data.referenceTemplate !== undefined) dbData.reference_template = data.referenceTemplate;
-    if (data.payerNote !== undefined) dbData.payer_note = data.payerNote || null;
-    if (data.goodsTotalZar !== undefined) dbData.goods_total_zar = data.goodsTotalZar;
-    if (data.lots !== undefined) dbData.lots = data.lots;
-    if (data.fees !== undefined) dbData.fees = data.fees;
-    if (data.payments !== undefined) dbData.payments = data.payments;
-    if (data.isArchived !== undefined) dbData.is_archived = data.isArchived;
+    if (data.name !== undefined) dbData.name = optimisticOrder.name;
+    if (data.orderDate !== undefined) dbData.order_date = optimisticOrder.orderDate;
+    if (data.roasterId !== undefined) dbData.roaster_id = optimisticOrder.roasterId;
+    if (data.roasterSnapshot !== undefined) dbData.roaster_snapshot = optimisticOrder.roasterSnapshot;
+    if (data.payerId !== undefined) dbData.payer_id = optimisticOrder.payerId;
+    if (data.payerBank !== undefined) dbData.payer_bank = optimisticOrder.payerBank;
+    if (data.referenceTemplate !== undefined) dbData.reference_template = optimisticOrder.referenceTemplate;
+    if (data.payerNote !== undefined) dbData.payer_note = optimisticOrder.payerNote || null;
+    if (data.goodsTotalZar !== undefined) dbData.goods_total_zar = optimisticOrder.goodsTotalZar;
+    if (data.lots !== undefined || strictIntegrity) dbData.lots = optimisticOrder.lots;
+    if (data.fees !== undefined || strictIntegrity) dbData.fees = optimisticOrder.fees;
+    if (data.payments !== undefined || strictIntegrity) dbData.payments = optimisticOrder.payments;
+    if (data.isArchived !== undefined || strictIntegrity) dbData.is_archived = optimisticOrder.isArchived;
+    if (data.ownerId !== undefined) dbData.owner_id = optimisticOrder.ownerId;
 
     const previousChain = orderWriteChains.get(id) ?? Promise.resolve();
     const nextChain = previousChain

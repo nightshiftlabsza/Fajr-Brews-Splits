@@ -1,5 +1,5 @@
 import type { Order, Person, PersonCalculation } from '../types';
-import { formatZAR, resolveReference } from './formatters';
+import { buildInvoiceModel, buildPaymentSummaryText } from './invoiceFormatter';
 
 interface SharePayload {
   order: Order;
@@ -9,35 +9,7 @@ interface SharePayload {
 }
 
 function buildPaymentText({ order, person, payer, calc }: SharePayload): string {
-  const ref = resolveReference(
-    order.referenceTemplate,
-    order.name,
-    person.name,
-    order.orderDate
-  );
-
-  const lines: string[] = [
-    `Fajr Brews — Coffee Splitter`,
-    `Order: ${order.name}`,
-    ``,
-    `Amount due: *${formatZAR(calc.totalFinal)}*`,
-    `Payment reference: ${ref}`,
-    ``,
-    `Pay to:`,
-    `  Beneficiary: ${order.payerBank.beneficiary || payer?.name || 'See payer'}`,
-    `  Bank: ${order.payerBank.bankName}`,
-    `  Account: ${order.payerBank.accountNumber}`,
-  ];
-
-  if (order.payerBank.branch) {
-    lines.push(`  Branch: ${order.payerBank.branch}`);
-  }
-
-  if (order.payerNote) {
-    lines.push(``, `Note: ${order.payerNote}`);
-  }
-
-  return lines.join('\n');
+  return buildPaymentSummaryText({ order, person, payer, calc });
 }
 
 export async function copyPaymentSummary(payload: SharePayload): Promise<void> {
@@ -63,12 +35,7 @@ export function openWhatsApp(payload: SharePayload): void {
 
 export function openEmail(payload: SharePayload): void {
   const email = payload.person.email;
-  const ref = resolveReference(
-    payload.order.referenceTemplate,
-    payload.order.name,
-    payload.person.name,
-    payload.order.orderDate
-  );
+  const ref = buildInvoiceModel(payload).reference;
   const subject = encodeURIComponent(`Fajr Brews Invoice — ${payload.order.name} — ${ref}`);
   const body = encodeURIComponent(buildPaymentText(payload));
 

@@ -1,5 +1,6 @@
 import type { Order } from '../types';
 import { calculate } from './calculations';
+import { normalizeFeeAllocationType } from './invoiceFormatter';
 
 function fallbackParticipantIds(order: Order): string[] {
   const personIds = new Set<string>();
@@ -9,6 +10,25 @@ function fallbackParticipantIds(order: Order): string[] {
       if (share.personId && share.shareGrams > 0) {
         personIds.add(share.personId);
       }
+    }
+    for (const bag of lot.bags ?? []) {
+      for (const buyer of bag.buyers) {
+        if (buyer.personId && buyer.grams > 0) {
+          personIds.add(buyer.personId);
+        }
+      }
+    }
+  }
+
+  for (const fee of order.fees) {
+    if (normalizeFeeAllocationType(fee.allocationType) === 'specific_person' && fee.personId && fee.amountZar > 0) {
+      personIds.add(fee.personId);
+    }
+  }
+
+  for (const [personId, payment] of Object.entries(order.payments)) {
+    if (payment && payment.status !== 'unpaid') {
+      personIds.add(personId);
     }
   }
 

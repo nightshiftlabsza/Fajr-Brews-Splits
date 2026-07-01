@@ -324,3 +324,90 @@ describe('calculate() — fixed_shared fee guard: zero eligible people', () => {
     expect(result.isValid).toBe(false);
   });
 });
+
+describe('calculate() - person-specific fees and rounding', () => {
+  it('charges a specific-person fee only to the selected person and counts them as a participant', () => {
+    const order: Order = {
+      ...testOrder,
+      goodsTotalZar: 100,
+      payerId: PERSON_A,
+      lots: [
+        {
+          id: 'lot-1',
+          name: 'Pastel Hour',
+          foreignPricePerBag: 20,
+          gramsPerBag: 250,
+          quantity: 1,
+          shares: [{ id: 'share-a', personId: PERSON_A, shareGrams: 250, bagIndex: 0 }],
+          bags: [
+            {
+              id: 'bag-1',
+              splitMode: 'full',
+              buyers: [{ id: 'buyer-a', personId: PERSON_A, grams: 250 }],
+            },
+          ],
+        },
+      ],
+      fees: [
+        { id: 'fee-pudo', label: 'PUDO courier', amountZar: 60, allocationType: 'specific_person', personId: PERSON_B },
+      ],
+    };
+
+    const result = calculate(order, personNames);
+
+    expect(result.isValid).toBe(true);
+    expect(result.personIds).toContain(PERSON_B);
+    expect(result.personCalcs[PERSON_B].totalGrams).toBe(0);
+    expect(result.personCalcs[PERSON_B].feesZar).toBe(60);
+    expect(result.personCalcs[PERSON_B].feeBreakdowns).toEqual([
+      expect.objectContaining({
+        feeId: 'fee-pudo',
+        allocationType: 'specific_person',
+        amountZar: 60,
+        personId: PERSON_B,
+      }),
+    ]);
+    expect(result.personCalcs[PERSON_A].feeBreakdowns).toHaveLength(0);
+  });
+
+  it('rounds non-payers down and lets the payer absorb the remaining cents', () => {
+    const order: Order = {
+      ...testOrder,
+      goodsTotalZar: 100,
+      payerId: PERSON_A,
+      lots: [
+        {
+          id: 'lot-1',
+          name: 'Pastel Hour',
+          foreignPricePerBag: 30,
+          gramsPerBag: 300,
+          quantity: 1,
+          shares: [
+            { id: 'share-a', personId: PERSON_A, shareGrams: 100, bagIndex: 0 },
+            { id: 'share-b', personId: PERSON_B, shareGrams: 100, bagIndex: 0 },
+            { id: 'share-c', personId: PERSON_C, shareGrams: 100, bagIndex: 0 },
+          ],
+          bags: [
+            {
+              id: 'bag-1',
+              splitMode: 'equal',
+              buyers: [
+                { id: 'buyer-a', personId: PERSON_A, grams: 100 },
+                { id: 'buyer-b', personId: PERSON_B, grams: 100 },
+                { id: 'buyer-c', personId: PERSON_C, grams: 100 },
+              ],
+            },
+          ],
+        },
+      ],
+      fees: [],
+    };
+
+    const result = calculate(order, personNames);
+
+    expect(result.personCalcs[PERSON_B].totalFinal).toBe(33.33);
+    expect(result.personCalcs[PERSON_C].totalFinal).toBe(33.33);
+    expect(result.personCalcs[PERSON_A].totalFinal).toBe(33.34);
+    expect(result.roundingAbsorbed).toBeCloseTo(0.006666, 5);
+  });
+});

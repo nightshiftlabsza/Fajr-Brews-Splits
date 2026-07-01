@@ -83,6 +83,7 @@ function getBagToneLabel(bag: Bag, gramsPerBag: number): { label: string; tone: 
 
 interface Props {
   order: Order;
+  onOrderChange?: (patch: Partial<Order>) => void | Promise<void>;
 }
 
 interface BuyerModalTarget {
@@ -104,8 +105,9 @@ const emptyLotForm: LotFormState = {
   initialBagCount: '1',
 };
 
-export function CoffeeLotsSection({ order }: Props) {
+export function CoffeeLotsSection({ order, onOrderChange }: Props) {
   const { people, addPerson, updateOrder } = useAppStore();
+  const patchOrder = onOrderChange ?? ((patch: Partial<Order>) => updateOrder(order.id, patch));
   const [editingLotId, setEditingLotId] = useState<string | 'new' | null>(null);
   const [expandedLotId, setExpandedLotId] = useState<string | null>(() => getPreferredExpandedLotId(order.lots));
   const [lotForm, setLotForm] = useState<LotFormState>(emptyLotForm);
@@ -173,7 +175,7 @@ export function CoffeeLotsSection({ order }: Props) {
       const newBags = createUnassignedBags(initialBagCount);
       const serialized = serializeLotFromBags(newBags);
       const newLotId = genId();
-      void updateOrder(order.id, {
+      void patchOrder({
         lots: [
           ...order.lots,
           {
@@ -214,7 +216,7 @@ export function CoffeeLotsSection({ order }: Props) {
     }
 
     const serialized = serializeLotFromBags(nextBags);
-    void updateOrder(order.id, {
+    void patchOrder({
       lots: order.lots.map((lot) => (lot.id === editingLotId
         ? {
             ...lot,
@@ -232,7 +234,7 @@ export function CoffeeLotsSection({ order }: Props) {
 
   function deleteLot(lotId: string) {
     const remainingLots = order.lots.filter((lot) => lot.id !== lotId);
-    void updateOrder(order.id, { lots: remainingLots });
+    void patchOrder({ lots: remainingLots });
     if (editingLotId === lotId) setEditingLotId(null);
     if (expandedLotId === lotId) setExpandedLotId(getPreferredExpandedLotId(remainingLots));
   }
@@ -240,7 +242,7 @@ export function CoffeeLotsSection({ order }: Props) {
   function updateBags(lotId: string, bags: Bag[], touchedPersonIds: string[] = []) {
     touchedPersonIds.forEach(rememberBuyer);
     const serialized = serializeLotFromBags(bags);
-    void updateOrder(order.id, {
+    void patchOrder({
       lots: order.lots.map((lot) => (lot.id === lotId ? { ...lot, ...serialized } : lot)),
     });
   }
@@ -261,6 +263,12 @@ export function CoffeeLotsSection({ order }: Props) {
         email: values.email || undefined,
         note: values.note || undefined,
       });
+
+      if (activeBuyerBag.splitMode === 'full' && activeBuyerBag.buyers.some((buyer) => buyer.personId)) {
+        rememberBuyer(person.id);
+        setBuyerModalTarget(null);
+        return;
+      }
 
       const nextBags = normalizeLotToBags(activeBuyerLot).map((bag) => {
         if (bag.id !== activeBuyerBag.id) return bag;
@@ -298,7 +306,11 @@ export function CoffeeLotsSection({ order }: Props) {
           <div className="wizard-modal-sheet" onClick={(event) => event.stopPropagation()}>
             <PersonEditor
               title="Add new buyer"
-              description={`This buyer will be added to the shared directory and assigned to Bag ${normalizeLotToBags(activeBuyerLot).indexOf(activeBuyerBag) + 1} for "${activeBuyerLot.name || 'this coffee lot'}".`}
+              description={
+                activeBuyerBag.splitMode === 'full' && activeBuyerBag.buyers.some((buyer) => buyer.personId)
+                  ? `This buyer will be added to the shared directory. Split Bag ${normalizeLotToBags(activeBuyerLot).indexOf(activeBuyerBag) + 1} first if they should share "${activeBuyerLot.name || 'this coffee lot'}".`
+                  : `This buyer will be added to the shared directory and assigned to Bag ${normalizeLotToBags(activeBuyerLot).indexOf(activeBuyerBag) + 1} for "${activeBuyerLot.name || 'this coffee lot'}".`
+              }
               error={buyerError}
               saving={buyerSaving}
               submitLabel="Add buyer"

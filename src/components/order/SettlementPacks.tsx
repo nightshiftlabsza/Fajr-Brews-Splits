@@ -12,6 +12,7 @@ interface Props {
   description?: string;
   onPaymentChange?: (personId: string, record: PaymentRecord) => void;
   paymentEditingEnabled?: boolean;
+  visiblePersonIds?: string[];
 }
 
 export function SettlementPacks({
@@ -22,6 +23,7 @@ export function SettlementPacks({
   description = 'Each person stays compact until you open the one you need.',
   onPaymentChange,
   paymentEditingEnabled = false,
+  visiblePersonIds,
 }: Props) {
   const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
 
@@ -41,7 +43,9 @@ export function SettlementPacks({
       </div>
 
       <div className="settlement-pack-list">
-        {result.personIds.map((personId) => {
+        {result.personIds
+          .filter((personId) => !visiblePersonIds || visiblePersonIds.includes(personId))
+          .map((personId) => {
           const person = personMap.get(personId);
           const calc = result.personCalcs[personId];
           const payment = order.payments[personId];

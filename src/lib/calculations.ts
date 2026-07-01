@@ -9,6 +9,7 @@ import type {
   LotCalculation,
   BagSplitMode,
 } from '../types';
+import { normalizeFeeAllocationType } from './invoiceFormatter';
 import { normalizeLotToBags } from './orderWizard';
 
 // ─── Validation ───────────────────────────────────────────────
@@ -70,6 +71,16 @@ function validateOrder(order: Order): string[] {
     errors.push('Goods total (ZAR) must be greater than zero.');
   }
 
+  for (const fee of order.fees) {
+    const allocationType = normalizeFeeAllocationType(fee.allocationType);
+    if (!['equal_per_person', 'proportional_by_value', 'specific_person'].includes(allocationType)) {
+      errors.push(`"${fee.label || 'Fee'}": unsupported fee allocation type.`);
+    }
+    if (allocationType === 'specific_person' && !fee.personId) {
+      errors.push(`"${fee.label || 'Fee'}": choose a person for this specific-person fee.`);
+    }
+  }
+
   return errors;
 }
 
@@ -127,7 +138,18 @@ export function calculate(
       }
     }
   }
+  for (const fee of order.fees) {
+    if (normalizeFeeAllocationType(fee.allocationType) === 'specific_person' && fee.personId) {
+      personIdSet.add(fee.personId);
+    }
+  }
+  for (const [personId, payment] of Object.entries(order.payments)) {
+    if (payment && payment.status !== 'unpaid') {
+      personIdSet.add(personId);
+    }
+  }
   const personIds = Array.from(personIdSet);
+  const personIdLookup = new Set(personIds);
 
   // ── Per-person accumulators (full precision) ──────────────
   const personGoods: Record<string, number> = {};
@@ -161,7 +183,7 @@ export function calculate(
 
       for (const buyer of bag.buyers) {
         const pid = buyer.personId;
-        if (!pid || buyer.grams <= 0 || !personIds.includes(pid)) continue;
+        if (!pid || buyer.grams <= 0 || !personIdLookup.has(pid)) continue;
 
         // Goods ZAR for this share
         const shareGoodsZar = (buyer.grams / lotTotalGrams) * lotGoodsZarForThisLot;
@@ -208,7 +230,11 @@ export function calculate(
   }
 
   // ── E. Fee allocation ─────────────────────────────────────────
-  const eligiblePeople = personIds.filter((pid) => personTotalGrams[pid] > 0);
+  const eligiblePeople = personIds.filter((pid) => (
+    personTotalGrams[pid] > 0 ||
+    order.fees.some((fee) => normalizeFeeAllocationType(fee.allocationType) === 'specific_person' && fee.personId === pid) ||
+    Boolean(order.payments[pid] && order.payments[pid].status !== 'unpaid')
+  ));
   const personFees: Record<string, number> = {};
   for (const pid of personIds) personFees[pid] = 0;
 
@@ -217,20 +243,24 @@ export function calculate(
 
   for (const fee of order.fees) {
     const feeBreakdownForLater: Record<string, number> = {};
+    const allocationType = normalizeFeeAllocationType(fee.allocationType);
 
-    if (fee.allocationType === 'fixed_shared') {
+    if (allocationType === 'equal_per_person') {
       if (eligiblePeople.length === 0) continue; // guard: no participants
       const perPerson = fee.amountZar / eligiblePeople.length;
       for (const pid of eligiblePeople) {
         personFees[pid] += perPerson;
         feeBreakdownForLater[pid] = perPerson;
       }
-    } else if (fee.allocationType === 'value_based') {
+    } else if (allocationType === 'proportional_by_value') {
       for (const pid of personIds) {
         const share = coffeeValueForeignShare[pid] * fee.amountZar;
         personFees[pid] += share;
         feeBreakdownForLater[pid] = share;
       }
+    } else if (allocationType === 'specific_person' && fee.personId && personIdLookup.has(fee.personId)) {
+      personFees[fee.personId] += fee.amountZar;
+      feeBreakdownForLater[fee.personId] = fee.amountZar;
     }
 
     // Add fee breakdown to each person's record
@@ -242,6 +272,7 @@ export function calculate(
           label: fee.label,
           allocationType: fee.allocationType,
           amountZar: amt,
+          personId: fee.personId ?? null,
         });
       }
     }

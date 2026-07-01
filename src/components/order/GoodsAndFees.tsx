@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import type { Order, Fee, FeeAllocationType } from '../../types';
+import type { Order, Fee, FeeAllocationType, Person } from '../../types';
 import { useAppStore } from '../../store/appStore';
 import { formatZAR } from '../../lib/formatters';
+import { getFeeAllocationLabel, normalizeFeeAllocationType } from '../../lib/invoiceFormatter';
 
 function genId() {
   return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
@@ -9,29 +10,37 @@ function genId() {
 
 const ALLOCATION_OPTIONS: { value: FeeAllocationType; label: string; description: string }[] = [
   {
-    value: 'fixed_shared',
-    label: 'Fixed shared fee',
+    value: 'equal_per_person',
+    label: 'Equal per person',
     description: 'Split equally across all participants; charged once per person',
   },
   {
-    value: 'value_based',
-    label: 'Value-based fee',
+    value: 'proportional_by_value',
+    label: 'Proportional by order value',
     description: 'Split by each person\'s share of original foreign list value (customs, VAT)',
+  },
+  {
+    value: 'specific_person',
+    label: 'Specific person',
+    description: 'Charge the full fee to one selected person only',
   },
 ];
 
 interface Props {
   order: Order;
   registerCommit?: (commit: (() => Promise<void>) | null) => void;
+  onOrderChange?: (patch: Partial<Order>) => void | Promise<void>;
 }
 
-export function GoodsAndFees({ order, registerCommit }: Props) {
-  const { updateOrder } = useAppStore();
+export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
+  const { people, updateOrder } = useAppStore();
+  const patchOrder = onOrderChange ?? ((patch: Partial<Order>) => updateOrder(order.id, patch));
   const [goodsInput, setGoodsInput] = useState(order.goodsTotalZar > 0 ? String(order.goodsTotalZar) : '');
   const [editingFeeId, setEditingFeeId] = useState<string | 'new' | null>(null);
   const [feeLabel, setFeeLabel] = useState('');
   const [feeAmount, setFeeAmount] = useState('');
-  const [feeType, setFeeType] = useState<FeeAllocationType>('fixed_shared');
+  const [feeType, setFeeType] = useState<FeeAllocationType>('equal_per_person');
+  const [feePersonId, setFeePersonId] = useState('');
   const [feeError, setFeeError] = useState('');
 
   const totalFees = order.fees.reduce((s, f) => s + (f.amountZar || 0), 0);
@@ -49,29 +58,30 @@ export function GoodsAndFees({ order, registerCommit }: Props) {
   function saveGoods() {
     const val = parseFloat(goodsInput);
     if (!isNaN(val) && val > 0) {
-      void updateOrder(order.id, { goodsTotalZar: val });
+      void patchOrder({ goodsTotalZar: val });
       return;
     }
     if (!goodsInput.trim() && order.goodsTotalZar !== 0) {
-      void updateOrder(order.id, { goodsTotalZar: 0 });
+      void patchOrder({ goodsTotalZar: 0 });
     }
   }
 
   async function flushGoodsSave() {
     const val = parseFloat(goodsInput);
     if (!isNaN(val) && val > 0 && val !== order.goodsTotalZar) {
-      await updateOrder(order.id, { goodsTotalZar: val });
+      await patchOrder({ goodsTotalZar: val });
       return;
     }
     if (!goodsInput.trim() && order.goodsTotalZar !== 0) {
-      await updateOrder(order.id, { goodsTotalZar: 0 });
+      await patchOrder({ goodsTotalZar: 0 });
     }
   }
 
   function openNewFee() {
     setFeeLabel('');
     setFeeAmount('');
-    setFeeType('fixed_shared');
+    setFeeType('equal_per_person');
+    setFeePersonId('');
     setFeeError('');
     setEditingFeeId('new');
   }
@@ -79,7 +89,8 @@ export function GoodsAndFees({ order, registerCommit }: Props) {
   function openEditFee(fee: Fee) {
     setFeeLabel(fee.label);
     setFeeAmount(String(fee.amountZar));
-    setFeeType(fee.allocationType);
+    setFeeType(normalizeFeeAllocationType(fee.allocationType));
+    setFeePersonId(fee.personId ?? '');
     setFeeError('');
     setEditingFeeId(fee.id);
   }
@@ -88,29 +99,39 @@ export function GoodsAndFees({ order, registerCommit }: Props) {
     if (!feeLabel.trim()) return setFeeError('Fee label is required.');
     const amt = parseFloat(feeAmount);
     if (isNaN(amt) || amt <= 0) return setFeeError('Amount must be > 0.');
+    if (normalizeFeeAllocationType(feeType) === 'specific_person' && !feePersonId) {
+      return setFeeError('Choose who should pay this fee.');
+    }
     setFeeError('');
 
     let updatedFees: Fee[];
+    const normalizedType = normalizeFeeAllocationType(feeType);
+    const nextFee = {
+      label: feeLabel.trim(),
+      amountZar: amt,
+      allocationType: normalizedType,
+      personId: normalizedType === 'specific_person' ? feePersonId : null,
+    };
 
     if (editingFeeId === 'new') {
       updatedFees = [
         ...order.fees,
-        { id: genId(), label: feeLabel.trim(), amountZar: amt, allocationType: feeType },
+        { id: genId(), ...nextFee },
       ];
     } else {
       updatedFees = order.fees.map((f) =>
         f.id === editingFeeId
-          ? { ...f, label: feeLabel.trim(), amountZar: amt, allocationType: feeType }
+          ? { ...f, ...nextFee }
           : f
       );
     }
 
-    void updateOrder(order.id, { fees: updatedFees });
+    void patchOrder({ fees: updatedFees });
     setEditingFeeId(null);
   }
 
   function deleteFee(feeId: string) {
-    void updateOrder(order.id, { fees: order.fees.filter((f) => f.id !== feeId) });
+    void patchOrder({ fees: order.fees.filter((f) => f.id !== feeId) });
   }
 
   return (
@@ -179,16 +200,19 @@ export function GoodsAndFees({ order, registerCommit }: Props) {
                     label={feeLabel}
                     amount={feeAmount}
                     type={feeType}
+                    personId={feePersonId}
+                    people={people}
                     error={feeError}
                     onLabelChange={setFeeLabel}
                     onAmountChange={setFeeAmount}
                     onTypeChange={setFeeType}
+                    onPersonChange={setFeePersonId}
                     onSave={saveFee}
                     onCancel={() => setEditingFeeId(null)}
                   />
                 </div>
               ) : (
-                <FeeRow fee={fee} onEdit={() => openEditFee(fee)} onDelete={() => deleteFee(fee.id)} />
+                <FeeRow fee={fee} people={people} onEdit={() => openEditFee(fee)} onDelete={() => deleteFee(fee.id)} />
               )}
             </div>
           ))}
@@ -199,10 +223,13 @@ export function GoodsAndFees({ order, registerCommit }: Props) {
                 label={feeLabel}
                 amount={feeAmount}
                 type={feeType}
+                personId={feePersonId}
+                people={people}
                 error={feeError}
                 onLabelChange={setFeeLabel}
                 onAmountChange={setFeeAmount}
                 onTypeChange={setFeeType}
+                onPersonChange={setFeePersonId}
                 onSave={saveFee}
                 onCancel={() => setEditingFeeId(null)}
               />
@@ -248,11 +275,11 @@ function TotalRow({ label, value, bold = false }: { label: string; value: string
   );
 }
 
-function FeeRow({ fee, onEdit, onDelete }: { fee: Fee; onEdit: () => void; onDelete: () => void }) {
-  const typeLabel = {
-    fixed_shared: 'Fixed shared',
-    value_based: 'Value-based',
-  }[fee.allocationType];
+function FeeRow({ fee, people, onEdit, onDelete }: { fee: Fee; people: Person[]; onEdit: () => void; onDelete: () => void }) {
+  const person = fee.personId ? people.find((candidate) => candidate.id === fee.personId) : undefined;
+  const typeLabel = normalizeFeeAllocationType(fee.allocationType) === 'specific_person' && person
+    ? `${getFeeAllocationLabel(fee.allocationType)}: ${person.name}`
+    : getFeeAllocationLabel(fee.allocationType);
 
   return (
     <div style={{
@@ -281,15 +308,32 @@ interface FeeFormProps {
   label: string;
   amount: string;
   type: FeeAllocationType;
+  personId: string;
+  people: Person[];
   error: string;
   onLabelChange: (v: string) => void;
   onAmountChange: (v: string) => void;
   onTypeChange: (v: FeeAllocationType) => void;
+  onPersonChange: (v: string) => void;
   onSave: () => void;
   onCancel: () => void;
 }
 
-function FeeForm({ label, amount, type, error, onLabelChange, onAmountChange, onTypeChange, onSave, onCancel }: FeeFormProps) {
+function FeeForm({
+  label,
+  amount,
+  type,
+  personId,
+  people,
+  error,
+  onLabelChange,
+  onAmountChange,
+  onTypeChange,
+  onPersonChange,
+  onSave,
+  onCancel,
+}: FeeFormProps) {
+  const canonicalType = normalizeFeeAllocationType(type);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       <div className="grid-2">
@@ -339,7 +383,7 @@ function FeeForm({ label, amount, type, error, onLabelChange, onAmountChange, on
                 type="radio"
                 name="fee-type"
                 value={opt.value}
-                checked={type === opt.value}
+                checked={canonicalType === opt.value}
                 onChange={() => onTypeChange(opt.value)}
                 style={{ marginTop: 2, accentColor: 'var(--color-accent)' }}
               />
@@ -351,6 +395,22 @@ function FeeForm({ label, amount, type, error, onLabelChange, onAmountChange, on
           ))}
         </div>
       </div>
+
+      {canonicalType === 'specific_person' && (
+        <div className="field">
+          <label className="field-label">Person who pays this fee</label>
+          <select
+            className="select"
+            value={personId}
+            onChange={(event) => onPersonChange(event.target.value)}
+          >
+            <option value="">Select person</option>
+            {people.map((person) => (
+              <option key={person.id} value={person.id}>{person.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {error && <div className="alert alert-error">{error}</div>}
 

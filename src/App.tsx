@@ -54,7 +54,7 @@ export function getAuthReinitializeOptions(isInitialized: boolean): { silent?: b
 }
 
 export default function App() {
-  const { initialize, isInitialized, user, accessStatus, linkResolution, dismissLinkResolution } = useAppStore();
+  const { initialize, isInitialized, isSyncing, user, accessStatus, linkResolution, dismissLinkResolution } = useAppStore();
   const [currentTab, setCurrentTab] = useState<AppTab>('order');
   const [authMode, setAuthMode] = useState<'default' | 'recovery'>(() => (
     typeof window !== 'undefined' && isRecoveryHash(window.location.hash) ? 'recovery' : 'default'
@@ -89,7 +89,7 @@ export default function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       // Token refresh doesn't change user identity or data — skip re-init
-      if (event === 'TOKEN_REFRESHED') return;
+      if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') return;
 
       if (event === 'PASSWORD_RECOVERY') {
         setAuthMode('recovery');
@@ -242,6 +242,26 @@ export default function App() {
         onTabChange={setCurrentTab}
         participantOnly={participantOnly}
       />
+      {isSyncing && (
+        <div
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            top: 72,
+            right: 16,
+            zIndex: 20,
+            padding: '6px 10px',
+            borderRadius: 'var(--radius-sm)',
+            background: 'var(--color-surface-raised)',
+            border: '1px solid var(--color-border)',
+            color: 'var(--color-text-muted)',
+            fontSize: '0.75rem',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          Syncing...
+        </div>
+      )}
 
       <main className="app-main">
         {linkResolution.status === 'auto-linked' && linkResolution.person && (

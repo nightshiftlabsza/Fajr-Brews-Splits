@@ -8,6 +8,7 @@ import type {
   Order,
   ShareLine,
 } from '../types';
+import { normalizeFeeAllocationType } from './invoiceFormatter';
 
 export type OrderWizardStep = 'setup' | 'coffees' | 'goods' | 'summary';
 
@@ -354,7 +355,7 @@ export function recalculateBagGrams(bag: Bag, gramsPerBag: number): Bag {
   }
   if (bag.splitMode === 'equal') {
     const n = bag.buyers.length;
-    const base = Math.round(gramsPerBag / n);
+    const base = Math.floor(gramsPerBag / n);
     return {
       ...bag,
       buyers: bag.buyers.map((b, i) => ({
@@ -604,8 +605,12 @@ export function validateGoodsStep(order: Order): string[] {
   for (const fee of order.fees) {
     if (!fee.label.trim()) errors.push('Each fee needs a label.');
     if (!(fee.amountZar > 0)) errors.push(`"${fee.label || 'Fee'}" amount must be greater than zero.`);
-    if (!['fixed_shared', 'value_based'].includes(fee.allocationType)) {
+    const allocationType = normalizeFeeAllocationType(fee.allocationType);
+    if (!['equal_per_person', 'proportional_by_value', 'specific_person'].includes(allocationType)) {
       errors.push(`"${fee.label || 'Fee'}" has an unsupported fee type.`);
+    }
+    if (allocationType === 'specific_person' && !fee.personId) {
+      errors.push(`"${fee.label || 'Fee'}" needs a selected person.`);
     }
   }
   return errors;

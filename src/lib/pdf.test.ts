@@ -109,7 +109,7 @@ describe('generateOrderInvoicePDF', () => {
 
     expect(textCalls).toContain('Saved March Drop');
     expect(textCalls).toContain('KENYA AA');
-    expect(textCalls).toContain('Shipping (value-based)');
+    expect(textCalls).toContain('Shipping (Proportional by order value)');
     expect(textCalls).toContain('Alice · Bag 1 · 125g');
     expect(textCalls).toContain('Bilal · Bag 1 · 125g');
     expect(textCalls).toContain('Split bag · Split with Bilal');

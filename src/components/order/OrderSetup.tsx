@@ -9,6 +9,7 @@ import { RoasterPicker } from '../roaster/RoasterPicker';
 interface Props {
   order: Order;
   registerCommit?: (commit: (() => Promise<void>) | null) => void;
+  onOrderChange?: (patch: Partial<Order>) => void | Promise<void>;
 }
 
 function normalizeBank(bank?: Partial<PayerBank> | null): PayerBank {
@@ -49,7 +50,7 @@ function getIncludedPeople(order: Order, people: Person[]): Person[] {
     .filter((person): person is Person => person !== null);
 }
 
-export function OrderSetup({ order, registerCommit }: Props) {
+export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
   const {
     people,
     roasters,
@@ -60,6 +61,7 @@ export function OrderSetup({ order, registerCommit }: Props) {
     updateOrder,
     createRoaster,
   } = useAppStore();
+  const patchOrder = onOrderChange ?? ((patch: Partial<Order>) => updateOrder(order.id, patch));
 
   const [name, setName] = useState(order.name);
   const [orderDate, setOrderDate] = useState(order.orderDate || todayISO());
@@ -106,7 +108,7 @@ export function OrderSetup({ order, registerCommit }: Props) {
     }
 
     const timeoutId = window.setTimeout(() => {
-      void updateOrder(order.id, { name: trimmedName });
+      void patchOrder({ name: trimmedName });
     }, 450);
 
     return () => window.clearTimeout(timeoutId);
@@ -124,7 +126,7 @@ export function OrderSetup({ order, registerCommit }: Props) {
     }
 
     const timeoutId = window.setTimeout(() => {
-      void updateOrder(order.id, { payerBank: bank });
+      void patchOrder({ payerBank: bank });
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
@@ -134,7 +136,7 @@ export function OrderSetup({ order, registerCommit }: Props) {
     const trimmedName = name.trim();
     setName(trimmedName);
     if (trimmedName !== order.name) {
-      void updateOrder(order.id, { name: trimmedName });
+      void patchOrder({ name: trimmedName });
     }
   }
 
@@ -142,7 +144,7 @@ export function OrderSetup({ order, registerCommit }: Props) {
     const normalizedBank = normalizeBank(bank);
     setBank(normalizedBank);
     if (!banksEqual(normalizedBank, normalizeBank(order.payerBank))) {
-      void updateOrder(order.id, { payerBank: normalizedBank });
+      void patchOrder({ payerBank: normalizedBank });
     }
   }
 
@@ -174,7 +176,7 @@ export function OrderSetup({ order, registerCommit }: Props) {
     setBank(normalizedBank);
 
     if (Object.keys(updates).length > 0) {
-      await updateOrder(order.id, updates);
+      await patchOrder(updates);
     }
   }
 
@@ -189,12 +191,12 @@ export function OrderSetup({ order, registerCommit }: Props) {
 
   function handlePayerChange(nextPayerId: string) {
     setPayerId(nextPayerId);
-    void updateOrder(order.id, { payerId: nextPayerId || null });
+    void patchOrder({ payerId: nextPayerId || null });
   }
 
   function handleRoasterSelect(roaster: Roaster | null) {
     setSelectedRoasterId(roaster?.id ?? '');
-    void updateOrder(order.id, {
+    void patchOrder({
       roasterId: roaster?.id ?? null,
       roasterSnapshot: createRoasterSnapshot(roaster),
     });
@@ -202,7 +204,7 @@ export function OrderSetup({ order, registerCommit }: Props) {
 
   async function handleCreateRoaster(data: { name: string; logoFile?: File | null }) {
     const roaster = await createRoaster(data);
-    await updateOrder(order.id, {
+    await patchOrder({
       roasterId: roaster.id,
       roasterSnapshot: createRoasterSnapshot(roaster),
     });
@@ -243,7 +245,7 @@ export function OrderSetup({ order, registerCommit }: Props) {
               value={orderDate}
               onChange={(event) => {
                 setOrderDate(event.target.value);
-                void updateOrder(order.id, { orderDate: event.target.value });
+                void patchOrder({ orderDate: event.target.value });
               }}
             />
           </div>

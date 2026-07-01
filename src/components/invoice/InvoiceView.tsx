@@ -1,5 +1,6 @@
 import type { Order, Person, PersonCalculation } from '../../types';
-import { formatZAR, formatDate, resolveReference } from '../../lib/formatters';
+import { formatZAR, formatDate } from '../../lib/formatters';
+import { buildInvoiceModel } from '../../lib/invoiceFormatter';
 
 interface Props {
   order: Order;
@@ -9,13 +10,7 @@ interface Props {
 }
 
 export function InvoiceView({ order, person, payer, calc }: Props) {
-  const ref = resolveReference(
-    order.referenceTemplate,
-    order.name,
-    person.name,
-    order.orderDate
-  );
-
+  const invoice = buildInvoiceModel({ order, person, payer, calc });
   const payment = order.payments[person.id];
   const roundingAdjustment = calc.totalFinal - calc.totalPreRound;
 
@@ -44,10 +39,10 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
               lineHeight: 1,
               marginBottom: 4,
             }}>
-              {formatZAR(calc.totalFinal)}
+              {invoice.amountDue}
             </div>
             <div style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.75 }}>
-              {payment?.status === 'paid' ? '✓ Paid' : payment?.status === 'partial' ? '◑ Partial' : 'Amount Due'}
+              {payment?.status === 'paid' ? 'Paid' : payment?.status === 'partial' ? 'Partial' : 'Amount Due'}
             </div>
           </div>
         </div>
@@ -66,10 +61,10 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
               {person.email && <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{person.email}</div>}
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{order.name}</div>
-              <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{formatDate(order.orderDate)}</div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{invoice.orderName}</div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{invoice.orderDate}</div>
               <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--color-text-secondary)', marginTop: 4 }}>
-                Ref: {ref}
+                Ref: {invoice.reference}
               </div>
             </div>
           </div>
@@ -79,33 +74,33 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
         <div className="invoice-section">
           <div className="invoice-section-label">Coffee Shares</div>
 
-          {calc.lotBreakdowns.map((lb) => {
+          {invoice.coffeeLines.map((line) => {
             return (
-              <div className="invoice-lot" key={lb.id}>
+              <div className="invoice-lot" key={line.id}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                   <div>
-                    <div className="invoice-lot-name">{lb.lotName}</div>
+                    <div className="invoice-lot-name">{line.name}</div>
                     <div className="invoice-lot-meta">
-                      Bag {lb.bagIndex + 1} · {lb.shareGrams}g · {lb.bagMode === 'full' ? 'own bag' : lb.bagMode === 'unassigned' ? 'unassigned' : 'split bag'}
+                      {line.detail}
                     </div>
-                    {lb.splitWith.length > 0 && (
+                    {line.splitWith.length > 0 && (
                       <div className="invoice-lot-split">
-                        Split with: {lb.splitWith.join(', ')}
+                        Split with: {line.splitWith.join(', ')}
                       </div>
                     )}
                     <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
-                      <span style={{ opacity: 0.8 }}>Beans: {formatZAR(lb.goodsZar)}</span>
-                      {lb.feesZar > 0 && (
+                      <span style={{ opacity: 0.8 }}>Beans: {line.beansAmount}</span>
+                      {line.feesAmount && (
                         <>
                           <span style={{ margin: '0 6px', opacity: 0.4 }}>•</span>
-                          <span style={{ opacity: 0.8 }}>Allocated fees: {formatZAR(lb.feesZar)}</span>
+                          <span style={{ opacity: 0.8 }}>Allocated fees: {line.feesAmount}</span>
                         </>
                       )}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--color-text-primary)' }}>
-                      {formatZAR(lb.totalZar)}
+                      {line.totalAmount}
                     </div>
                   </div>
                 </div>
@@ -118,15 +113,15 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
         {calc.feeBreakdowns.length > 0 && (
           <div className="invoice-section">
             <div className="invoice-section-label">Included Allocated Fees</div>
-            {calc.feeBreakdowns.map((fb) => (
-              <div className="invoice-total-row" key={fb.feeId}>
+            {invoice.feeLines.map((fee) => (
+              <div className="invoice-total-row" key={fee.id}>
                 <div style={{ color: 'var(--color-text-secondary)' }}>
-                  {fb.label}
+                  {fee.label}
                   <span style={{ marginLeft: 6, fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                    {fb.allocationType === 'value_based' ? 'Value-based' : 'Shared'}
+                    {fee.methodLabel}
                   </span>
                 </div>
-                <span className="amount-small">{formatZAR(fb.amountZar)}</span>
+                <span className="amount-small">{fee.amount}</span>
               </div>
             ))}
           </div>
@@ -162,7 +157,7 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
               ['Bank', order.payerBank.bankName],
               ['Account number', order.payerBank.accountNumber],
               ...(order.payerBank.branch ? [['Branch', order.payerBank.branch]] : []),
-              ['Reference', ref],
+              ['Reference', invoice.reference],
             ].filter(([, v]) => v).map(([label, value]) => (
               <div className="invoice-bank-row" key={label}>
                 <span className="invoice-bank-label">{label}</span>

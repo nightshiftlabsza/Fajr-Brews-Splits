@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Order, Person } from '../types';
 
 type QueryResult = {
   data: unknown;
@@ -16,6 +17,7 @@ type StoreTestConfig = {
   roasters?: QueryResult;
   roasterInsert?: QueryResult;
   roasterUpdate?: QueryResult;
+  orderUpdate?: QueryResult;
   logoUploadError?: { message: string; code?: string } | null;
 };
 
@@ -67,6 +69,10 @@ function createSupabaseMock(config: StoreTestConfig) {
   };
   const roasterInsert = config.roasterInsert ?? { data: null, error: null };
   const roasterUpdate = config.roasterUpdate ?? { data: null, error: null };
+  const orderUpdate = config.orderUpdate ?? { data: null, error: null };
+  const orderUpdateMock = vi.fn().mockImplementation(() => ({
+    eq: vi.fn().mockResolvedValue(orderUpdate),
+  }));
 
   const storageApi = {
     upload: vi.fn().mockResolvedValue({ error: config.logoUploadError ?? null }),
@@ -105,6 +111,7 @@ function createSupabaseMock(config: StoreTestConfig) {
       if (table === 'orders') {
         return {
           select: vi.fn().mockImplementation(() => createSelectBuilder(orders)),
+          update: orderUpdateMock,
         };
       }
 
@@ -141,6 +148,59 @@ function createSupabaseMock(config: StoreTestConfig) {
       unsubscribe: vi.fn(),
     }),
     removeChannel: vi.fn(),
+    __mocks: {
+      orderUpdate: orderUpdateMock,
+    },
+  };
+}
+
+const storePeople: Person[] = [
+  {
+    id: 'person-1',
+    workspaceId: 'workspace-1',
+    name: 'Abdul',
+    createdAt: '2026-03-18T00:00:00.000Z',
+    updatedAt: '2026-03-18T00:00:00.000Z',
+  },
+];
+
+function makeStoreOrder(overrides: Partial<Order> = {}): Order {
+  return {
+    id: overrides.id || 'order-1',
+    workspaceId: 'workspace-1',
+    name: overrides.name || 'Saved Order',
+    orderDate: overrides.orderDate || '2026-03-18',
+    roasterId: overrides.roasterId ?? null,
+    roasterSnapshot: overrides.roasterSnapshot ?? null,
+    payerId: overrides.payerId ?? 'person-1',
+    payerBank: overrides.payerBank ?? { bankName: '', accountNumber: '', beneficiary: '' },
+    referenceTemplate: overrides.referenceTemplate || 'FAJR-{ORDER}-{NAME}',
+    goodsTotalZar: overrides.goodsTotalZar ?? 240,
+    lots: overrides.lots ?? [
+      {
+        id: 'lot-1',
+        name: 'Pastel Hour',
+        foreignPricePerBag: 20,
+        gramsPerBag: 250,
+        quantity: 1,
+        shares: [{ id: 'share-1', personId: 'person-1', shareGrams: 250, bagIndex: 0 }],
+        bagAllocations: [
+          {
+            id: 'bag-1',
+            bagIndex: 0,
+            mode: 'single',
+            participants: [{ id: 'participant-1', personId: 'person-1', shareGrams: 250, sourceShareId: 'share-1' }],
+          },
+        ],
+      },
+    ],
+    fees: overrides.fees ?? [],
+    payments: overrides.payments ?? {},
+    isArchived: overrides.isArchived ?? true,
+    ownerId: overrides.ownerId,
+    createdBy: overrides.createdBy,
+    createdAt: overrides.createdAt || '2026-03-18T00:00:00.000Z',
+    updatedAt: overrides.updatedAt || '2026-03-18T00:00:00.000Z',
   };
 }
 
@@ -252,6 +312,68 @@ describe('appStore.initialize', () => {
     expect(useAppStore.getState().roasterFeatureMessage).toBe('Roasters are unavailable because the Supabase roaster migration has not been applied yet.');
     expect(useAppStore.getState().roasters).toEqual([]);
     expect(useAppStore.getState().error).toBeNull();
+  });
+});
+
+describe('appStore.updateOrder integrity', () => {
+  it('rejects destructive archived-order writes before local state or Supabase are touched', async () => {
+    const { useAppStore, supabase } = await loadStore();
+    const archivedOrder = makeStoreOrder({ id: 'archived-order', isArchived: true });
+    const currentDraft = makeStoreOrder({ id: 'current-draft', name: 'Current Draft', isArchived: false });
+
+    useAppStore.setState({
+      people: storePeople,
+      orders: [archivedOrder, currentDraft],
+      currentOrderId: currentDraft.id,
+    });
+
+    await expect(useAppStore.getState().updateOrder('archived-order', { lots: [] }))
+      .rejects.toThrow('Saved orders must keep at least one coffee lot.');
+
+    expect(useAppStore.getState().orders).toEqual([archivedOrder, currentDraft]);
+    expect(useAppStore.getState().currentOrderId).toBe('current-draft');
+    expect(supabase.__mocks.orderUpdate).not.toHaveBeenCalled();
+  });
+
+  it('updates the targeted archived order without using or changing the current draft', async () => {
+    const { useAppStore, supabase } = await loadStore();
+    const archivedOrder = makeStoreOrder({ id: 'archived-order', isArchived: true });
+    const currentDraft = makeStoreOrder({ id: 'current-draft', name: 'Current Draft', isArchived: false });
+
+    useAppStore.setState({
+      people: storePeople,
+      orders: [currentDraft, archivedOrder],
+      currentOrderId: currentDraft.id,
+    });
+
+    await useAppStore.getState().updateOrder('archived-order', {
+      name: 'Corrected Saved Order',
+      isArchived: true,
+    });
+
+    const state = useAppStore.getState();
+    expect(state.currentOrderId).toBe('current-draft');
+    expect(state.orders.find((order) => order.id === 'current-draft')).toEqual(currentDraft);
+    expect(state.orders.find((order) => order.id === 'archived-order')).toEqual(expect.objectContaining({
+      id: 'archived-order',
+      name: 'Corrected Saved Order',
+      isArchived: true,
+      lots: [
+        expect.objectContaining({
+          id: 'lot-1',
+          bags: [
+            expect.objectContaining({
+              buyers: [expect.objectContaining({ personId: 'person-1', grams: 250 })],
+            }),
+          ],
+        }),
+      ],
+    }));
+    expect(supabase.__mocks.orderUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Corrected Saved Order',
+      is_archived: true,
+      lots: expect.any(Array),
+    }));
   });
 });
 

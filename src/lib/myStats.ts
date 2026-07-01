@@ -1,4 +1,5 @@
 import { calculate } from './calculations';
+import { normalizeFeeAllocationType } from './invoiceFormatter';
 import { resolveOrderRoaster, type ResolvedOrderRoaster } from './roasters';
 import type { Order, PersonCalculation, PersonLinkResolution, Roaster } from '../types';
 
@@ -67,7 +68,13 @@ export function orderIncludesPerson(order: Order, personId: string): boolean {
   return order.lots.some((lot) => (
     lot.shares.some((share) => share.personId === personId && share.shareGrams > 0) ||
     lot.bags?.some((bag) => bag.buyers.some((buyer) => buyer.personId === personId && buyer.grams > 0))
-  ));
+  )) ||
+  order.fees.some((fee) => (
+    normalizeFeeAllocationType(fee.allocationType) === 'specific_person' &&
+    fee.personId === personId &&
+    fee.amountZar > 0
+  )) ||
+  Boolean(order.payments[personId] && order.payments[personId].status !== 'unpaid');
 }
 
 export function getParticipantScopedOrders(orders: Order[], personId: string | null): Order[] {

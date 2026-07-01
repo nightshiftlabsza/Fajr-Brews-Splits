@@ -4,8 +4,11 @@ export type ThemeMode = 'light' | 'dark' | 'auto';
 
 // ─── Fee allocation types ─────────────────────────────────────
 export type FeeAllocationType =
-  | 'fixed_shared'        // Equal split across all participants
-  | 'value_based';        // By each person's share of foreign list value
+  | 'equal_per_person'       // Equal split across all participants
+  | 'proportional_by_value'  // By each person's share of foreign list value
+  | 'specific_person'
+  | 'fixed_shared'           // Legacy alias for equal_per_person
+  | 'value_based';           // Legacy alias for proportional_by_value
 
 // ─── Payment ──────────────────────────────────────────────────
 export type PaymentStatus = 'unpaid' | 'paid' | 'partial';
@@ -106,6 +109,7 @@ export interface Fee {
   label: string;
   amountZar: number;
   allocationType: FeeAllocationType;
+  personId?: string | null;
 }
 
 // ─── Payer Bank Details ───────────────────────────────────────
@@ -133,6 +137,7 @@ export interface Order {
   fees: Fee[];
   payments: Record<string, PaymentRecord>; // personId → PaymentRecord
   isArchived: boolean;
+  ownerId?: string;
   createdBy?: string;
   createdAt: string;
   updatedAt: string;
@@ -163,6 +168,7 @@ export interface DbOrder {
   fees: Fee[];
   payments: Record<string, PaymentRecord>;
   is_archived: boolean;
+  owner_id?: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -261,6 +267,7 @@ export interface FeePersonBreakdown {
   label: string;
   allocationType: FeeAllocationType;
   amountZar: number;
+  personId?: string | null;
 }
 
 export interface PersonCalculation {

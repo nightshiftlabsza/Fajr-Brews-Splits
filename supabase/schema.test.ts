@@ -43,10 +43,14 @@ describe('supabase schema access rules', () => {
     expect(finalAccessSection).toContain("allocation->'participants'");
     expect(finalAccessSection).toContain("lot->'bags'");
     expect(finalAccessSection).toContain("bag->'buyers'");
+    expect(finalAccessSection).toContain('order_participant_people_for_order');
+    expect(finalAccessSection).toContain("fee->>'allocationType' IN ('specific_person')");
+    expect(finalAccessSection).toContain("value->>'status' IN ('paid', 'partial')");
   });
 
   it('updates order policies to use the PIN-free access helper', () => {
-    expect(finalAccessSection).toContain('USING (public.can_access_order(workspace_id, id));');
-    expect(finalAccessSection).toContain('USING (public.is_workspace_member(workspace_id) AND public.can_access_order(workspace_id, id))');
+    expect(finalAccessSection).toContain('CREATE OR REPLACE FUNCTION public.get_my_participant_orders()');
+    expect(finalAccessSection).toContain('USING (public.is_order_full_viewer(workspace_id, coalesce(owner_id, created_by)))');
+    expect(finalAccessSection).toContain('WHERE NOT public.is_order_full_viewer');
   });
 });

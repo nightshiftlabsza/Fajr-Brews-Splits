@@ -1,5 +1,6 @@
 import type { CalculationResult, Order, Person, PersonCalculation } from '../types';
-import { formatZAR, formatDate, orderPdfFilename, pdfFilename, resolveReference } from './formatters';
+import { formatZAR, formatDate, orderPdfFilename, pdfFilename } from './formatters';
+import { buildInvoiceModel, formatFeeForOwner } from './invoiceFormatter';
 
 // Dynamic import to keep initial bundle smaller
 async function getJsPDF() {
@@ -85,16 +86,10 @@ export async function generateInvoicePDF(
   const JsPDF = await getJsPDF();
   const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-  const ref = resolveReference(
-    order.referenceTemplate,
-    order.name,
-    person.name,
-    order.orderDate
-  );
-
   let y = 20;
   const pageW = 210;
   const roundingAdjustment = calc.totalFinal - calc.totalPreRound;
+  const invoice = buildInvoiceModel({ order, person, payer, calc });
 
   // ── Header ────────────────────────────────────────────────
   setFill(doc, ACCENT);
@@ -111,7 +106,7 @@ export async function generateInvoicePDF(
   // Amount due — top right
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text(formatZAR(calc.totalFinal), 190, 12, { align: 'right' });
+  doc.text(invoice.amountDue, 190, 12, { align: 'right' });
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
   doc.text('AMOUNT DUE', 190, 17, { align: 'right' });
@@ -122,15 +117,15 @@ export async function generateInvoicePDF(
   setTextColor(doc, DARK);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
-  doc.text(person.name, 20, y);
+  doc.text(invoice.personName, 20, y);
   y += 6;
 
   setTextColor(doc, MID);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  doc.text(`${order.name}  ·  ${formatDate(order.orderDate)}`, 20, y);
+  doc.text(`${invoice.orderName}  ·  ${invoice.orderDate}`, 20, y);
   y += 4;
-  doc.text(`Ref: ${ref}`, 20, y);
+  doc.text(`Ref: ${invoice.reference}`, 20, y);
   y += 10;
 
   hLine(doc, y);
@@ -139,23 +134,22 @@ export async function generateInvoicePDF(
   // ── Coffee Lots ───────────────────────────────────────────
   y = sectionHeader(doc, 'Coffee Shares', y);
 
-  for (const lb of calc.lotBreakdowns) {
+  for (const line of invoice.coffeeLines) {
     // Lot name
     setTextColor(doc, DARK);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
-    doc.text(lb.lotName, 24, y);
+    doc.text(line.name, 24, y);
     y += 5;
 
     // Grams detail line
     setTextColor(doc, MID);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
-    const gramsLine = `Bag ${lb.bagIndex + 1} · ${lb.shareGrams}g · ${lb.bagMode === 'full' ? 'own bag' : lb.bagMode === 'unassigned' ? 'unassigned' : 'split bag'}`;
-    doc.text(gramsLine, 24, y);
+    doc.text(line.detail, 24, y);
 
-    if (lb.splitWith.length > 0) {
-      doc.text(`Split with: ${lb.splitWith.join(', ')}`, 24, y + 4.5);
+    if (line.splitWith.length > 0) {
+      doc.text(`Split with: ${line.splitWith.join(', ')}`, 24, y + 4.5);
       y += 4.5;
     }
     y += 5;
@@ -163,12 +157,12 @@ export async function generateInvoicePDF(
     setTextColor(doc, MID);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text(`Beans ${formatZAR(lb.goodsZar)}${lb.feesZar > 0 ? `  •  Fees ${formatZAR(lb.feesZar)}` : ''}`, 24, y);
+    doc.text(`Beans ${line.beansAmount}${line.feesAmount ? `  -  Fees ${line.feesAmount}` : ''}`, 24, y);
 
     setTextColor(doc, DARK);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
-    doc.text(formatZAR(lb.totalZar), 186, y, { align: 'right' });
+    doc.text(line.totalAmount, 186, y, { align: 'right' });
 
     y += 5;
 
@@ -182,13 +176,13 @@ export async function generateInvoicePDF(
   if (calc.feeBreakdowns.length > 0) {
     y = sectionHeader(doc, 'Included Allocated Fees', y);
 
-    for (const fb of calc.feeBreakdowns) {
+    for (const fee of invoice.feeLines) {
       setTextColor(doc, MID);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
-      doc.text(`${fb.label} (${fb.allocationType === 'value_based' ? 'value-based' : 'shared'})`, 24, y);
+      doc.text(`${fee.label} (${fee.methodLabel})`, 24, y);
       setTextColor(doc, DARK);
-      doc.text(formatZAR(fb.amountZar), 186, y, { align: 'right' });
+      doc.text(fee.amount, 186, y, { align: 'right' });
       y += 5.5;
     }
     y += 4;
@@ -215,7 +209,7 @@ export async function generateInvoicePDF(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
   doc.text('TOTAL DUE', 24, y + 4);
-  doc.text(formatZAR(calc.totalFinal), 186, y + 4, { align: 'right' });
+  doc.text(invoice.amountDue, 186, y + 4, { align: 'right' });
   y += 14;
 
   // ── Payment Instructions ──────────────────────────────────
@@ -229,7 +223,7 @@ export async function generateInvoicePDF(
   if (order.payerBank.branch) {
     bankRows.push(['Branch', order.payerBank.branch]);
   }
-  bankRows.push(['Reference', ref]);
+  bankRows.push(['Reference', invoice.reference]);
 
   for (const [label, value] of bankRows) {
     y = row(doc, label, value, y);
@@ -390,7 +384,7 @@ export async function generateOrderInvoicePDF(
     for (const fee of order.fees) {
       y = row(
         doc,
-        `${fee.label} (${fee.allocationType === 'value_based' ? 'value-based' : 'shared'})`,
+        formatFeeForOwner(fee, peopleById),
         formatZAR(fee.amountZar),
         y,
       );

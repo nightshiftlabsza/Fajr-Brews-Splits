@@ -9,7 +9,7 @@ import { SettlementPacks } from '../order/SettlementPacks';
 import { OrderSetup } from '../order/OrderSetup';
 import { CoffeeLotsSection } from '../order/CoffeeLotsSection';
 import { GoodsAndFees } from '../order/GoodsAndFees';
-import { OrderSummary } from '../order/OrderSummary';
+import { CoffeeCostSummary } from '../order/CoffeeCostSummary';
 import { generateOrderInvoicePDF } from '../../lib/pdf';
 import { getParticipantScopedOrders } from '../../lib/myStats';
 import { resolveOrderRoaster } from '../../lib/roasters';
@@ -255,7 +255,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
                 )}
                 {!participantOnly && (
                   <button className="btn btn-ghost btn-sm" onClick={() => void handleDuplicate(selectedOrder)}>
-                    Duplicate as copy
+                    Duplicate as new order
                   </button>
                 )}
                 {!participantOnly && (
@@ -306,6 +306,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
               result={selectedOrderResult}
               title="Saved order details"
               description="Review the full settlement, payment state, and invoice/share actions exactly as saved."
+              visiblePersonIds={participantOnly && linkedPersonId ? [linkedPersonId] : undefined}
             />
           )}
         </div>
@@ -469,7 +470,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
                     Edit order
                   </button>
                   <button className="btn btn-ghost btn-sm" onClick={() => void handleDuplicate(order)}>
-                    Duplicate as copy
+                    Duplicate as new order
                   </button>
                   <button
                     className="btn btn-ghost btn-sm"
@@ -489,18 +490,50 @@ export function HistoryPage({ participantOnly = false }: Props) {
 }
 
 function PastOrderEditor({ order, onClose }: { order: Order; onClose: () => void }) {
-  const { sessionUi, setOrderWizardStep, roasters } = useAppStore();
+  const { sessionUi, setOrderWizardStep, roasters, people, updateOrder, flushOrderWrites } = useAppStore();
   const commitStepRef = useRef<(() => Promise<void>) | null>(null);
-  const currentStep = sessionUi.orderWizardSteps[order.id] ?? getSuggestedWizardStep(order);
+  const [draftOrder, setDraftOrder] = useState<Order>(() => cloneOrder(order));
+  const draftOrderRef = useRef<Order>(draftOrder);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const sourceOrderId = order.id;
+  const currentStep = sessionUi.orderWizardSteps[sourceOrderId] ?? getSuggestedWizardStep(draftOrder);
   const savedStep = sessionUi.orderWizardSteps[order.id];
-  const orderRoaster = resolveOrderRoaster(order, roasters);
+  const orderRoaster = resolveOrderRoaster(draftOrder, roasters);
+  const personNames = useMemo(
+    () => Object.fromEntries(people.map((person) => [person.id, person.name])),
+    [people],
+  );
+  const summaryResult = useMemo(() => calculate(draftOrder, personNames), [draftOrder, personNames]);
+
+  useEffect(() => {
+    const nextDraft = cloneOrder(order);
+    draftOrderRef.current = nextDraft;
+    setDraftOrder(nextDraft);
+    setSaveError(null);
+  }, [order]);
 
   useEffect(() => {
     if (savedStep) {
       return;
     }
-    setOrderWizardStep(order.id, getSuggestedWizardStep(order));
-  }, [order.id, savedStep, setOrderWizardStep]);
+    setOrderWizardStep(sourceOrderId, getSuggestedWizardStep(draftOrder));
+  }, [draftOrder, savedStep, setOrderWizardStep, sourceOrderId]);
+
+  function patchDraft(patch: Partial<Order>) {
+    setDraftOrder((current) => ({
+      ...current,
+      ...patch,
+      id: sourceOrderId,
+      isArchived: true,
+    }));
+    draftOrderRef.current = {
+      ...draftOrderRef.current,
+      ...patch,
+      id: sourceOrderId,
+      isArchived: true,
+    };
+  }
 
   function getStepErrors(targetOrder: Order, step: OrderWizardStep): string[] {
     if (step === 'setup') return validateSetupStep(targetOrder);
@@ -509,14 +542,14 @@ function PastOrderEditor({ order, onClose }: { order: Order; onClose: () => void
     return [];
   }
 
-  const validationErrors = useMemo(() => getStepErrors(order, currentStep), [currentStep, order]);
-  const maxUnlockedStepIndex = getMaxUnlockedStepIndex(order);
+  const validationErrors = useMemo(() => getStepErrors(draftOrder, currentStep), [currentStep, draftOrder]);
+  const maxUnlockedStepIndex = getMaxUnlockedStepIndex(draftOrder);
   const currentStepIndex = STEP_INDEX[currentStep];
   const stepCompleteMap: Record<OrderWizardStep, boolean> = {
-    setup: isStepComplete(order, 'setup'),
-    coffees: isStepComplete(order, 'coffees'),
-    goods: isStepComplete(order, 'goods'),
-    summary: isStepComplete(order, 'summary'),
+    setup: isStepComplete(draftOrder, 'setup'),
+    coffees: isStepComplete(draftOrder, 'coffees'),
+    goods: isStepComplete(draftOrder, 'goods'),
+    summary: isStepComplete(draftOrder, 'summary'),
   };
 
   async function flushCurrentStep() {
@@ -525,9 +558,46 @@ function PastOrderEditor({ order, onClose }: { order: Order; onClose: () => void
     }
   }
 
-  async function handleClose() {
-    await flushCurrentStep();
+  async function handleCancel() {
+    setDraftOrder(cloneOrder(order));
+    setSaveError(null);
     onClose();
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await flushCurrentStep();
+      const latestDraft = draftOrderRef.current;
+      const latestResult = calculate(latestDraft, personNames);
+      if (!latestResult.isValid) {
+        throw new Error(latestResult.validationErrors[0] ?? 'This saved order still has incomplete data.');
+      }
+
+      await updateOrder(sourceOrderId, {
+        name: latestDraft.name,
+        orderDate: latestDraft.orderDate,
+        roasterId: latestDraft.roasterId,
+        roasterSnapshot: latestDraft.roasterSnapshot,
+        payerId: latestDraft.payerId,
+        payerBank: latestDraft.payerBank,
+        referenceTemplate: latestDraft.referenceTemplate,
+        payerNote: latestDraft.payerNote,
+        goodsTotalZar: latestDraft.goodsTotalZar,
+        lots: latestDraft.lots,
+        fees: latestDraft.fees,
+        payments: latestDraft.payments,
+        isArchived: true,
+        ownerId: latestDraft.ownerId,
+      });
+      await flushOrderWrites(sourceOrderId);
+      onClose();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Could not save this historical order.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function goToStep(step: OrderWizardStep) {
@@ -535,24 +605,23 @@ function PastOrderEditor({ order, onClose }: { order: Order; onClose: () => void
       if (step !== currentStep) {
         await flushCurrentStep();
       }
-      setOrderWizardStep(order.id, step);
+      setOrderWizardStep(sourceOrderId, step);
     }
   }
 
   async function handleNext() {
     if (currentStep === 'summary') return;
     await flushCurrentStep();
-    const latestOrder = useAppStore.getState().orders.find((candidate) => candidate.id === order.id) ?? order;
-    const freshErrors = getStepErrors(latestOrder, currentStep);
+    const freshErrors = getStepErrors(draftOrderRef.current, currentStep);
     if (freshErrors.length > 0) return;
     const nextStep = ORDER_WIZARD_STEPS[currentStepIndex + 1]?.id;
-    if (nextStep) setOrderWizardStep(order.id, nextStep);
+    if (nextStep) setOrderWizardStep(sourceOrderId, nextStep);
   }
 
   async function handleBack() {
     await flushCurrentStep();
     const previousStep = ORDER_WIZARD_STEPS[currentStepIndex - 1]?.id;
-    if (previousStep) setOrderWizardStep(order.id, previousStep);
+    if (previousStep) setOrderWizardStep(sourceOrderId, previousStep);
   }
 
   return (
@@ -568,8 +637,11 @@ function PastOrderEditor({ order, onClose }: { order: Order; onClose: () => void
           </div>
 
           <div className="wizard-chip-row">
-            <button className="btn btn-secondary btn-sm" onClick={() => void handleClose()}>
-              Back to details
+            <button className="btn btn-secondary btn-sm" onClick={() => void handleCancel()} disabled={saving}>
+              Cancel
+            </button>
+            <button className="btn btn-primary btn-sm" onClick={() => void handleSave()} disabled={saving || !summaryResult.isValid}>
+              {saving ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Save changes'}
             </button>
           </div>
         </div>
@@ -588,7 +660,7 @@ function PastOrderEditor({ order, onClose }: { order: Order; onClose: () => void
                 />
               )}
               <div>
-                <h2 className="wizard-page-title">{order.name || 'Untitled order'}</h2>
+                <h2 className="wizard-page-title">{draftOrder.name || 'Untitled order'}</h2>
                 {orderRoaster && (
                   <div className="field-hint" style={{ marginTop: 4 }}>
                     Roaster: {orderRoaster.name}
@@ -597,7 +669,7 @@ function PastOrderEditor({ order, onClose }: { order: Order; onClose: () => void
               </div>
             </div>
             <p className="wizard-page-copy">
-              {formatDateShort(order.orderDate)} - update setup, coffees, fees, and settlement details while keeping this record finalized.
+              {formatDateShort(draftOrder.orderDate)} - update setup, coffees, fees, and settlement details while keeping this record finalized.
             </p>
           </div>
           <span className="wizard-badge wizard-badge-accent">Finalized</span>
@@ -626,16 +698,41 @@ function PastOrderEditor({ order, onClose }: { order: Order; onClose: () => void
         </div>
       </section>
 
+      {saveError && <div className="alert alert-error">{saveError}</div>}
+
       <div className="wizard-stage">
-        {currentStep === 'setup' && <OrderSetup order={order} registerCommit={(commit) => { commitStepRef.current = commit; }} />}
-        {currentStep === 'coffees' && <CoffeeLotsSection order={order} />}
-        {currentStep === 'goods' && <GoodsAndFees order={order} registerCommit={(commit) => { commitStepRef.current = commit; }} />}
+        {currentStep === 'setup' && <OrderSetup order={draftOrder} onOrderChange={patchDraft} registerCommit={(commit) => { commitStepRef.current = commit; }} />}
+        {currentStep === 'coffees' && <CoffeeLotsSection order={draftOrder} onOrderChange={patchDraft} />}
+        {currentStep === 'goods' && <GoodsAndFees order={draftOrder} onOrderChange={patchDraft} registerCommit={(commit) => { commitStepRef.current = commit; }} />}
         {currentStep === 'summary' && (
-          <OrderSummary
-            order={order}
-            onJumpToStep={(step) => setOrderWizardStep(order.id, step)}
-            onFinalize={onClose}
-          />
+          <div className="wizard-step-stack">
+            {!summaryResult.isValid ? (
+              <>
+                <section className="wizard-panel">
+                  <div className="wizard-card-title">Summary is waiting for the earlier steps</div>
+                  <p className="wizard-card-copy" style={{ marginTop: 'var(--space-2)' }}>
+                    Fix the highlighted issues below, then save the historical order.
+                  </p>
+                </section>
+                {summaryResult.validationErrors.map((error, index) => (
+                  <div key={index} className="alert alert-warning">{error}</div>
+                ))}
+              </>
+            ) : (
+              <>
+                <CoffeeCostSummary result={summaryResult} />
+                <SettlementPacks
+                  order={draftOrder}
+                  people={people}
+                  result={summaryResult}
+                  onPaymentChange={(personId, record) => patchDraft({
+                    payments: { ...draftOrder.payments, [personId]: record },
+                  })}
+                  paymentEditingEnabled
+                />
+              </>
+            )}
+          </div>
         )}
       </div>
 
@@ -660,8 +757,28 @@ function PastOrderEditor({ order, onClose }: { order: Order; onClose: () => void
           </div>
         </div>
       )}
+      {currentStep === 'summary' && (
+        <div className="wizard-footer">
+          <div className="wizard-footer-copy">
+            {summaryResult.isValid ? 'Review the edited saved order before replacing the historical record.' : summaryResult.validationErrors[0]}
+          </div>
+          <div className="wizard-footer-actions">
+            <button className="btn btn-ghost" onClick={() => void handleBack()}>Back</button>
+            <button className="btn btn-secondary" onClick={() => void handleCancel()} disabled={saving}>Cancel</button>
+            <button className="btn btn-primary" onClick={() => void handleSave()} disabled={saving || !summaryResult.isValid}>
+              {saving ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Save changes'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function cloneOrder(order: Order): Order {
+  return typeof structuredClone === 'function'
+    ? structuredClone(order)
+    : JSON.parse(JSON.stringify(order)) as Order;
 }
 
 function SummaryMetric({ label, value, emphasize = false }: { label: string; value: string; emphasize?: boolean }) {
