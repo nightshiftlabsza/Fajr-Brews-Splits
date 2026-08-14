@@ -94,6 +94,27 @@ After running `schema.sql`, confirm these in the Supabase Dashboard:
 
 ---
 
+## ⏱️ Supabase Free-Tier Keep-Alive
+
+On Supabase's Free plan, projects automatically pause after **7 days of inactivity**. Because Fajr Brews is used intermittently (~once a month), an external free cron service is configured to send a lightweight `GET` ping daily to keep the database awake and prevent automatic pausing.
+
+### Keep-Alive Configuration Summary
+
+- **Service**: [cron-job.org](https://cron-job.org) (Free tier)
+- **Schedule**: Once daily (e.g., `06:00 UTC`)
+- **Method**: `GET`
+- **URL**: `https://evukrughkgpzjftwkinh.supabase.co/rest/v1/workspaces?select=id&limit=1&apikey=sb_publishable_NHzJCQi5M_ghXCwZp92jEg_kmlutoe1`
+- **Data Privacy & Security**: Uses the public `anon`/publishable key only. No private data is returned or exposed.
+- **Resource Usage**: ~30 lightweight queries per month (under 0.01% of Supabase's 500,000 free request monthly quota).
+
+### Troubleshooting / Updating
+If the keep-alive service is ever unreachable or you need to reconfigure it:
+1. Log in to [cron-job.org](https://cron-job.org).
+2. Check the execution history log for any non-200 responses.
+3. If your Supabase URL or publishable key changes in the future, update the URL parameter in the cron-job console.
+
+---
+
 ## Build & Deploy
 
 ### Local build

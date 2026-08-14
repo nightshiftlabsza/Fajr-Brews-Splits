@@ -9,6 +9,7 @@ import { resolveOrderRoaster } from '../../lib/roasters';
 import { SettlementPacks } from './SettlementPacks';
 import { CoffeeCostSummary } from './CoffeeCostSummary';
 import { RoasterAvatar } from '../roaster/RoasterAvatar';
+import { ConfirmModal } from '../ui/ConfirmModal';
 
 interface Props {
   order: Order;
@@ -22,6 +23,7 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const personNames = Object.fromEntries(people.map((person) => [person.id, person.name]));
   const result = calculate(order, personNames);
@@ -30,9 +32,9 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
     return (
       <div className="wizard-step-stack">
         <section className="wizard-panel">
-          <div className="wizard-card-title">Summary is waiting for the earlier steps</div>
+          <div className="wizard-card-title">Summary is waiting for earlier details</div>
           <p className="wizard-card-copy" style={{ marginTop: 'var(--space-2)' }}>
-            Fix the highlighted issues below, then come back here for the final review.
+            Fix the highlighted issues below to review the final order totals and settlements.
           </p>
         </section>
         {result.validationErrors.map((error, index) => (
@@ -79,15 +81,8 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
     }
   }
 
-  async function handleDeleteOrder() {
-    if (order.isArchived) {
-      return;
-    }
-
-    const confirmed = confirm(`Delete "${order.name}"? This cannot be undone.`);
-    if (!confirmed) {
-      return;
-    }
+  async function handleConfirmDelete() {
+    if (order.isArchived) return;
 
     setDeleting(true);
     setDeleteError(null);
@@ -95,6 +90,7 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
     try {
       await flushOrderWrites(order.id);
       await deleteOrder(order.id);
+      setConfirmDeleteOpen(false);
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : 'Failed to delete this order. Please try again.');
     } finally {
@@ -145,7 +141,7 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
               key={step.id}
               className={`summary-progress-item ${index < ORDER_WIZARD_STEPS.length - 1 ? 'is-complete' : 'is-active'}`}
             >
-              <span className="summary-progress-index">{index < ORDER_WIZARD_STEPS.length - 1 ? index + 1 : index + 1}</span>
+              <span className="summary-progress-index">{index + 1}</span>
               <span className="summary-progress-label">{step.shortLabel}</span>
             </div>
           ))}
@@ -213,7 +209,11 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
 
         <div className="wizard-inline-actions" style={{ marginTop: 'var(--space-4)' }}>
           {!savingPastOrder && (
-            <button className="btn btn-danger" onClick={() => void handleDeleteOrder()} disabled={deleting || finalizing}>
+            <button
+              className="btn btn-danger"
+              onClick={() => setConfirmDeleteOpen(true)}
+              disabled={deleting || finalizing}
+            >
               {deleting ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Delete order'}
             </button>
           )}
@@ -222,6 +222,21 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
           </button>
         </div>
       </section>
+
+      {/* Custom Delete Confirmation Modal */}
+      {confirmDeleteOpen && (
+        <ConfirmModal
+          isOpen={true}
+          title={`Delete "${order.name}"?`}
+          description="This action cannot be undone. This order and all of its allocations will be permanently removed."
+          confirmText="Delete Order"
+          cancelText="Cancel"
+          variant="danger"
+          isLoading={deleting}
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setConfirmDeleteOpen(false)}
+        />
+      )}
     </div>
   );
 }

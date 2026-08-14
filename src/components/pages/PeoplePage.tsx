@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import type { Person } from '../../types';
 import { PersonEditor, type PersonFormValues } from '../people/PersonEditor';
+import { ConfirmModal } from '../ui/ConfirmModal';
 
 const emptyForm: PersonFormValues = { name: '', phone: '', email: '', note: '' };
 
@@ -12,6 +13,8 @@ export function PeoplePage() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<Person | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [search, setSearch] = useState('');
 
   const filtered = people.filter((p) =>
@@ -61,14 +64,18 @@ export function PeoplePage() {
     }
   }
 
-  async function handleDelete(id: string, name: string) {
-    if (!confirm(`Remove ${name} from the directory?`)) return;
+  async function confirmDeletePerson() {
+    if (!deleteTarget) return;
+    setDeleting(true);
     setDeleteError('');
     try {
-      await deletePerson(id);
-      if (editingId === id) setEditingId(null);
+      await deletePerson(deleteTarget.id);
+      if (editingId === deleteTarget.id) setEditingId(null);
+      setDeleteTarget(null);
     } catch (e) {
       setDeleteError(String(e));
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -169,7 +176,7 @@ export function PeoplePage() {
                   <button
                     className="btn btn-ghost btn-sm"
                     style={{ color: 'var(--color-unpaid)' }}
-                    onClick={() => handleDelete(person.id, person.name)}
+                    onClick={() => setDeleteTarget(person)}
                   >
                     Remove
                   </button>
@@ -179,6 +186,20 @@ export function PeoplePage() {
           </div>
         ))}
       </div>
+
+      {deleteTarget && (
+        <ConfirmModal
+          isOpen={true}
+          title={`Remove "${deleteTarget.name}"?`}
+          description="Are you sure you want to remove this person from the directory?"
+          confirmText="Remove Person"
+          cancelText="Cancel"
+          variant="danger"
+          isLoading={deleting}
+          onConfirm={confirmDeletePerson}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }

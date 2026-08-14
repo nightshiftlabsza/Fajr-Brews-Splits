@@ -14,6 +14,7 @@ import { generateOrderInvoicePDF } from '../../lib/pdf';
 import { getParticipantScopedOrders } from '../../lib/myStats';
 import { resolveOrderRoaster } from '../../lib/roasters';
 import { RoasterAvatar } from '../roaster/RoasterAvatar';
+import { ConfirmModal } from '../ui/ConfirmModal';
 import {
   ORDER_WIZARD_STEPS,
   type OrderWizardStep,
@@ -54,6 +55,8 @@ export function HistoryPage({ participantOnly = false }: Props) {
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [downloadingOrderInvoice, setDownloadingOrderInvoice] = useState(false);
   const [orderInvoiceError, setOrderInvoiceError] = useState<string | null>(null);
+  const [deleteTargetOrder, setDeleteTargetOrder] = useState<Order | null>(null);
+  const [importStatus, setImportStatus] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
 
   const personNames = useMemo(
     () => Object.fromEntries(people.map((person) => [person.id, person.name])),
@@ -119,11 +122,12 @@ export function HistoryPage({ participantOnly = false }: Props) {
     openPastOrderEditor(order);
   }
 
-  async function handleDelete(order: Order) {
-    if (!confirm(`Delete "${order.name}"? This cannot be undone.`)) return;
-    await deleteOrder(order.id);
-    setSelectedOrderId((current) => (current === order.id ? null : current));
-    setEditingOrderId((current) => (current === order.id ? null : current));
+  async function confirmDeleteOrder() {
+    if (!deleteTargetOrder) return;
+    await deleteOrder(deleteTargetOrder.id);
+    if (selectedOrderId === deleteTargetOrder.id) setSelectedOrderId(null);
+    if (editingOrderId === deleteTargetOrder.id) setEditingOrderId(null);
+    setDeleteTargetOrder(null);
   }
 
   function handleExport() {
@@ -165,9 +169,11 @@ export function HistoryPage({ participantOnly = false }: Props) {
       const text = await file.text();
       try {
         await importJSON(text);
-        alert('Import complete.');
+        setImportStatus({ text: 'Import completed successfully.', tone: 'success' });
+        setTimeout(() => setImportStatus(null), 4000);
       } catch {
-        alert('Failed to import - invalid JSON file.');
+        setImportStatus({ text: 'Failed to import — the JSON file format was invalid.', tone: 'error' });
+        setTimeout(() => setImportStatus(null), 5000);
       }
     };
     input.click();
@@ -199,6 +205,12 @@ export function HistoryPage({ participantOnly = false }: Props) {
         )}
       </div>
 
+      {importStatus && (
+        <div className={`alert ${importStatus.tone === 'success' ? 'alert-success' : 'alert-error'}`} style={{ marginBottom: 'var(--space-4)' }}>
+          {importStatus.text}
+        </div>
+      )}
+
       {editingOrder && !participantOnly && (
         <div style={{ marginBottom: 'var(--space-6)' }}>
           <PastOrderEditor
@@ -218,29 +230,20 @@ export function HistoryPage({ participantOnly = false }: Props) {
               <div>
                 <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Saved order</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-                  {selectedOrderRoaster && (
-                    <RoasterAvatar
-                      name={selectedOrderRoaster.name}
-                      logoUrl={selectedOrderRoaster.logoUrl}
-                      size={42}
-                    />
-                  )}
-                  <div className="wizard-card-title">{selectedOrder.name}</div>
-                  <span className="wizard-badge wizard-badge-accent">Finalized</span>
+                  <h3 className="wizard-card-title">{selectedOrder.name}</h3>
+                  <span className={`summary-status-pill is-${selectedOrderResult?.isValid ? 'complete' : 'ready'}`}>
+                    {selectedOrder.isArchived ? 'Archived' : 'Saved'}
+                  </span>
                 </div>
-                <p className="wizard-card-copy" style={{ marginTop: 'var(--space-2)' }}>
-                  Finalized on {formatDateShort(selectedOrder.orderDate)}.
-                </p>
-                {selectedOrderRoaster && (
-                  <div className="field-hint" style={{ marginTop: 4 }}>
-                    Roaster: {selectedOrderRoaster.name}
-                  </div>
-                )}
+                <div className="field-hint" style={{ marginTop: 'var(--space-2)' }}>
+                  {formatDateShort(selectedOrder.orderDate)}
+                  {selectedOrderRoaster ? ` · ${selectedOrderRoaster.name}` : ''}
+                </div>
               </div>
 
               <div className="wizard-chip-row">
                 <button className="btn btn-secondary btn-sm" onClick={() => setSelectedOrderId(null)}>
-                  Back to list
+                  Close
                 </button>
                 <button
                   className="btn btn-secondary btn-sm"
@@ -250,7 +253,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
                   {downloadingOrderInvoice ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Download full order invoice'}
                 </button>
                 {!participantOnly && (
-                  <button className="btn btn-primary btn-sm" onClick={() => void handleEdit(selectedOrder)}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => void handleEdit(selectedOrder)}>
                     Edit order
                   </button>
                 )}
@@ -263,7 +266,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
                   <button
                     className="btn btn-ghost btn-sm"
                     style={{ color: 'var(--color-unpaid)' }}
-                    onClick={() => void handleDelete(selectedOrder)}
+                    onClick={() => setDeleteTargetOrder(selectedOrder)}
                   >
                     Delete
                   </button>
@@ -476,7 +479,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
                   <button
                     className="btn btn-ghost btn-sm"
                     style={{ color: 'var(--color-unpaid)' }}
-                    onClick={() => void handleDelete(order)}
+                    onClick={() => setDeleteTargetOrder(order)}
                   >
                     Delete
                   </button>
@@ -486,6 +489,19 @@ export function HistoryPage({ participantOnly = false }: Props) {
           );
         })}
       </div>
+
+      {deleteTargetOrder && (
+        <ConfirmModal
+          isOpen={true}
+          title={`Delete "${deleteTargetOrder.name}"?`}
+          description="Are you sure you want to permanently delete this past order? This action cannot be undone."
+          confirmText="Delete Order"
+          cancelText="Cancel"
+          variant="danger"
+          onConfirm={confirmDeleteOrder}
+          onCancel={() => setDeleteTargetOrder(null)}
+        />
+      )}
     </div>
   );
 }

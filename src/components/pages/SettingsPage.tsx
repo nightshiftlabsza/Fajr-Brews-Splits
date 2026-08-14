@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import type { Theme, ThemeMode, WorkspaceMember } from '../../types';
 import { formatDateShort } from '../../lib/formatters';
+import { ConfirmModal } from '../ui/ConfirmModal';
 
 const THEMES: { id: Theme; name: string; description: string }[] = [
   { id: 'emerald', name: 'Emerald Ledger', description: 'Warm mineral · Deep emerald · Serif headings' },
@@ -27,6 +28,8 @@ export function SettingsPage() {
   const [inviteSuccess, setInviteSuccess] = useState('');
   const [inviting, setInviting] = useState(false);
   const [removeError, setRemoveError] = useState('');
+  const [removeTarget, setRemoveTarget] = useState<WorkspaceMember | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   const isAdmin = memberRole === 'owner' || memberRole === 'admin';
   const roleLabel = accessStatus === 'participant' ? 'participant' : memberRole ?? 'member';
@@ -54,13 +57,17 @@ export function SettingsPage() {
     }
   }
 
-  async function handleRemove(member: WorkspaceMember) {
-    if (!confirm(`Remove ${member.email || member.fullName || 'this member'} from the workspace?`)) return;
+  async function confirmRemoveMember() {
+    if (!removeTarget) return;
+    setRemoving(true);
     setRemoveError('');
     try {
-      await removeMember(member.userId);
+      await removeMember(removeTarget.userId);
+      setRemoveTarget(null);
     } catch (e) {
       setRemoveError(String(e));
+    } finally {
+      setRemoving(false);
     }
   }
 
@@ -107,146 +114,108 @@ export function SettingsPage() {
                 value={theme.id}
                 checked={settings.theme === theme.id}
                 onChange={() => setTheme(theme.id)}
-                style={{ accentColor: 'var(--color-accent)' }}
               />
               <ThemeSwatch themeId={theme.id} />
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '0.9375rem', color: 'var(--color-text-primary)' }}>{theme.name}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 2 }}>{theme.description}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{theme.name}</div>
+                <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{theme.description}</div>
               </div>
             </label>
           ))}
         </div>
 
-        <div className="section-label">Mode</div>
-        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-          {MODES.map((m) => (
+        {/* Mode */}
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          {MODES.map((mode) => (
             <button
-              key={m.id}
-              onClick={() => setThemeMode(m.id)}
-              style={{
-                flex: '1 1 auto',
-                minWidth: 80,
-                padding: 'var(--space-3) var(--space-4)',
-                border: `1.5px solid ${settings.themeMode === m.id ? 'var(--color-accent)' : 'var(--color-border)'}`,
-                borderRadius: 'var(--radius-sm)',
-                background: settings.themeMode === m.id ? 'var(--color-accent-light)' : 'var(--color-surface-raised)',
-                color: settings.themeMode === m.id ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-                fontWeight: settings.themeMode === m.id ? 700 : 400,
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                transition: 'border-color var(--transition-fast), background var(--transition-fast)',
-              }}
+              key={mode.id}
+              className={`btn btn-sm ${settings.themeMode === mode.id ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ flex: 1 }}
+              onClick={() => setThemeMode(mode.id)}
             >
-              {m.icon} {m.label}
+              {mode.icon} {mode.label}
             </button>
           ))}
         </div>
-        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 'var(--space-2)' }}>
-          Auto follows your device's dark/light preference.
-        </p>
       </Section>
 
-      {/* Workspace members (admin only) */}
-      {accessStatus === 'member' && (
-        <Section
-          title="Workspace Members"
-          action={
-            !membersLoaded ? (
-              <button className="btn btn-secondary btn-sm" onClick={loadMembers}>Load members</button>
-            ) : undefined
-          }
-        >
+      {/* Workspace members — Admin only */}
+      {isAdmin && (
+        <Section title="Workspace Members" action={
+          !membersLoaded ? (
+            <button className="btn btn-ghost btn-sm" onClick={loadMembers}>Load members</button>
+          ) : undefined
+        }>
           {!membersLoaded ? (
             <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-              Click "Load members" to view and manage workspace access.
+              Click above to view and manage workspace members.
             </p>
           ) : (
             <>
-              {workspaceMembers.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginBottom: 'var(--space-5)' }}>
-                {workspaceMembers.map((member) => (
-                  <div key={member.id} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-3)',
-                    padding: 'var(--space-3) var(--space-4)',
-                    background: 'var(--color-surface-raised)',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--color-border)',
-                  }}>
-                    <div style={{
-                      width: 32, height: 32, borderRadius: '50%',
-                      background: 'var(--color-accent-light)', color: 'var(--color-accent)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontWeight: 700, fontSize: '0.875rem', flexShrink: 0,
-                    }}>
-                      {(member.fullName || member.email || '?')[0]?.toUpperCase()}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {member.fullName || member.email}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', textTransform: 'capitalize' }}>
-                        {member.role}
-                        {member.userId === user?.id && ' (you)'}
-                      </div>
-                    </div>
-                    {isAdmin && member.userId !== user?.id && member.role !== 'owner' && (
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        style={{ color: 'var(--color-unpaid)', flexShrink: 0 }}
-                        onClick={() => handleRemove(member)}
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                ))}
+              {/* Invite */}
+              <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)', flexWrap: 'wrap' }}>
+                <input
+                  className="input"
+                  type="email"
+                  placeholder="Invite by email…"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  style={{ flex: 1, minWidth: 200 }}
+                />
+                <select
+                  className="input"
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member')}
+                  style={{ width: 'auto' }}
+                >
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <button className="btn btn-primary" onClick={handleInvite} disabled={inviting}>
+                  {inviting ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Invite'}
+                </button>
               </div>
-            )}
 
-              {removeError && (
-                <div className="alert alert-error" style={{ marginBottom: 'var(--space-4)' }}>{removeError}</div>
-              )}
+              {inviteError && <div className="alert alert-error" style={{ marginBottom: 'var(--space-3)' }}>{inviteError}</div>}
+              {inviteSuccess && <div className="alert alert-success" style={{ marginBottom: 'var(--space-3)' }}>{inviteSuccess}</div>}
+              {removeError && <div className="alert alert-error" style={{ marginBottom: 'var(--space-3)' }}>{removeError}</div>}
 
-              {isAdmin && (
-                <div>
-                  <div className="section-label">Add member by email</div>
-                  <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-                    <input
-                      className="input"
-                      type="email"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      placeholder="member@example.com"
-                      style={{ flex: 1, minWidth: 200 }}
-                    />
-                    <select
-                      className="select"
-                      value={inviteRole}
-                      onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member')}
-                      style={{ width: 120 }}
-                    >
-                      <option value="member">Member</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                    <button className="btn btn-primary" onClick={handleInvite} disabled={inviting}>
-                      {inviting ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Add'}
-                    </button>
-                  </div>
-                  {inviteError && <div className="alert alert-error mt-3">{inviteError}</div>}
-                  {inviteSuccess && <div className="alert alert-success mt-3">{inviteSuccess}</div>}
-                  <p className="field-hint mt-2">
-                    The person must first create an account in the app, then you can add them here.
-                  </p>
+              {/* Members list */}
+              {workspaceMembers.length === 0 ? (
+                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>No members found.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                  {workspaceMembers.map((member) => (
+                    <div key={member.id} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: 'var(--space-3)',
+                      background: 'var(--color-surface-raised)',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--color-border)',
+                      gap: 'var(--space-3)',
+                    }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--color-text-primary)' }}>
+                          {member.fullName || member.email || member.userId}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', textTransform: 'capitalize' }}>
+                          {member.role} · joined {formatDateShort(member.createdAt.split('T')[0])}
+                        </div>
+                      </div>
+                      {member.userId !== user?.id && (
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ color: 'var(--color-unpaid)' }}
+                          onClick={() => setRemoveTarget(member)}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              )}
-
-              {!isAdmin && (
-                <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
-                  Only admins can add or remove workspace members.
-                </p>
               )}
             </>
           )}
@@ -268,6 +237,21 @@ export function SettingsPage() {
         <div className="alert alert-info" style={{ fontSize: '0.8125rem' }}>
           Last backup exported: {formatDateShort(settings.lastExportDate.split('T')[0])}
         </div>
+      )}
+
+      {/* Remove Member Confirm Modal */}
+      {removeTarget && (
+        <ConfirmModal
+          isOpen={true}
+          title={`Remove "${removeTarget.email || removeTarget.fullName || 'Member'}"?`}
+          description="Are you sure you want to remove this member from the workspace? They will lose access to all orders and data."
+          confirmText="Remove Member"
+          cancelText="Cancel"
+          variant="danger"
+          isLoading={removing}
+          onConfirm={confirmRemoveMember}
+          onCancel={() => setRemoveTarget(null)}
+        />
       )}
     </div>
   );

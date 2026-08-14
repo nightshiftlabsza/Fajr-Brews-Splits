@@ -311,7 +311,6 @@ describe('HistoryPage', () => {
     });
 
     clickButtonByText(container, 'Edit order');
-    clickExactButtonByText(container, 'Edit', 1);
     clickExactButtonByText(container, 'Add new buyer');
 
     const nameInput = container.querySelector('input[placeholder="Full name"]') as HTMLInputElement;
@@ -340,12 +339,12 @@ describe('HistoryPage', () => {
             bags: [
               expect.objectContaining({
                 id: 'bag-pastel-1',
-                buyers: [expect.objectContaining({ personId: 'person-abdul', grams: 250 })],
+                buyers: [expect.objectContaining({ personId: 'person-ahmed', grams: 250 })],
               }),
             ],
             bagAllocations: [
               expect.objectContaining({
-                participants: [expect.objectContaining({ personId: 'person-abdul', shareGrams: 250 })],
+                participants: [expect.objectContaining({ personId: 'person-ahmed', shareGrams: 250 })],
               }),
             ],
           }),

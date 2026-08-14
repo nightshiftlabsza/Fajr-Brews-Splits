@@ -269,8 +269,6 @@ describe('OrderSummary', () => {
   });
 
   it('deletes the active order from the main summary after confirmation', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => true));
-
     act(() => {
       root.render(
         <OrderSummary
@@ -287,7 +285,13 @@ describe('OrderSummary', () => {
       await Promise.resolve();
     });
 
-    expect(globalThis.confirm).toHaveBeenCalledWith('Delete "March Drop"? This cannot be undone.');
+    expect(container.textContent).toContain('Delete "March Drop"?');
+    clickButtonByText(container, 'Delete Order');
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
     expect(mockStoreState.flushOrderWrites).toHaveBeenCalledWith('order-1');
     expect(mockStoreState.deleteOrder).toHaveBeenCalledWith('order-1');
   });
