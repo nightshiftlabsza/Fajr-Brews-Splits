@@ -12,11 +12,12 @@ import {
   upsertRoasterById,
 } from '../lib/storeState';
 import { assertCanPersistOrder } from '../lib/orderIntegrity';
-import { getNextActiveOrderId, getPreferredActiveOrderId } from '../lib/orderLifecycle';
+import { getNextActiveOrderId, getPreferredActiveOrderId, normalizeOrderStatus, syncOrderStatusFlags } from '../lib/orderLifecycle';
 import { createRoasterSnapshot, normalizeRoasterName } from '../lib/roasters';
 import type {
   Person,
   Order,
+  OrderStatus,
   AppSettings,
   Theme,
   ThemeMode,
@@ -50,11 +51,13 @@ function mapPerson(row: DbPerson): Person {
 }
 
 function mapOrder(row: DbOrder): Order {
+  const status = normalizeOrderStatus(row.status, row.is_archived);
   return {
     id: row.id,
     workspaceId: row.workspace_id,
     name: row.name,
     orderDate: row.order_date,
+    status,
     roasterId: row.roaster_id ?? null,
     roasterSnapshot: row.roaster_snapshot ?? null,
     payerId: row.payer_id,
@@ -67,7 +70,7 @@ function mapOrder(row: DbOrder): Order {
     payments: (row.payments && typeof row.payments === 'object' && !Array.isArray(row.payments))
       ? row.payments
       : {},
-    isArchived: row.is_archived,
+    isArchived: status === 'archived',
     ownerId: row.owner_id ?? row.created_by ?? undefined,
     createdBy: row.created_by ?? undefined,
     createdAt: row.created_at,
@@ -142,9 +145,12 @@ interface AppStore {
   updateRoaster: (id: string, data: { name?: string; logoFile?: File | null; removeLogo?: boolean }) => Promise<Roaster>;
 
   // ── Order Actions ─────────────────────────────────────────
-  createOrder: (data: Omit<Order, 'id' | 'workspaceId' | 'isArchived' | 'createdBy' | 'createdAt' | 'updatedAt'>) => Promise<Order | null>;
+  createOrder: (data: Omit<Order, 'id' | 'workspaceId' | 'status' | 'isArchived' | 'createdBy' | 'createdAt' | 'updatedAt'> & { status?: OrderStatus }) => Promise<Order | null>;
   updateOrder: (id: string, data: Partial<Order>) => Promise<void>;
+  updateOrderStatus: (id: string, status: OrderStatus) => Promise<void>;
   deleteOrder: (id: string) => Promise<void>;
+  joinOrder: (orderId: string) => Promise<void>;
+  leaveOrder: (orderId: string) => Promise<void>;
   setCurrentOrderId: (id: string | null) => void;
   setOrderWizardStep: (orderId: string, step: OrderWizardStep) => void;
   flushOrderWrites: (orderId: string) => Promise<void>;
@@ -609,7 +615,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
           for (const row of (ownedOrderRows as DbOrder[] | null) ?? []) {
             fetchedOrdersById.set(row.id, row);
           }
-        } else if (linkedPersonId) {
+        }
+
+        if (linkedPersonId && !canFetchAllOrders) {
           const { data: scopedOrderRows, error: scopedOrderError } = await supabase
             .rpc('get_my_participant_orders');
 
@@ -1022,12 +1030,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // ── Orders ────────────────────────────────────────────────
   createOrder: async (data) => {
     const userId = get().user?.id;
+    const initialStatus = normalizeOrderStatus(data.status, false);
     const { data: row, error } = await supabase
       .from('orders')
       .insert({
         workspace_id: WORKSPACE_ID,
         name: data.name,
         order_date: data.orderDate,
+        status: initialStatus,
         roaster_id: data.roasterId,
         roaster_snapshot: data.roasterSnapshot,
         payer_id: data.payerId,
@@ -1038,7 +1048,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         lots: data.lots,
         fees: data.fees,
         payments: data.payments,
-        is_archived: false,
+        is_archived: initialStatus === 'archived',
         owner_id: userId ?? null,
         created_by: userId ?? null,
       })
@@ -1061,11 +1071,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
       return;
     }
 
-    if (targetOrder.isArchived && data.isArchived === false) {
-      throw new Error('Saved historical orders cannot be moved back to the current order flow.');
+    const mergedOrder = syncOrderStatusFlags(mergeOrderPatch(targetOrder, data));
+    if (targetOrder.isArchived && mergedOrder.status !== 'archived') {
+      throw new Error('Saved historical orders cannot be moved back to active order status.');
     }
 
-    const mergedOrder = mergeOrderPatch(targetOrder, data);
     const strictIntegrity = targetOrder.isArchived || mergedOrder.isArchived;
     const optimisticOrder = assertCanPersistOrder(mergedOrder, {
       people: get().people,
@@ -1079,6 +1089,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const dbData: Record<string, unknown> = {};
     if (data.name !== undefined) dbData.name = optimisticOrder.name;
     if (data.orderDate !== undefined) dbData.order_date = optimisticOrder.orderDate;
+    if (data.status !== undefined || data.isArchived !== undefined) {
+      dbData.status = optimisticOrder.status;
+      dbData.is_archived = optimisticOrder.isArchived;
+    }
     if (data.roasterId !== undefined) dbData.roaster_id = optimisticOrder.roasterId;
     if (data.roasterSnapshot !== undefined) dbData.roaster_snapshot = optimisticOrder.roasterSnapshot;
     if (data.payerId !== undefined) dbData.payer_id = optimisticOrder.payerId;
@@ -1108,6 +1122,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
     orderWriteChains.set(id, nextChain);
     await nextChain;
+  },
+
+  updateOrderStatus: async (id, status) => {
+    await get().updateOrder(id, { status, isArchived: status === 'archived' });
+  },
+
+  joinOrder: async (orderId) => {
+    const { error } = await supabase.rpc('join_planned_order', { p_order_id: orderId });
+    if (error) throw new Error(error.message);
+    await get().initialize({ silent: true });
+  },
+
+  leaveOrder: async (orderId) => {
+    const { error } = await supabase.rpc('leave_planned_order', { p_order_id: orderId });
+    if (error) throw new Error(error.message);
+    await get().initialize({ silent: true });
   },
 
   deleteOrder: async (id) => {

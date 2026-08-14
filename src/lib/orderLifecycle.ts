@@ -1,15 +1,42 @@
-import type { Order } from '../types';
+import type { Order, OrderStatus } from '../types';
+
+export function normalizeOrderStatus(status?: string | null, isArchived?: boolean): OrderStatus {
+  if (isArchived || status === 'archived') {
+    return 'archived';
+  }
+  if (status === 'locked' || status === 'completed' || status === 'planning') {
+    return status;
+  }
+  return 'planning';
+}
+
+export function syncOrderStatusFlags<T extends { status?: OrderStatus | null; isArchived?: boolean }>(
+  target: T,
+): T & { status: OrderStatus; isArchived: boolean } {
+  const canonicalStatus = normalizeOrderStatus(target.status, target.isArchived);
+  return {
+    ...target,
+    status: canonicalStatus,
+    isArchived: canonicalStatus === 'archived',
+  };
+}
 
 function byNewestOrderDate(left: Order, right: Order): number {
   return new Date(right.orderDate).getTime() - new Date(left.orderDate).getTime();
 }
 
 export function getActiveOrders(orders: Order[]): Order[] {
-  return orders.filter((order) => !order.isArchived).sort(byNewestOrderDate);
+  return orders
+    .map(syncOrderStatusFlags)
+    .filter((order) => order.status !== 'archived')
+    .sort(byNewestOrderDate);
 }
 
 export function getPastOrders(orders: Order[]): Order[] {
-  return orders.filter((order) => order.isArchived).sort(byNewestOrderDate);
+  return orders
+    .map(syncOrderStatusFlags)
+    .filter((order) => order.status === 'archived')
+    .sort(byNewestOrderDate);
 }
 
 export function getPreferredActiveOrderId(orders: Order[], currentOrderId?: string | null): string | null {
@@ -24,6 +51,10 @@ export function getNextActiveOrderId(orders: Order[], excludedOrderId?: string):
   return getActiveOrders(orders).find((order) => order.id !== excludedOrderId)?.id ?? null;
 }
 
-export function getOrderLifecycleLabel(order: Order): 'In progress' | 'Past order' {
-  return order.isArchived ? 'Past order' : 'In progress';
+export function getOrderLifecycleLabel(order: Order): 'Planning' | 'Locked' | 'Completed' | 'Past order' {
+  const normalized = normalizeOrderStatus(order.status, order.isArchived);
+  if (normalized === 'archived') return 'Past order';
+  if (normalized === 'locked') return 'Locked';
+  if (normalized === 'completed') return 'Completed';
+  return 'Planning';
 }

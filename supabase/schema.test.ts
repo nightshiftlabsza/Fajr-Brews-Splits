@@ -53,4 +53,12 @@ describe('supabase schema access rules', () => {
     expect(finalAccessSection).toContain('USING (public.is_order_full_viewer(workspace_id, coalesce(owner_id, created_by)))');
     expect(finalAccessSection).toContain('WHERE NOT public.is_order_full_viewer');
   });
+
+  it('filters lots, shares, buyers, fees, and payments to strip other participants data server-side in get_my_participant_orders', () => {
+    const rpcDefinition = schema.slice(schema.indexOf('CREATE OR REPLACE FUNCTION public.get_my_participant_orders()'));
+    expect(rpcDefinition).toContain("share->>'personId' = po.me_id::text");
+    expect(rpcDefinition).toContain("buyer->>'personId' = po.me_id::text");
+    expect(rpcDefinition).toContain("CASE WHEN po.payer_id = po.me_id THEN po.payer_id ELSE NULL END AS payer_id");
+    expect(rpcDefinition).toContain("po.payments ? po.me_id::text THEN jsonb_build_object(po.me_id::text, po.payments -> po.me_id::text)");
+  });
 });

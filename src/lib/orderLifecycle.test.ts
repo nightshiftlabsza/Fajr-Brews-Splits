@@ -14,6 +14,7 @@ function makeOrder(id: string, orderDate: string, isArchived: boolean): Order {
     workspaceId: 'workspace-1',
     name: id,
     orderDate,
+    status: isArchived ? 'archived' : 'planning',
     roasterId: null,
     roasterSnapshot: null,
     payerId: null,
@@ -56,7 +57,7 @@ describe('orderLifecycle helpers', () => {
   });
 
   it('labels order lifecycle state for the UI', () => {
-    expect(getOrderLifecycleLabel(makeOrder('draft', '2026-03-18', false))).toBe('In progress');
+    expect(getOrderLifecycleLabel(makeOrder('draft', '2026-03-18', false))).toBe('Planning');
     expect(getOrderLifecycleLabel(makeOrder('past', '2026-03-18', true))).toBe('Past order');
   });
 });

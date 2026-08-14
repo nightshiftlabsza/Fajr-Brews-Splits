@@ -757,55 +757,105 @@ AS $$
     FROM public.people p
     WHERE p.linked_user_id = auth.uid()
     LIMIT 1
+  ),
+  participant_orders AS (
+    SELECT o.*, lp.person_id AS me_id
+    FROM public.orders o
+    JOIN public.order_participants op
+      ON op.order_id = o.id
+     AND op.user_id = auth.uid()
+    CROSS JOIN linked_person lp
+    WHERE NOT public.is_order_full_viewer(o.workspace_id, coalesce(o.owner_id, o.created_by))
   )
   SELECT
-    o.id,
-    o.workspace_id,
-    o.name,
-    o.order_date,
-    o.roaster_id,
-    o.roaster_snapshot,
-    CASE WHEN o.payer_id = lp.person_id THEN o.payer_id ELSE NULL END AS payer_id,
-    o.payer_bank,
-    o.reference_template,
-    o.payer_note,
-    o.goods_total_zar,
+    po.id,
+    po.workspace_id,
+    po.name,
+    po.order_date,
+    po.roaster_id,
+    po.roaster_snapshot,
+    CASE WHEN po.payer_id = po.me_id THEN po.payer_id ELSE NULL END AS payer_id,
+    po.payer_bank,
+    po.reference_template,
+    po.payer_note,
     coalesce((
-      SELECT jsonb_agg(lot)
-      FROM jsonb_array_elements(o.lots) lot
+      SELECT sum(coalesce((lot->>'foreignPricePerBag')::numeric, 0) * coalesce((
+        SELECT sum(coalesce((buyer->>'grams')::numeric, 0)) / nullif(coalesce((lot->>'gramsPerBag')::numeric, 1), 0)
+        FROM jsonb_array_elements(coalesce(lot->'bags', '[]'::jsonb)) bag
+        CROSS JOIN LATERAL jsonb_array_elements(coalesce(bag->'buyers', '[]'::jsonb)) buyer
+        WHERE buyer->>'personId' = po.me_id::text
+      ), 0))
+      FROM jsonb_array_elements(po.lots) lot
       WHERE EXISTS (
-        SELECT 1
-        FROM jsonb_array_elements(coalesce(lot->'shares', '[]'::jsonb)) share
-        WHERE share->>'personId' = lp.person_id::text
+        SELECT 1 FROM jsonb_array_elements(coalesce(lot->'bags', '[]'::jsonb)) bag
+        CROSS JOIN LATERAL jsonb_array_elements(coalesce(bag->'buyers', '[]'::jsonb)) buyer
+        WHERE buyer->>'personId' = po.me_id::text
+      ) OR EXISTS (
+        SELECT 1 FROM jsonb_array_elements(coalesce(lot->'shares', '[]'::jsonb)) share
+        WHERE share->>'personId' = po.me_id::text
+      )
+    ), po.goods_total_zar) AS goods_total_zar,
+    coalesce((
+      SELECT jsonb_agg(
+        jsonb_set(
+          jsonb_set(
+            lot,
+            '{shares}',
+            coalesce((
+              SELECT jsonb_agg(share)
+              FROM jsonb_array_elements(coalesce(lot->'shares', '[]'::jsonb)) share
+              WHERE share->>'personId' = po.me_id::text
+            ), '[]'::jsonb)
+          ),
+          '{bags}',
+          coalesce((
+            SELECT jsonb_agg(
+              jsonb_set(
+                bag,
+                '{buyers}',
+                coalesce((
+                  SELECT jsonb_agg(buyer)
+                  FROM jsonb_array_elements(coalesce(bag->'buyers', '[]'::jsonb)) buyer
+                  WHERE buyer->>'personId' = po.me_id::text
+                ), '[]'::jsonb)
+              )
+            )
+            FROM jsonb_array_elements(coalesce(lot->'bags', '[]'::jsonb)) bag
+            WHERE EXISTS (
+              SELECT 1
+              FROM jsonb_array_elements(coalesce(bag->'buyers', '[]'::jsonb)) buyer
+              WHERE buyer->>'personId' = po.me_id::text
+            )
+          ), '[]'::jsonb)
+        )
+      )
+      FROM jsonb_array_elements(po.lots) lot
+      WHERE EXISTS (
+        SELECT 1 FROM jsonb_array_elements(coalesce(lot->'shares', '[]'::jsonb)) share
+        WHERE share->>'personId' = po.me_id::text
       )
       OR EXISTS (
-        SELECT 1
-        FROM jsonb_array_elements(coalesce(lot->'bags', '[]'::jsonb)) bag
-        JOIN LATERAL jsonb_array_elements(coalesce(bag->'buyers', '[]'::jsonb)) buyer ON true
-        WHERE buyer->>'personId' = lp.person_id::text
+        SELECT 1 FROM jsonb_array_elements(coalesce(lot->'bags', '[]'::jsonb)) bag
+        CROSS JOIN LATERAL jsonb_array_elements(coalesce(bag->'buyers', '[]'::jsonb)) buyer
+        WHERE buyer->>'personId' = po.me_id::text
       )
     ), '[]'::jsonb) AS lots,
     coalesce((
       SELECT jsonb_agg(fee)
-      FROM jsonb_array_elements(o.fees) fee
+      FROM jsonb_array_elements(po.fees) fee
       WHERE fee->>'allocationType' IN ('equal_per_person', 'proportional_by_value', 'fixed_shared', 'value_based')
-        OR (fee->>'allocationType' = 'specific_person' AND fee->>'personId' = lp.person_id::text)
+         OR (fee->>'allocationType' = 'specific_person' AND fee->>'personId' = po.me_id::text)
     ), '[]'::jsonb) AS fees,
     CASE
-      WHEN o.payments ? lp.person_id::text THEN jsonb_build_object(lp.person_id::text, o.payments -> lp.person_id::text)
+      WHEN po.payments ? po.me_id::text THEN jsonb_build_object(po.me_id::text, po.payments -> po.me_id::text)
       ELSE '{}'::jsonb
     END AS payments,
-    o.is_archived,
+    po.is_archived,
     NULL::uuid AS owner_id,
     NULL::uuid AS created_by,
-    o.created_at,
-    o.updated_at
-  FROM public.orders o
-  JOIN public.order_participants op
-    ON op.order_id = o.id
-   AND op.user_id = auth.uid()
-  CROSS JOIN linked_person lp
-  WHERE NOT public.is_order_full_viewer(o.workspace_id, coalesce(o.owner_id, o.created_by));
+    po.created_at,
+    po.updated_at
+  FROM participant_orders po;
 $$;
 
 CREATE OR REPLACE FUNCTION public.sync_order_participants(p_order_id uuid)
@@ -1909,6 +1959,7 @@ RETURNS TABLE (
   workspace_id uuid,
   name text,
   order_date date,
+  status text,
   roaster_id uuid,
   roaster_snapshot jsonb,
   payer_id uuid,
@@ -1941,6 +1992,7 @@ AS $$
     o.workspace_id,
     o.name,
     o.order_date,
+    o.status,
     o.roaster_id,
     o.roaster_snapshot,
     CASE WHEN o.payer_id = lp.person_id THEN o.payer_id ELSE NULL END AS payer_id,
@@ -1949,7 +2001,39 @@ AS $$
     o.payer_note,
     o.goods_total_zar,
     coalesce((
-      SELECT jsonb_agg(lot)
+      SELECT jsonb_agg(
+        jsonb_build_object(
+          'id', lot->>'id',
+          'name', lot->>'name',
+          'foreignPricePerBag', lot->'foreignPricePerBag',
+          'gramsPerBag', lot->'gramsPerBag',
+          'quantity', lot->'quantity',
+          'shares', coalesce((
+            SELECT jsonb_agg(share)
+            FROM jsonb_array_elements(coalesce(lot->'shares', '[]'::jsonb)) share
+            WHERE share->>'personId' = lp.person_id::text
+          ), '[]'::jsonb),
+          'bags', coalesce((
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'id', bag->>'id',
+                'splitMode', bag->>'splitMode',
+                'buyers', (
+                  SELECT jsonb_agg(buyer)
+                  FROM jsonb_array_elements(coalesce(bag->'buyers', '[]'::jsonb)) buyer
+                  WHERE buyer->>'personId' = lp.person_id::text
+                )
+              )
+            )
+            FROM jsonb_array_elements(coalesce(lot->'bags', '[]'::jsonb)) bag
+            WHERE EXISTS (
+              SELECT 1
+              FROM jsonb_array_elements(coalesce(bag->'buyers', '[]'::jsonb)) b
+              WHERE b->>'personId' = lp.person_id::text
+            )
+          ), '[]'::jsonb)
+        )
+      )
       FROM jsonb_array_elements(o.lots) lot
       WHERE EXISTS (
         SELECT 1
@@ -2053,3 +2137,169 @@ CREATE POLICY "Members can update orders"
 CREATE POLICY "Members can delete orders"
   ON public.orders FOR DELETE
   USING (public.is_order_full_viewer(workspace_id, coalesce(owner_id, created_by)));
+
+-- ============================================================
+-- MIGRATION 003 — Canonical OrderStatus and Planned Order Joining
+-- ============================================================
+
+ALTER TABLE public.orders
+  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'planning'
+  CHECK (status IN ('planning', 'locked', 'completed', 'archived'));
+
+UPDATE public.orders
+SET status = 'archived'
+WHERE is_archived = true AND status != 'archived';
+
+UPDATE public.orders
+SET status = 'planning'
+WHERE (is_archived = false OR is_archived IS NULL) AND (status IS NULL OR status = 'archived');
+
+CREATE OR REPLACE FUNCTION public._sync_order_status_and_archived()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NEW.status = 'archived' THEN
+    NEW.is_archived := true;
+  ELSIF NEW.is_archived = true AND (OLD.is_archived IS DISTINCT FROM NEW.is_archived OR NEW.status IS NULL) THEN
+    NEW.status := 'archived';
+  ELSIF NEW.status IS NULL THEN
+    NEW.status := 'planning';
+    NEW.is_archived := false;
+  ELSE
+    NEW.is_archived := false;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_sync_order_status ON public.orders;
+CREATE TRIGGER trg_sync_order_status
+  BEFORE INSERT OR UPDATE OF status, is_archived
+  ON public.orders
+  FOR EACH ROW
+  EXECUTE FUNCTION public._sync_order_status_and_archived();
+
+CREATE OR REPLACE FUNCTION public.join_planned_order(p_order_id uuid)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_user_email text;
+  v_order_record public.orders%ROWTYPE;
+  v_person_id uuid;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Authentication required to join an order';
+  END IF;
+
+  SELECT * INTO v_order_record
+  FROM public.orders
+  WHERE id = p_order_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Order not found';
+  END IF;
+
+  IF NOT public.is_workspace_member(v_order_record.workspace_id) THEN
+    RAISE EXCEPTION 'Access denied: You must be a workspace member to join this order';
+  END IF;
+
+  IF v_order_record.status IS DISTINCT FROM 'planning' AND v_order_record.is_archived = true THEN
+    RAISE EXCEPTION 'Order is no longer open for joining';
+  END IF;
+
+  SELECT id INTO v_person_id
+  FROM public.people
+  WHERE workspace_id = v_order_record.workspace_id
+    AND linked_user_id = v_user_id
+  LIMIT 1;
+
+  IF v_person_id IS NULL THEN
+    SELECT email INTO v_user_email
+    FROM public.profiles
+    WHERE id = v_user_id;
+
+    IF v_user_email IS NOT NULL AND v_user_email != '' THEN
+      SELECT id INTO v_person_id
+      FROM public.people
+      WHERE workspace_id = v_order_record.workspace_id
+        AND lower(trim(email)) = lower(trim(v_user_email))
+      LIMIT 1;
+
+      IF v_person_id IS NOT NULL THEN
+        UPDATE public.people
+        SET linked_user_id = v_user_id,
+            linked_at = now(),
+            link_source = 'email'
+        WHERE id = v_person_id AND linked_user_id IS NULL;
+      END IF;
+    END IF;
+  END IF;
+
+  IF v_person_id IS NULL THEN
+    SELECT full_name, email INTO v_user_email, v_user_email
+    FROM public.profiles
+    WHERE id = v_user_id;
+
+    INSERT INTO public.people (
+      workspace_id,
+      name,
+      email,
+      linked_user_id,
+      linked_at,
+      link_source
+    )
+    VALUES (
+      v_order_record.workspace_id,
+      coalesce(nullif(v_user_email, ''), 'Participant'),
+      v_user_email,
+      v_user_id,
+      now(),
+      'manual'
+    )
+    RETURNING id INTO v_person_id;
+  END IF;
+
+  INSERT INTO public.order_participants (order_id, user_id)
+  VALUES (p_order_id, v_user_id)
+  ON CONFLICT (order_id, user_id) DO NOTHING;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'orderId', p_order_id,
+    'personId', v_person_id
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.leave_planned_order(p_order_id uuid)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_order_record public.orders%ROWTYPE;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Authentication required';
+  END IF;
+
+  SELECT * INTO v_order_record
+  FROM public.orders
+  WHERE id = p_order_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Order not found';
+  END IF;
+
+  IF v_order_record.status IS DISTINCT FROM 'planning' AND v_order_record.is_archived = true THEN
+    RAISE EXCEPTION 'Cannot leave an order that is finalized or locked';
+  END IF;
+
+  IF v_order_record.owner_id = v_user_id OR v_order_record.created_by = v_user_id THEN
+    RAISE EXCEPTION 'The order owner cannot leave the order. You can delete or archive it instead.';
+  END IF;
+
+  DELETE FROM public.order_participants
+  WHERE order_id = p_order_id AND user_id = v_user_id;
+
+  RETURN jsonb_build_object('success', true, 'orderId', p_order_id);
+END;
+$$;
+

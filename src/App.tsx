@@ -87,9 +87,14 @@ export default function App() {
 
     void initialize();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       // Token refresh doesn't change user identity or data — skip re-init
       if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') return;
+
+      const currentUser = useAppStore.getState().user;
+      if (event === 'SIGNED_IN' && currentUser && currentUser.id === session?.user?.id) {
+        return;
+      }
 
       if (event === 'PASSWORD_RECOVERY') {
         setAuthMode('recovery');
@@ -113,6 +118,23 @@ export default function App() {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!user || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const joinOrderId = params.get('joinOrder');
+    if (joinOrderId) {
+      void useAppStore.getState().joinOrder(joinOrderId).then(() => {
+        const nextParams = new URLSearchParams(window.location.search);
+        nextParams.delete('joinOrder');
+        const search = nextParams.toString() ? `?${nextParams.toString()}` : '';
+        window.history.replaceState({}, document.title, `${window.location.pathname}${search}${window.location.hash}`);
+        setCurrentTab('order');
+      }).catch((err) => {
+        console.error('Failed to join order:', err);
+      });
+    }
+  }, [user]);
 
   useEffect(() => {
     if (accessStatus === 'participant' && (currentTab === 'order' || currentTab === 'people')) {

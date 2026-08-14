@@ -9,7 +9,7 @@ interface HeaderProps {
 }
 
 const FULL_TABS: { id: AppTab; label: string }[] = [
-  { id: 'order', label: 'Order' },
+  { id: 'order', label: 'Active Orders' },
   { id: 'people', label: 'People' },
   { id: 'my-stats', label: 'My Stats' },
   { id: 'history', label: 'Past Orders' },

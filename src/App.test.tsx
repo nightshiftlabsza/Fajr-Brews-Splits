@@ -52,7 +52,14 @@ vi.mock('./components/auth/PendingAccess', () => ({
 }));
 
 vi.mock('./components/layout/Header', () => ({
-  Header: () => <div>Header</div>,
+  Header: ({ onTabChange }: { onTabChange: (tab: string) => void }) => (
+    <div>
+      <button data-tab="order" onClick={() => onTabChange('order')}>Order</button>
+      <button data-tab="people" onClick={() => onTabChange('people')}>People</button>
+      <button data-tab="history" onClick={() => onTabChange('history')}>History</button>
+      <button data-tab="my-stats" onClick={() => onTabChange('my-stats')}>My Stats</button>
+    </div>
+  ),
 }));
 
 vi.mock('./components/pages/OrderPage', () => ({
@@ -130,7 +137,7 @@ describe('App loading shell', () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain('Header');
+    expect(container.textContent).toContain('Order');
     expect(container.textContent).toContain('OrderPage');
     expect(container.textContent).toContain('MyStatsPage');
     expect(container.textContent).not.toContain('Fajr Brews');
@@ -158,5 +165,58 @@ describe('App loading shell', () => {
     expect(container.textContent).toContain('MyStatsPage');
     expect(container.textContent).toContain('HistoryPage');
     expect(container.textContent).not.toContain('OrderPage');
+  });
+
+  it('keeps the main shell alive without showing startup splash when isInitialized is true', async () => {
+    mockStoreState.isInitialized = true;
+    mockStoreState.isLoading = false;
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('.spinner')).toBeNull();
+    expect(container.textContent).toContain('OrderPage');
+  });
+
+  it('does NOT call initialize() when switching tabs 25 times and shows ZERO loading spinners', async () => {
+    mockStoreState.isInitialized = true;
+    mockStoreState.isLoading = false;
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+    });
+
+    const initCallsAfterMount = mockStoreState.initialize.mock.calls.length;
+
+    const toPeople = container.querySelector('button[data-tab="people"]');
+    const toOrder = container.querySelector('button[data-tab="order"]');
+    const toHistory = container.querySelector('button[data-tab="history"]');
+
+    expect(toPeople).toBeTruthy();
+    expect(toOrder).toBeTruthy();
+    expect(toHistory).toBeTruthy();
+
+    for (let i = 0; i < 25; i++) {
+      await act(async () => {
+        toPeople?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(container.querySelector('.spinner')).toBeNull();
+
+      await act(async () => {
+        toOrder?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(container.querySelector('.spinner')).toBeNull();
+
+      await act(async () => {
+        toHistory?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(container.querySelector('.spinner')).toBeNull();
+    }
+
+    // initialize was NEVER called during tab transitions
+    expect(mockStoreState.initialize.mock.calls.length).toBe(initCallsAfterMount);
   });
 });

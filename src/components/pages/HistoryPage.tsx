@@ -110,6 +110,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
       ...order,
       name: `${order.name} (copy)`,
       orderDate: todayISO(),
+      status: 'planning',
       payments: {},
     });
   }
@@ -511,7 +512,7 @@ function PastOrderEditor({ order, onClose }: { order: Order; onClose: () => void
     draftOrderRef.current = nextDraft;
     setDraftOrder(nextDraft);
     setSaveError(null);
-  }, [order]);
+  }, [order.id]);
 
   useEffect(() => {
     if (savedStep) {
@@ -525,12 +526,14 @@ function PastOrderEditor({ order, onClose }: { order: Order; onClose: () => void
       ...current,
       ...patch,
       id: sourceOrderId,
+      status: 'archived',
       isArchived: true,
     }));
     draftOrderRef.current = {
       ...draftOrderRef.current,
       ...patch,
       id: sourceOrderId,
+      status: 'archived',
       isArchived: true,
     };
   }

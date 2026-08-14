@@ -121,11 +121,14 @@ export interface PayerBank {
 }
 
 // ─── Order ────────────────────────────────────────────────────
+export type OrderStatus = 'planning' | 'locked' | 'completed' | 'archived';
+
 export interface Order {
   id: string;
   workspaceId: string;
   name: string;
   orderDate: string;         // ISO date string (YYYY-MM-DD)
+  status?: OrderStatus;      // Canonical order status
   roasterId: string | null;
   roasterSnapshot: RoasterSnapshot | null;
   payerId: string | null;    // references people.id
@@ -136,7 +139,7 @@ export interface Order {
   lots: CoffeeLot[];
   fees: Fee[];
   payments: Record<string, PaymentRecord>; // personId → PaymentRecord
-  isArchived: boolean;
+  isArchived: boolean;       // kept in sync with status === 'archived'
   ownerId?: string;
   createdBy?: string;
   createdAt: string;
@@ -157,6 +160,7 @@ export interface DbOrder {
   workspace_id: string;
   name: string;
   order_date: string;
+  status?: OrderStatus | null;
   roaster_id: string | null;
   roaster_snapshot: RoasterSnapshot | null;
   payer_id: string | null;

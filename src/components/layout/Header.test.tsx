@@ -44,7 +44,7 @@ describe('Header navigation', () => {
       .map((button) => button.textContent?.trim())
       .filter(Boolean);
 
-    expect(labels).toContain('Order');
+    expect(labels).toContain('Active Orders');
     expect(labels).toContain('My Stats');
     expect(labels).toContain('Past Orders');
     expect(labels).not.toContain('Invoices');
