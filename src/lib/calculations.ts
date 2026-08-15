@@ -129,6 +129,9 @@ export function calculate(
 
   // ── B. Collect all participating person IDs ──────────────────
   const personIdSet = new Set<string>();
+  if (order.payerId && order.payerId.trim()) {
+    personIdSet.add(order.payerId.trim());
+  }
   for (const lot of order.lots) {
     for (const bag of lotBagsCache.get(lot.id)!) {
       for (const buyer of bag.buyers) {

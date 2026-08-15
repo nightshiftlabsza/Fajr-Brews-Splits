@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getRoasterInitials } from '../../lib/roasters';
 
 interface RoasterAvatarProps {
@@ -17,6 +17,11 @@ export function RoasterAvatar({
   className = '',
 }: RoasterAvatarProps) {
   const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [logoUrl]);
+
   const showImage = Boolean(logoUrl) && !imageFailed;
   const initials = getRoasterInitials(name);
 

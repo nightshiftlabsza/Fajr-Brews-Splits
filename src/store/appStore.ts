@@ -1363,24 +1363,32 @@ export const useAppStore = create<AppStore>((set, get) => ({
       throw new Error('Unsupported export format. Expected version 1 or 2.');
     }
 
+    const importedPersonIdMap = new Map<string, string>();
     if (parsed.people && Array.isArray(parsed.people)) {
       // Import people — insert any that don't exist by name
       for (const p of parsed.people) {
         if (!p || typeof p.name !== 'string') continue;
         try {
-          if (!get().people.find((ex) => ex.name === p.name)) {
-            await get().addPerson({
-              name: String(p.name),
-              phone: p.phone ? String(p.phone) : undefined,
-              email: p.email ? String(p.email) : undefined,
-              note: p.note ? String(p.note) : undefined,
-            });
+          const existing = get().people.find((ex) => ex.name.trim().toLowerCase() === p.name.trim().toLowerCase());
+          const person = existing ?? await get().addPerson({
+            name: String(p.name).trim(),
+            phone: p.phone ? String(p.phone) : undefined,
+            email: p.email ? String(p.email) : undefined,
+            note: p.note ? String(p.note) : undefined,
+          });
+          if (p.id && person) {
+            importedPersonIdMap.set(String(p.id), person.id);
           }
         } catch (err) {
           console.error('importJSON: skipping person due to error', p.name, err);
         }
       }
     }
+
+    const mapPersonId = (oldId: unknown): string | null => {
+      if (typeof oldId !== 'string' || !oldId) return null;
+      return importedPersonIdMap.get(oldId) ?? oldId;
+    };
 
     const importedRoasterIdMap = new Map<string, Roaster>();
     if (parsed.version === '2' && parsed.roasters && Array.isArray(parsed.roasters)) {
@@ -1421,19 +1429,47 @@ export const useAppStore = create<AppStore>((set, get) => ({
               }
               : null;
 
+            const mappedLots = (Array.isArray(o.lots) ? o.lots : []).map((lot: any) => ({
+              ...lot,
+              shares: Array.isArray(lot.shares) ? lot.shares.map((s: any) => ({
+                ...s,
+                personId: mapPersonId(s.personId) ?? s.personId,
+              })) : [],
+              bags: Array.isArray(lot.bags) ? lot.bags.map((b: any) => ({
+                ...b,
+                buyers: Array.isArray(b.buyers) ? b.buyers.map((buyer: any) => ({
+                  ...buyer,
+                  personId: mapPersonId(buyer.personId) ?? buyer.personId,
+                })) : [],
+              })) : [],
+            }));
+
+            const mappedFees = (Array.isArray(o.fees) ? o.fees : []).map((fee: any) => ({
+              ...fee,
+              personId: mapPersonId(fee.personId),
+            }));
+
+            const mappedPayments: Record<string, any> = {};
+            if (o.payments && typeof o.payments === 'object' && !Array.isArray(o.payments)) {
+              for (const [oldPid, payment] of Object.entries(o.payments)) {
+                const newPid = mapPersonId(oldPid) ?? oldPid;
+                mappedPayments[newPid] = payment;
+              }
+            }
+
             await get().createOrder({
               name: String(o.name ?? 'Imported Order'),
               orderDate: String(o.orderDate ?? new Date().toISOString().split('T')[0]),
               roasterId: importedRoaster?.id ?? null,
               roasterSnapshot,
-              payerId: o.payerId ? String(o.payerId) : null,
+              payerId: mapPersonId(o.payerId),
               payerBank: o.payerBank && typeof o.payerBank === 'object' ? o.payerBank : { bankName: '', accountNumber: '', beneficiary: '' },
               referenceTemplate: String(o.referenceTemplate ?? 'FAJR-{ORDER}-{NAME}'),
               payerNote: o.payerNote ? String(o.payerNote) : undefined,
               goodsTotalZar: Number(o.goodsTotalZar ?? 0),
-              lots: Array.isArray(o.lots) ? o.lots : [],
-              fees: Array.isArray(o.fees) ? o.fees : [],
-              payments: (o.payments && typeof o.payments === 'object' && !Array.isArray(o.payments)) ? o.payments : {},
+              lots: mappedLots,
+              fees: mappedFees,
+              payments: mappedPayments,
             });
           }
         } catch (err) {
@@ -1495,7 +1531,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
                 const deletedOrderId = (oldRow as DbOrder).id;
                 optimisticOrderSnapshots.delete(deletedOrderId);
                 orderWriteChains.delete(deletedOrderId);
-                set((s) => ({ orders: s.orders.filter((o) => o.id !== deletedOrderId) }));
+                set((s) => {
+                  const remainingOrders = s.orders.filter((o) => o.id !== deletedOrderId);
+                  const nextOrderId = s.currentOrderId === deletedOrderId
+                    ? getNextActiveOrderId(remainingOrders, deletedOrderId)
+                    : s.currentOrderId;
+                  return { orders: remainingOrders, currentOrderId: nextOrderId };
+                });
               }
           } catch (err) {
             console.error('Realtime orders error:', err);

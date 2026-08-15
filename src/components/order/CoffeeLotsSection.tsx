@@ -33,6 +33,7 @@ interface Props {
   order: Order;
   onOrderChange?: (patch: Partial<Order>) => void | Promise<void>;
   onContinue?: () => void;
+  registerCommit?: (commit: (() => Promise<void>) | null) => void;
 }
 
 interface LotFormState {
@@ -53,7 +54,7 @@ const emptyLotForm: LotFormState = {
   bags: createEmptyBags(1),
 };
 
-export function CoffeeLotsSection({ order, onOrderChange, onContinue }: Props) {
+export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCommit }: Props) {
   const { people, addPerson, updateOrder } = useAppStore();
   const patchOrder = onOrderChange ?? ((patch: Partial<Order>) => updateOrder(order.id, patch));
 
@@ -78,6 +79,25 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue }: Props) {
 
   const coffeeErrors = useMemo(() => validateCoffeeStep(order), [order]);
   const isAllocationComplete = order.lots.length > 0 && coffeeErrors.length === 0;
+
+  useEffect(() => {
+    if (!registerCommit) return;
+    registerCommit(async () => {
+      if (!editingLotId) return;
+      const gramsPerBag = parseInt(lotForm.gramsPerBag, 10);
+      const bagCount = parseInt(lotForm.initialBagCount, 10);
+      const foreignPricePerBag = parseFloat(lotForm.foreignPricePerBag);
+      if (
+        lotForm.name.trim() &&
+        Number.isInteger(gramsPerBag) && gramsPerBag >= 1 &&
+        Number.isFinite(foreignPricePerBag) && foreignPricePerBag > 0 &&
+        Number.isInteger(bagCount) && bagCount >= 1
+      ) {
+        saveLot();
+      }
+    });
+    return () => registerCommit(null);
+  }, [registerCommit, editingLotId, lotForm, order]);
 
   const allocationStats = useMemo(() => {
     let totalBags = 0;
@@ -966,12 +986,15 @@ function LotEditorForm({
 
       // Live inference sync when bag count or grams change
       if (key === 'initialBagCount' || key === 'gramsPerBag') {
-        const bagCount = parseInt(key === 'initialBagCount' ? val : form.initialBagCount, 10) || 1;
+        const rawCount = (key === 'initialBagCount' ? val : form.initialBagCount).trim();
+        const parsedCount = parseInt(rawCount, 10);
         const grams = parseInt(key === 'gramsPerBag' ? val : form.gramsPerBag, 10) || 250;
-        const resizedBags = form.bags.length < bagCount
-          ? [...form.bags, ...createEmptyBags(bagCount - form.bags.length)]
-          : form.bags.slice(0, bagCount);
-        nextForm.bags = syncLotWithSelectedBuyers(resizedBags, form.selectedBuyerIds, grams);
+        if (!isNaN(parsedCount) && parsedCount > 0) {
+          const resizedBags = form.bags.length < parsedCount
+            ? [...form.bags, ...createEmptyBags(parsedCount - form.bags.length)]
+            : form.bags.slice(0, parsedCount);
+          nextForm.bags = syncLotWithSelectedBuyers(resizedBags, form.selectedBuyerIds, grams);
+        }
       }
 
       onChange(nextForm);
@@ -1225,6 +1248,7 @@ function BagAdjusterRow({
               type="button"
               className="btn btn-ghost btn-xs btn-danger-text"
               onClick={onRemoveBag}
+              aria-label={`Remove Bag ${bagIndex + 1}`}
               title="Remove this bag"
             >
               ✕
@@ -1364,6 +1388,7 @@ function CustomSplitModal({ isOpen, lot, bag, people, onSave, onCancel }: Custom
                       className="btn btn-ghost btn-xs"
                       style={{ color: 'var(--color-text-muted)' }}
                       onClick={() => handleRemovePersonFromSplit(personId)}
+                      aria-label={`Remove ${person?.name || 'person'} from split`}
                       title="Remove person"
                     >
                       ✕

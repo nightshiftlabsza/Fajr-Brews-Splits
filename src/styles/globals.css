@@ -1125,6 +1125,11 @@ tr:hover td {
     background var(--transition-fast);
 }
 
+.coffee-lot-summary-trigger:hover .coffee-lot-summary-chevron {
+  color: var(--color-text-secondary);
+  transform: translateY(1px);
+}
+
 .coffee-lot-summary-trigger:hover {
   border-color: var(--color-border-strong);
   box-shadow: var(--shadow-sm);
@@ -1194,11 +1199,6 @@ tr:hover td {
   color: var(--color-text-muted);
   font-size: 1rem;
   transition: transform var(--transition-fast), color var(--transition-fast);
-}
-
-.coffee-lot-summary-trigger:hover .coffee-lot-summary-chevron {
-  color: var(--color-text-secondary);
-  transform: translateY(1px);
 }
 
 .coffee-lot-summary-actions {
@@ -1520,53 +1520,6 @@ tr:hover td {
   color: var(--color-paid);
 }
 
-.summary-progress-compact {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.summary-progress-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 48px;
-  padding: 10px 12px;
-  border-radius: 16px;
-  border: 1px solid var(--color-border);
-  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-bg));
-}
-
-.summary-progress-item.is-complete {
-  border-color: color-mix(in srgb, var(--color-paid) 18%, var(--color-border));
-  background: color-mix(in srgb, var(--color-paid-bg) 72%, var(--color-surface));
-}
-
-.summary-progress-item.is-active {
-  border-color: color-mix(in srgb, var(--color-accent) 28%, var(--color-border));
-  background: color-mix(in srgb, var(--color-accent-light) 54%, var(--color-surface));
-}
-
-.summary-progress-index {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  font-size: 0.8rem;
-  font-weight: 700;
-  background: var(--color-surface-raised);
-  color: var(--color-text-primary);
-}
-
-.summary-progress-label {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--color-text-primary);
-}
-
 .order-summary-metrics {
   gap: var(--space-3);
 }
@@ -1575,21 +1528,110 @@ tr:hover td {
   margin-top: calc(var(--space-2) * -1);
 }
 
-.summary-payment-card {
-  padding: var(--space-4);
-  border-radius: 18px;
-  border: 1px solid var(--color-border);
-  background: color-mix(in srgb, var(--color-surface) 96%, var(--color-bg));
+.coffee-cost-table-wrap {
+  overflow-x: auto;
 }
 
-.settlement-payment-card {
+.coffee-cost-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.coffee-cost-table th {
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.coffee-cost-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  vertical-align: middle;
+}
+
+.coffee-cost-name {
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.coffee-cost-meta {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.coffee-cost-per-bag {
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.settlement-quick-status-buttons {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.summary-partial-fields {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-md);
 }
 
-.settlement-payment-grid {
-  margin-top: 0;
+.summary-sticky-bar {
+  position: sticky;
+  bottom: var(--space-4);
+  z-index: 40;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-bg));
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: var(--shadow-lg, 0 10px 25px -5px rgba(0, 0, 0, 0.15));
+  margin-top: var(--space-4);
+}
+
+.summary-sticky-status-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.9375rem;
+}
+
+.summary-sticky-status-label {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.summary-sticky-status-dot {
+  color: var(--color-text-muted);
+}
+
+.summary-sticky-status-total {
+  font-size: 1.125rem;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-sticky-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.order-summary-stack {
+  padding-bottom: 80px;
 }
 
 .settlement-payment-note {
@@ -1610,9 +1652,9 @@ tr:hover td {
 .settlement-pack {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-4);
-  border-radius: 18px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: 14px;
   border: 1px solid var(--color-border);
   background: color-mix(in srgb, var(--color-surface) 96%, var(--color-bg));
 }
@@ -1625,40 +1667,43 @@ tr:hover td {
 .settlement-pack-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
 }
 
 .settlement-pack-primary {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
 }
 
 .settlement-pack-name {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: 1rem;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: var(--color-text-primary);
 }
 
 .settlement-pack-copy {
-  margin-top: var(--space-1);
-  font-size: 0.82rem;
+  font-size: 0.8125rem;
   color: var(--color-text-muted);
 }
 
 .settlement-pack-topline {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
 .settlement-pack-total {
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--color-text-primary);
   font-variant-numeric: tabular-nums;

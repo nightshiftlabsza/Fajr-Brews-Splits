@@ -11,6 +11,7 @@ import { calculate } from '../../lib/calculations';
 import { formatDateShort, formatZAR, todayISO } from '../../lib/formatters';
 import { resolveOrderRoaster } from '../../lib/roasters';
 import { RoasterAvatar } from '../roaster/RoasterAvatar';
+import { createDuplicatedOrderPayload } from '../../lib/orderWizard';
 import type { Order, OrderStatus } from '../../types';
 
 export type OrderSection = 'setup' | 'coffees' | 'goods' | 'summary' | 'invoices';
@@ -122,13 +123,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
 
   async function handleDuplicate(order: Order) {
     setActionsMenuOpen(false);
-    const duplicated = await createOrder({
-      ...order,
-      name: `${order.name} (copy)`,
-      orderDate: todayISO(),
-      status: 'planning',
-      payments: {},
-    });
+    const duplicated = await createOrder(createDuplicatedOrderPayload(order, todayISO()));
     if (duplicated) {
       setCurrentOrderId(duplicated.id);
       setActiveOrderId(duplicated.id);
@@ -395,6 +390,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
         {activeSection === 'coffees' && (
           <CoffeeLotsSection
             order={currentOrder}
+            registerCommit={(commit) => { commitStepRef.current = commit; }}
             onContinue={() => void handleSectionChange('goods')}
           />
         )}
@@ -456,7 +452,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
       {/* ── STYLES ── */}
       <style>{`
         .active-order-container {
-          max-width: 920px;
+          max-width: 1200px;
           margin: 0 auto;
         }
 
@@ -598,13 +594,13 @@ export function OrderPage({ onNavigateToHistory }: Props) {
         }
 
         .status-locked {
-          background: #fef3c7;
-          color: #92400e;
+          background: color-mix(in srgb, var(--color-warning) 16%, var(--color-surface));
+          color: var(--color-warning);
         }
 
         .status-completed {
-          background: #d1fae5;
-          color: #065f46;
+          background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
+          color: var(--color-accent);
         }
 
         .order-header-actions {

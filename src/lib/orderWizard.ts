@@ -651,3 +651,45 @@ export function getInitialShareGramsForNewBuyer(lot: CoffeeLot): number {
   const allocatedGrams = bags.reduce((sum, bag) => sum + bag.buyers.reduce((s, b) => s + b.grams, 0), 0);
   return Math.max(0, totalGrams - allocatedGrams);
 }
+
+export function createDuplicatedOrderPayload(order: Order, dateStr?: string) {
+  const fallbackDate = dateStr ?? new Date().toISOString().split('T')[0];
+  const generateId = (prefix: string) => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  };
+
+  return {
+    id: order.id,
+    name: `${order.name} (copy)`,
+    orderDate: fallbackDate,
+    status: 'planning' as const,
+    roasterId: order.roasterId ?? null,
+    roasterSnapshot: order.roasterSnapshot ?? null,
+    payerId: order.payerId ?? null,
+    payerBank: order.payerBank ?? { bankName: '', accountNumber: '', beneficiary: '' },
+    referenceTemplate: order.referenceTemplate ?? 'FAJR-{ORDER}-{NAME}',
+    payerNote: order.payerNote ?? undefined,
+    goodsTotalZar: order.goodsTotalZar ?? 0,
+    lots: (order.lots || []).map((lot) => ({
+      ...lot,
+      id: generateId('lot'),
+      bags: (lot.bags || []).map((bag) => ({
+        ...bag,
+        id: generateId('bag'),
+        buyers: (bag.buyers || []).map((buyer) => ({ ...buyer })),
+      })),
+      shares: (lot.shares || []).map((share) => ({
+        ...share,
+        id: generateId('share'),
+      })),
+    })),
+    fees: (order.fees || []).map((fee) => ({
+      ...fee,
+      id: generateId('fee'),
+    })),
+    payments: {},
+  };
+}

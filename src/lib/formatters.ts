@@ -73,6 +73,8 @@ export function resolveReference(
 
 function slugify(text: string): string {
   return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
@@ -92,6 +94,8 @@ export function formatGrams(grams: number): string {
 export function pdfFilename(orderName: string, personName: string): string {
   const clean = (s: string) =>
     s
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
@@ -101,6 +105,8 @@ export function pdfFilename(orderName: string, personName: string): string {
 export function orderPdfFilename(orderName: string): string {
   const clean = (s: string) =>
     s
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');

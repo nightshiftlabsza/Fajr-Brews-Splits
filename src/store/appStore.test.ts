@@ -659,4 +659,39 @@ describe('appStore Realtime JSONB Hydration & Data Integrity', () => {
     expect(order.fees).toHaveLength(1);
     expect(order.fees[0].label).toBe('Air freight');
   });
+
+  it('updates currentOrderId when the currently selected order is deleted remotely via Realtime', async () => {
+    let realtimeCallback: ((payload: any) => void) | null = null;
+    const { useAppStore, supabase } = await loadStore();
+    const channelObj: any = {
+      on: vi.fn().mockImplementation((_event: string, _opts: any, callback: any) => {
+        if (_opts?.table === 'orders') realtimeCallback = callback;
+        return channelObj;
+      }),
+      subscribe: vi.fn().mockImplementation(() => channelObj),
+      unsubscribe: vi.fn(),
+    };
+    (supabase.channel as any).mockReturnValue(channelObj);
+
+    const orderA = makeStoreOrder({ id: 'order-a', name: 'Order A', isArchived: false, status: 'planning' });
+    const orderB = makeStoreOrder({ id: 'order-b', name: 'Order B', isArchived: false, status: 'planning' });
+
+    useAppStore.setState({
+      _realtimeChannel: null,
+      orders: [orderA, orderB],
+      currentOrderId: 'order-a',
+    });
+
+    useAppStore.getState()._setupRealtime('workspace-1');
+
+    expect(realtimeCallback).toBeTruthy();
+    realtimeCallback!({
+      eventType: 'DELETE',
+      old: { id: 'order-a' },
+    });
+
+    const state = useAppStore.getState();
+    expect(state.orders.map((o) => o.id)).toEqual(['order-b']);
+    expect(state.currentOrderId).toBe('order-b');
+  });
 });

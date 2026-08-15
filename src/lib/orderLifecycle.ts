@@ -22,7 +22,11 @@ export function syncOrderStatusFlags<T extends { status?: OrderStatus | null; is
 }
 
 function byNewestOrderDate(left: Order, right: Order): number {
-  return new Date(right.orderDate).getTime() - new Date(left.orderDate).getTime();
+  const dateDiff = new Date(right.orderDate).getTime() - new Date(left.orderDate).getTime();
+  if (!isNaN(dateDiff) && dateDiff !== 0) return dateDiff;
+  const createdDiff = new Date(right.createdAt ?? 0).getTime() - new Date(left.createdAt ?? 0).getTime();
+  if (!isNaN(createdDiff) && createdDiff !== 0) return createdDiff;
+  return (left.name || '').localeCompare(right.name || '');
 }
 
 export function getActiveOrders(orders: Order[]): Order[] {

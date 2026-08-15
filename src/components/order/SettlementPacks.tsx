@@ -20,7 +20,7 @@ export function SettlementPacks({
   people,
   result,
   title = 'People settlement',
-  description = 'Each person stays compact until you open the one you need.',
+  description,
   onPaymentChange,
   paymentEditingEnabled = false,
   visiblePersonIds,
@@ -35,107 +35,155 @@ export function SettlementPacks({
 
   return (
     <section className="wizard-panel">
-      <div className="wizard-card-header">
+      <div className="wizard-card-header" style={{ marginBottom: 'var(--space-3)' }}>
         <div>
           <div className="wizard-card-title">{title}</div>
-          <p className="wizard-card-copy">{description}</p>
+          {description && <p className="wizard-card-copy">{description}</p>}
         </div>
       </div>
 
       <div className="settlement-pack-list">
         {result.personIds
           .filter((personId) => !visiblePersonIds || visiblePersonIds.includes(personId))
+          .filter((personId) => {
+            const calc = result.personCalcs[personId];
+            if (!calc) return false;
+            if (personId === order.payerId && calc.totalGrams === 0 && calc.totalFinal === 0 && !order.payments[personId]) {
+              return false;
+            }
+            return true;
+          })
           .map((personId) => {
           const person = personMap.get(personId);
+          const resolvedPerson: Person = person ?? {
+            id: personId,
+            name: 'Deleted Person',
+            phone: '',
+            email: '',
+            note: '',
+          };
           const calc = result.personCalcs[personId];
           const payment = order.payments[personId];
           const status = payment?.status || 'unpaid';
           const isExpanded = expandedPersonId === personId;
 
-          if (!person) return null;
+          if (!calc) return null;
 
           return (
             <div key={personId} className={`settlement-pack ${isExpanded ? 'is-open' : ''}`}>
               <div className="settlement-pack-header">
                 <div className="settlement-pack-primary">
                   <div className="settlement-pack-name">
-                    {person.name}
+                    {resolvedPerson.name}
                     {personId === order.payerId && <span className="wizard-inline-meta">Payer</span>}
+                    {!person && <span className="wizard-inline-meta" style={{ color: 'var(--color-warning)' }}>Deleted</span>}
                   </div>
                   <div className="settlement-pack-copy">
-                    {calc.totalGrams}g - {status === 'paid' ? 'Paid in full' : status === 'partial' ? 'Partially paid' : 'Waiting for payment'}
+                    {calc.totalGrams}g
                   </div>
                 </div>
+
+                {paymentEditingEnabled && onPaymentChange && personId !== order.payerId && (
+                  <div className="settlement-quick-status-buttons">
+                    {(['unpaid', 'partial', 'paid'] as PaymentStatus[]).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        className={`btn btn-sm ${status === option ? 'btn-primary' : 'btn-ghost'}`}
+                        onClick={() => {
+                          const datePaid = payment?.datePaid || todayISO();
+                          if (option === 'paid') {
+                            onPaymentChange(personId, { status: 'paid', amountPaid: calc.totalFinal, datePaid });
+                          } else if (option === 'partial') {
+                            onPaymentChange(personId, { status: 'partial', amountPaid: payment?.amountPaid || 0, datePaid });
+                          } else {
+                            onPaymentChange(personId, { status: 'unpaid' });
+                          }
+                        }}
+                      >
+                        {option === 'unpaid' ? 'Unpaid' : option === 'partial' ? 'Partial' : 'Paid'}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 <div className="settlement-pack-topline">
                   <strong className="settlement-pack-total">{formatZAR(calc.totalFinal)}</strong>
                   <StatusPill payment={payment} />
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${isExpanded ? 'btn-secondary' : 'btn-ghost'}`}
+                    onClick={() => setExpandedPersonId((current) => (current === personId ? null : personId))}
+                  >
+                    {isExpanded ? 'Hide details' : 'View details'}
+                  </button>
                 </div>
               </div>
 
-              {paymentEditingEnabled && onPaymentChange && (
-                <div className="summary-payment-card">
-                  <PaymentEditor
-                    personName={person.name}
-                    totalDue={calc.totalFinal}
-                    payment={payment}
-                    isPayer={personId === order.payerId}
-                    onChange={(record) => onPaymentChange(personId, record)}
-                    compact
-                  />
+              {paymentEditingEnabled && onPaymentChange && status === 'partial' && (
+                <div className="summary-partial-fields">
+                  <div className="field" style={{ margin: 0, flex: 1, minWidth: 160 }}>
+                    <label className="field-label" style={{ fontSize: '0.75rem' }}>Amount paid (ZAR)</label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)', fontWeight: 700, pointerEvents: 'none' }}>R</span>
+                      <input
+                        className="input"
+                        type="number"
+                        value={payment?.amountPaid ?? ''}
+                        onChange={(e) => onPaymentChange(personId, {
+                          status: 'partial',
+                          amountPaid: parseFloat(e.target.value) || 0,
+                          datePaid: payment?.datePaid || todayISO(),
+                        })}
+                        min="0"
+                        step="0.01"
+                        style={{ paddingLeft: 26, height: 36, fontSize: '0.875rem' }}
+                      />
+                    </div>
+                    {payment?.amountPaid !== undefined && payment.amountPaid > 0 && (
+                      <span className="field-hint" style={{ fontSize: '0.75rem' }}>
+                        Outstanding: {formatZAR(Math.max(0, calc.totalFinal - payment.amountPaid))}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="field" style={{ margin: 0, flex: 1, minWidth: 140 }}>
+                    <label className="field-label" style={{ fontSize: '0.75rem' }}>Date paid</label>
+                    <input
+                      className="input"
+                      type="date"
+                      value={payment?.datePaid || todayISO()}
+                      onChange={(e) => onPaymentChange(personId, {
+                        ...payment,
+                        status: 'partial',
+                        datePaid: e.target.value,
+                      })}
+                      style={{ height: 36, fontSize: '0.875rem' }}
+                    />
+                  </div>
                 </div>
               )}
 
-              <div className="settlement-pack-toolbar">
-                <div className="settlement-pack-actions">
-                  <InvoiceActions
-                    order={order}
-                    person={person}
-                    payer={payer}
-                    calc={calc}
-                    showPrint={false}
-                  />
-                </div>
-
-                <button
-                  className={`btn btn-sm ${isExpanded ? 'btn-secondary' : 'btn-ghost'}`}
-                  onClick={() => setExpandedPersonId((current) => (current === personId ? null : personId))}
-                >
-                  {isExpanded ? 'Hide details' : 'View details'}
-                </button>
-              </div>
-
               {isExpanded && (
                 <div className="settlement-pack-preview">
+                  <div className="settlement-expanded-actions" style={{ marginBottom: 'var(--space-4)' }}>
+                    <InvoiceActions
+                      order={order}
+                      person={resolvedPerson}
+                      payer={payer}
+                      calc={calc}
+                      showPrint={true}
+                    />
+                  </div>
                   <div className="settlement-pack-detail-grid">
                     <div className="settlement-pack-detail-panel">
-                      <div className="settlement-pack-detail-header">
-                        <div>
-                          <div className="settlement-pack-detail-title">Settlement details</div>
-                          <div className="settlement-pack-detail-copy">
-                            Payment tracking and invoice review stay together for {person.name}.
-                          </div>
-                        </div>
-                        <button className="btn btn-ghost btn-sm" onClick={() => window.print()}>
-                          Print invoice
-                        </button>
-                      </div>
-
                       <PaymentReadout payment={payment} totalDue={calc.totalFinal} />
                     </div>
 
                     <div className="settlement-pack-detail-panel">
-                      <div className="settlement-pack-detail-header">
-                        <div>
-                          <div className="settlement-pack-detail-title">Invoice preview</div>
-                          <div className="settlement-pack-detail-copy">
-                            Coffee line items, fee breakdowns, and payment instructions stay tucked away until needed.
-                          </div>
-                        </div>
-                      </div>
                       <InvoiceView
                         order={order}
-                        person={person}
+                        person={resolvedPerson}
                         payer={payer}
                         calc={calc}
                       />
@@ -157,96 +205,6 @@ function StatusPill({ payment }: { payment?: PaymentRecord }) {
     <span className={`pill pill-${status}`}>
       {status === 'paid' ? 'Paid' : status === 'partial' ? 'Partial' : 'Unpaid'}
     </span>
-  );
-}
-
-interface PaymentEditorProps {
-  personName: string;
-  totalDue: number;
-  payment?: PaymentRecord;
-  isPayer: boolean;
-  onChange: (record: PaymentRecord) => void;
-  compact?: boolean;
-}
-
-function PaymentEditor({ personName, totalDue, payment, isPayer, onChange, compact = false }: PaymentEditorProps) {
-  const status = payment?.status || 'unpaid';
-  const datePaid = payment?.datePaid || todayISO();
-
-  function setStatus(nextStatus: PaymentStatus) {
-    if (nextStatus === 'paid') {
-      onChange({ status: 'paid', amountPaid: totalDue, datePaid });
-      return;
-    }
-    if (nextStatus === 'partial') {
-      onChange({ status: 'partial', amountPaid: payment?.amountPaid || 0, datePaid });
-      return;
-    }
-    onChange({ status: 'unpaid' });
-  }
-
-  return (
-    <div className="settlement-payment-card">
-      <div className="summary-payment-header">
-        <div>
-          <div style={{ fontWeight: 600, fontSize: '0.9375rem' }}>
-            {compact ? 'Quick payment update' : personName}
-          </div>
-          <div className="wizard-card-copy" style={{ marginTop: 'var(--space-1)' }}>
-            {compact ? `${personName} · ${formatZAR(totalDue)} due` : formatZAR(totalDue)} {isPayer && <span className="wizard-inline-meta">Payer</span>}
-          </div>
-        </div>
-
-        <div className="wizard-chip-row">
-          {(['unpaid', 'partial', 'paid'] as PaymentStatus[]).map((option) => (
-            <button
-              key={option}
-              className={`btn btn-sm ${status === option ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => setStatus(option)}
-            >
-              {option === 'unpaid' ? 'Unpaid' : option === 'partial' ? 'Partial' : 'Paid'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {(status === 'paid' || status === 'partial') && (
-        <div className="wizard-card-grid settlement-payment-grid">
-          {status === 'partial' && (
-            <div className="field">
-              <label className="field-label">Amount paid (ZAR)</label>
-              <div style={{ position: 'relative' }}>
-                <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)', fontWeight: 700, pointerEvents: 'none' }}>R</span>
-                <input
-                  className="input"
-                  type="number"
-                  value={payment?.amountPaid ?? ''}
-                  onChange={(e) => onChange({ status: 'partial', amountPaid: parseFloat(e.target.value) || 0, datePaid })}
-                  min="0"
-                  step="0.01"
-                  style={{ paddingLeft: 28 }}
-                />
-              </div>
-              {payment?.amountPaid !== undefined && payment.amountPaid > 0 && (
-                <span className="field-hint">
-                  Outstanding: {formatZAR(Math.max(0, totalDue - payment.amountPaid))}
-                </span>
-              )}
-            </div>
-          )}
-
-          <div className="field">
-            <label className="field-label">Date paid</label>
-            <input
-              className="input"
-              type="date"
-              value={payment?.datePaid || todayISO()}
-              onChange={(e) => onChange({ ...payment, status, datePaid: e.target.value })}
-            />
-          </div>
-        </div>
-      )}
-    </div>
   );
 }
 

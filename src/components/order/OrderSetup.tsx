@@ -6,6 +6,7 @@ import { dedupePeopleById } from '../../lib/storeState';
 import { createRoasterSnapshot } from '../../lib/roasters';
 import { RoasterPicker } from '../roaster/RoasterPicker';
 
+
 interface Props {
   order: Order;
   registerCommit?: (commit: (() => Promise<void>) | null) => void;
@@ -34,10 +35,26 @@ function getIncludedPeople(order: Order, people: Person[]): Person[] {
   const personIds = new Set<string>();
 
   for (const lot of order.lots) {
-    for (const share of lot.shares) {
-      if (share.shareGrams > 0) {
-        personIds.add(share.personId);
+    if (Array.isArray(lot.bags) && lot.bags.length > 0) {
+      for (const bag of lot.bags) {
+        for (const buyer of bag.buyers) {
+          if (buyer.personId && buyer.grams > 0) {
+            personIds.add(buyer.personId);
+          }
+        }
       }
+    } else if (Array.isArray(lot.shares)) {
+      for (const share of lot.shares) {
+        if (share.personId && share.shareGrams > 0) {
+          personIds.add(share.personId);
+        }
+      }
+    }
+  }
+
+  for (const fee of order.fees ?? []) {
+    if (normalizeFeeAllocationType(fee.allocationType) === 'specific_person' && fee.personId) {
+      personIds.add(fee.personId);
     }
   }
 
@@ -292,8 +309,9 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
       >
         <div className="wizard-card-grid">
           <div className="field">
-            <label className="field-label">Bank name</label>
+            <label className="field-label" htmlFor="payer-bank-name">Bank name</label>
             <input
+              id="payer-bank-name"
               className="input"
               value={bank.bankName}
               onChange={(event) => handleBankChange('bankName', event.target.value)}
@@ -302,8 +320,9 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
             />
           </div>
           <div className="field">
-            <label className="field-label">Account number</label>
+            <label className="field-label" htmlFor="payer-account-number">Account number</label>
             <input
+              id="payer-account-number"
               className="input"
               value={bank.accountNumber}
               onChange={(event) => handleBankChange('accountNumber', event.target.value)}
@@ -314,8 +333,9 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
         </div>
         <div className="wizard-card-grid">
           <div className="field">
-            <label className="field-label">Beneficiary</label>
+            <label className="field-label" htmlFor="payer-beneficiary">Beneficiary</label>
             <input
+              id="payer-beneficiary"
               className="input"
               value={bank.beneficiary}
               onChange={(event) => handleBankChange('beneficiary', event.target.value)}
@@ -324,8 +344,9 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
             />
           </div>
           <div className="field">
-            <label className="field-label">Branch code</label>
+            <label className="field-label" htmlFor="payer-branch-code">Branch code</label>
             <input
+              id="payer-branch-code"
               className="input"
               value={bank.branch || ''}
               onChange={(event) => handleBankChange('branch', event.target.value)}

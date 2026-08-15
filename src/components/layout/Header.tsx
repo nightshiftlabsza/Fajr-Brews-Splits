@@ -45,6 +45,8 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
   }, []);
 
   async function handleSignOut() {
+
+
     setMenuOpen(false);
     await signOut();
   }
@@ -72,7 +74,6 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
               </button>
             ))}
           </nav>
-
           <div className="nav-user" ref={menuRef}>
             <div className="realtime-dot" title="Realtime sync active" />
             <button
@@ -135,6 +136,23 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
           }
         }
 
+        @media (min-width: 768px) and (max-width: 960px) {
+          .nav-top-inner {
+            padding: 0 var(--space-3) !important;
+            gap: var(--space-2) !important;
+          }
+          .nav-desktop-tab {
+            padding: 6px 10px !important;
+            font-size: 0.8125rem !important;
+          }
+          .nav-brand-name {
+            font-size: 1rem !important;
+          }
+          .nav-user-email {
+            max-width: 110px !important;
+          }
+        }
+
         .nav-top-inner {
           display: flex;
           align-items: center;
@@ -181,8 +199,6 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
         }
 
         .nav-desktop-tab {
-          padding: 6px 16px;
-          border-radius: var(--radius-sm);
           border: none;
           background: transparent;
           cursor: pointer;

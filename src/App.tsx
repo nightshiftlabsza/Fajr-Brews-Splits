@@ -207,6 +207,14 @@ export default function App() {
     };
   }, []);
 
+  const [initTimeout, setInitTimeout] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!isInitialized) setInitTimeout(true);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [isInitialized]);
+
   // Loading splash
   if (!isInitialized) {
     return (
@@ -218,6 +226,8 @@ export default function App() {
         justifyContent: 'center',
         background: 'var(--color-bg)',
         gap: 'var(--space-4)',
+        padding: 'var(--space-4)',
+        textAlign: 'center',
       }}>
         <div style={{ fontSize: '2.5rem' }}>☕</div>
         <div style={{
@@ -229,6 +239,23 @@ export default function App() {
           Fajr Brews
         </div>
         <div className="spinner" />
+        {initTimeout && (
+          <div style={{ marginTop: 'var(--space-3)', maxWidth: 320 }}>
+            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: 'var(--space-3)' }}>
+              Connecting to workspace is taking longer than expected.
+            </p>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                setInitTimeout(false);
+                void initialize();
+              }}
+            >
+              Retry Connection
+            </button>
+          </div>
+        )}
       </div>
     );
   }

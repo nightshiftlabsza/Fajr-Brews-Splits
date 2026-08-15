@@ -428,8 +428,8 @@ describe('HistoryPage', () => {
 
     expect(mockStoreState.createOrder).toHaveBeenCalledTimes(1);
     expect(mockStoreState.createOrder).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'saved-order',
       name: 'Saved March Drop (copy)',
+      status: 'planning',
       payments: {},
     }));
     expect(mockStoreState.updateOrder).not.toHaveBeenCalled();

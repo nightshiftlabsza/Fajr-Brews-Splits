@@ -10,46 +10,47 @@ interface Props {
 export function CoffeeCostSummary({
   result,
   title = 'Coffee cost summary',
-  description = 'Each coffee shows its saved final cost with allocated fees included.',
+  description,
 }: Props) {
   return (
-    <section className="wizard-panel">
-      <div className="wizard-card-header">
+    <section className="wizard-panel coffee-cost-summary-panel">
+      <div className="wizard-card-header" style={{ marginBottom: 'var(--space-3)' }}>
         <div>
           <div className="wizard-card-title">{title}</div>
-          <p className="wizard-card-copy">{description}</p>
+          {description && <p className="wizard-card-copy">{description}</p>}
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-        {result.lotCalcs.map((lot) => (
-          <div
-            key={lot.lotId}
-            className="card card-padded"
-            style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-4)', flexWrap: 'wrap' }}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{lot.lotName}</div>
-              <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
-                {lot.quantity} x {formatGrams(lot.gramsPerBag)} bag · {formatGrams(lot.totalGrams)} total
-              </div>
-              <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap', marginTop: 'var(--space-3)', fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
-                <span>Beans: {formatZAR(lot.goodsZar)}</span>
-                <span>Allocated fees: {formatZAR(lot.feesZar)}</span>
-                <span><strong>{formatZAR(lot.finalZarPerBag)}</strong> per bag</span>
-              </div>
-            </div>
-
-            <div style={{ textAlign: 'right', minWidth: 140 }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>
-                Final coffee total
-              </div>
-              <div style={{ fontWeight: 800, fontSize: '1.125rem', color: 'var(--color-text-primary)', marginTop: 6 }}>
-                {formatZAR(lot.totalZar)}
-              </div>
-            </div>
-          </div>
-        ))}
+      <div className="coffee-cost-table-wrap">
+        <table className="coffee-cost-table">
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left' }}>Coffee</th>
+              <th style={{ textAlign: 'center', width: '80px' }}>Bags</th>
+              <th style={{ textAlign: 'right', width: '130px' }}>Cost / bag</th>
+              <th style={{ textAlign: 'right', width: '120px' }}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {result.lotCalcs.map((lot) => (
+              <tr key={lot.lotId}>
+                <td>
+                  <div className="coffee-cost-name">{lot.lotName}</div>
+                  <div className="coffee-cost-meta">
+                    {formatGrams(lot.gramsPerBag)}/bag · Beans: {formatZAR(lot.goodsZar)} · Fees: {formatZAR(lot.feesZar)}
+                  </div>
+                </td>
+                <td style={{ textAlign: 'center', fontWeight: 600 }}>{lot.quantity}</td>
+                <td style={{ textAlign: 'right' }}>
+                  <span className="coffee-cost-per-bag">{formatZAR(lot.finalZarPerBag)}</span>
+                </td>
+                <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                  {formatZAR(lot.totalZar)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </section>
   );

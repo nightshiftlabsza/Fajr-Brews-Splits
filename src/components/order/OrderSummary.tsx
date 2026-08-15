@@ -3,7 +3,7 @@ import type { Order, PaymentRecord } from '../../types';
 import { useAppStore } from '../../store/appStore';
 import { calculate } from '../../lib/calculations';
 import { formatZAR } from '../../lib/formatters';
-import { ORDER_WIZARD_STEPS, type OrderWizardStep } from '../../lib/orderWizard';
+import type { OrderWizardStep } from '../../lib/orderWizard';
 import { getNextActiveOrderId } from '../../lib/orderLifecycle';
 import { resolveOrderRoaster } from '../../lib/roasters';
 import { SettlementPacks } from './SettlementPacks';
@@ -100,12 +100,11 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
 
   const payer = people.find((person) => person.id === order.payerId);
   const orderRoaster = resolveOrderRoaster(order, roasters);
-  const activeOrderCount = orders.filter((candidate) => !candidate.isArchived && candidate.id !== order.id).length;
   const orderStatus = getOrderStatus(order, result);
   const savingPastOrder = order.isArchived;
 
   return (
-    <div className="wizard-step-stack">
+    <div className="wizard-step-stack order-summary-stack">
       <section className="wizard-panel order-summary-overview">
         <div className="order-summary-overview-top">
           <div>
@@ -129,22 +128,10 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
           </div>
 
           <div className="wizard-chip-row">
-            <button className="btn btn-secondary btn-sm" onClick={() => onJumpToStep('setup')}>Edit setup</button>
-            <button className="btn btn-secondary btn-sm" onClick={() => onJumpToStep('coffees')}>Edit coffees</button>
-            <button className="btn btn-secondary btn-sm" onClick={() => onJumpToStep('goods')}>Edit goods</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onJumpToStep('setup')}>Edit setup</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onJumpToStep('coffees')}>Edit coffees</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onJumpToStep('goods')}>Edit goods</button>
           </div>
-        </div>
-
-        <div className="summary-progress-compact" aria-label="Order progress">
-          {ORDER_WIZARD_STEPS.map((step, index) => (
-            <div
-              key={step.id}
-              className={`summary-progress-item ${index < ORDER_WIZARD_STEPS.length - 1 ? 'is-complete' : 'is-active'}`}
-            >
-              <span className="summary-progress-index">{index + 1}</span>
-              <span className="summary-progress-label">{step.shortLabel}</span>
-            </div>
-          ))}
         </div>
 
         <div className="wizard-summary-grid order-summary-metrics">
@@ -162,10 +149,7 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
         )}
       </section>
 
-      <CoffeeCostSummary
-        result={result}
-        description="Each coffee total includes its allocated share of the order fees, so the per-bag cost reconciles to the saved settlement."
-      />
+      <CoffeeCostSummary result={result} />
 
       <SettlementPacks
         order={order}
@@ -175,41 +159,19 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
         paymentEditingEnabled
       />
 
-      <section className="wizard-panel order-finalize-panel">
-        <div className="wizard-card-header">
-          <div>
-            <div className="wizard-card-title">{savingPastOrder ? 'Save changes' : 'Finalize order'}</div>
-            <p className="wizard-card-copy">
-              {savingPastOrder
-                ? 'Save your corrections while keeping this order in Past Orders with its payment and invoice history intact.'
-                : 'Save the latest order state first, then move it into Past Orders as a completed record.'}
-            </p>
-          </div>
+      {/* Persistent Sticky Finalize Action Bar */}
+      <div className="summary-sticky-bar" role="region" aria-label="Finalize order">
+        <span className="sr-only">Finalize order</span>
+        <div className="summary-sticky-status-group">
+          <span className="summary-sticky-status-label">{savingPastOrder ? 'Past Order' : 'Finalize order'}</span>
+          <span className="summary-sticky-status-dot">·</span>
+          <strong className="summary-sticky-status-total">{formatZAR(result.totalOrderZar)}</strong>
         </div>
 
-        <div className="wizard-inline-note">
-          {savingPastOrder
-            ? 'This saved order stays right here in Past Orders. Only the fields you changed will be updated.'
-            : activeOrderCount > 0
-              ? `Finalizing now will move this order to Past Orders and return you to your remaining ${activeOrderCount} active ${activeOrderCount === 1 ? 'order' : 'orders'}.`
-              : 'Finalizing now will move this order to Past Orders and clear it from the active drafting workspace.'}
-        </div>
-
-        {finalizeError && (
-          <div className="alert alert-error" style={{ marginTop: 'var(--space-4)' }}>
-            {finalizeError}
-          </div>
-        )}
-
-        {deleteError && (
-          <div className="alert alert-error" style={{ marginTop: 'var(--space-4)' }}>
-            {deleteError}
-          </div>
-        )}
-
-        <div className="wizard-inline-actions" style={{ marginTop: 'var(--space-4)' }}>
+        <div className="summary-sticky-actions">
           {!savingPastOrder && (
             <button
+              type="button"
               className="btn btn-danger"
               onClick={() => setConfirmDeleteOpen(true)}
               disabled={deleting || finalizing}
@@ -217,11 +179,34 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
               {deleting ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Delete order'}
             </button>
           )}
-          <button className="btn btn-primary" onClick={handleFinalizeOrder} disabled={finalizing || deleting}>
-            {finalizing ? <span className="spinner" style={{ width: 16, height: 16 }} /> : savingPastOrder ? 'Save changes' : 'Save to Past Orders'}
+          <button
+            type="button"
+            className="btn btn-primary btn-lg"
+            onClick={handleFinalizeOrder}
+            disabled={finalizing || deleting}
+          >
+            {finalizing ? (
+              <span className="spinner" style={{ width: 16, height: 16 }} />
+            ) : savingPastOrder ? (
+              'Save changes'
+            ) : (
+              'Save to Past Orders'
+            )}
           </button>
         </div>
-      </section>
+      </div>
+
+      {finalizeError && (
+        <div className="alert alert-error" style={{ marginTop: 'var(--space-4)' }}>
+          {finalizeError}
+        </div>
+      )}
+
+      {deleteError && (
+        <div className="alert alert-error" style={{ marginTop: 'var(--space-4)' }}>
+          {deleteError}
+        </div>
+      )}
 
       {/* Custom Delete Confirmation Modal */}
       {confirmDeleteOpen && (

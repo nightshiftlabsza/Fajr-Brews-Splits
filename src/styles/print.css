@@ -17,6 +17,17 @@
   .invoice-actions,
   .app-header,
   .page-tabs,
+  .active-orders-bar,
+  .order-section-nav,
+  .wizard-progress,
+  .wizard-footer,
+  .settlement-pack-toolbar,
+  .settlement-pack-topline,
+  .order-summary-overview,
+  .order-summary-metrics,
+  .order-finalize-panel,
+  .summary-payment-card,
+  .app-page:not(.is-active),
   button:not(.print-visible),
   .btn:not(.print-visible) {
     display: none !important;
@@ -24,7 +35,7 @@
 
   /* ── Page ──────────────────────────────────────────────── */
   @page {
-    margin: 18mm 20mm;
+    margin: 15mm 18mm;
     size: A4 portrait;
   }
 
@@ -35,13 +46,13 @@
     font-family: 'Sora', 'Inter', sans-serif;
   }
 
-  /* ── Show only invoice ─────────────────────────────────── */
-  .app-shell > *:not(.print-invoice-wrapper) {
-    display: none !important;
+  .app-main {
+    padding: 0 !important;
   }
 
-  .print-invoice-wrapper {
-    display: block !important;
+  .page-container {
+    padding: 0 !important;
+    max-width: 100% !important;
   }
 
   /* ── Invoice paper for print ───────────────────────────── */

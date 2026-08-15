@@ -18,6 +18,7 @@ import { ConfirmModal } from '../ui/ConfirmModal';
 import {
   ORDER_WIZARD_STEPS,
   type OrderWizardStep,
+  createDuplicatedOrderPayload,
   getMaxUnlockedStepIndex,
   getSuggestedWizardStep,
   isStepComplete,
@@ -109,13 +110,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
   }
 
   async function handleDuplicate(order: Order) {
-    await createOrder({
-      ...order,
-      name: `${order.name} (copy)`,
-      orderDate: todayISO(),
-      status: 'planning',
-      payments: {},
-    });
+    await createOrder(createDuplicatedOrderPayload(order, todayISO()));
   }
 
   async function handleEdit(order: Order) {

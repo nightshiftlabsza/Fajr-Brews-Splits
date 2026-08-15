@@ -66,8 +66,10 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
 
   function saveGoods() {
     const val = parseFloat(goodsInput);
-    if (!isNaN(val) && val > 0) {
-      void patchOrder({ goodsTotalZar: val });
+    if (!isNaN(val) && val >= 0) {
+      if (val !== order.goodsTotalZar) {
+        void patchOrder({ goodsTotalZar: val });
+      }
       return;
     }
     if (!goodsInput.trim() && order.goodsTotalZar !== 0) {
@@ -77,7 +79,7 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
 
   async function flushGoodsSave() {
     const val = parseFloat(goodsInput);
-    if (!isNaN(val) && val > 0 && val !== order.goodsTotalZar) {
+    if (!isNaN(val) && val >= 0 && val !== order.goodsTotalZar) {
       await patchOrder({ goodsTotalZar: val });
       return;
     }
@@ -155,7 +157,7 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
         </div>
 
         <div className="field">
-          <label className="field-label">Total Coffee Goods (ZAR) *</label>
+          <label className="field-label" htmlFor="order-goods-total-zar">Total Coffee Goods (ZAR) *</label>
           <div style={{ position: 'relative', maxWidth: 300 }}>
             <span style={{
               position: 'absolute',
@@ -169,6 +171,7 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
               R
             </span>
             <input
+              id="order-goods-total-zar"
               className="input"
               type="number"
               style={{ paddingLeft: 34, fontSize: '1.125rem', fontWeight: 600 }}
@@ -176,7 +179,7 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
               onChange={(e) => setGoodsInput(e.target.value)}
               onBlur={saveGoods}
               placeholder="e.g. 1850.00"
-              min="0.01"
+              min="0"
               step="0.01"
             />
           </div>
@@ -187,83 +190,81 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
       <section className="wizard-panel">
         <div className="wizard-card-header">
           <div>
-            <h2 className="wizard-card-title">Shipping, Customs & Additional Fees</h2>
+            <h2 className="wizard-card-title">Additional Fees</h2>
             <p className="wizard-card-copy">
-              Add customs duties, VAT, courier, or delivery fees. Choose how each fee is fairly divided.
+              Shipping, foreign transaction fees, customs duties, or handling charges.
             </p>
           </div>
           {editingFeeId === null && (
-            <button className="btn btn-secondary btn-sm" onClick={openNewFee}>
+            <button className="btn btn-secondary btn-sm" type="button" onClick={openNewFee}>
               + Add Fee
             </button>
           )}
         </div>
 
+        {/* Inline Add / Edit Fee Form */}
         {editingFeeId !== null && (
-          <div className="card-padded" style={{
-            background: 'var(--color-surface-raised)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-md)',
-            marginBottom: 'var(--space-4)',
-          }}>
-            <div className="section-label" style={{ marginBottom: 'var(--space-3)' }}>
-              {editingFeeId === 'new' ? 'New Fee' : 'Edit Fee'}
+          <div className="wizard-subsection" style={{ marginBottom: 'var(--space-4)' }}>
+            <div className="wizard-subsection-header">
+              <div className="wizard-card-title">
+                {editingFeeId === 'new' ? 'Add Fee' : 'Edit Fee'}
+              </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <div className="grid-2">
-                <div className="field">
-                  <label className="field-label">Fee Label *</label>
-                  <input
-                    className="input"
-                    value={feeLabel}
-                    onChange={(e) => setFeeLabel(e.target.value)}
-                    placeholder="e.g. DHL Clearance, Customs VAT, Local PUDO"
-                    autoFocus
-                  />
-                </div>
+            <div className="wizard-card-grid">
+              <div className="field">
+                <label className="field-label" htmlFor="fee-label-input">Fee name / description *</label>
+                <input
+                  id="fee-label-input"
+                  className="input"
+                  type="text"
+                  placeholder="e.g. DHL Express Shipping"
+                  value={feeLabel}
+                  onChange={(e) => setFeeLabel(e.target.value)}
+                  autoFocus
+                />
+              </div>
 
-                <div className="field">
-                  <label className="field-label">Amount (ZAR) *</label>
-                  <div style={{ position: 'relative' }}>
-                    <span style={{
-                      position: 'absolute',
-                      left: 14,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      color: 'var(--color-text-muted)',
-                      fontWeight: 700,
-                      pointerEvents: 'none',
-                    }}>
-                      R
-                    </span>
-                    <input
-                      className="input"
-                      type="number"
-                      style={{ paddingLeft: 34 }}
-                      value={feeAmount}
-                      onChange={(e) => setFeeAmount(e.target.value)}
-                      placeholder="250.00"
-                      min="0.01"
-                      step="0.01"
-                    />
-                  </div>
+              <div className="field">
+                <label className="field-label" htmlFor="fee-amount-input">Amount (ZAR) *</label>
+                <div style={{ position: 'relative' }}>
+                  <span style={{
+                    position: 'absolute',
+                    left: 14,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--color-text-muted)',
+                    fontWeight: 700,
+                    pointerEvents: 'none',
+                  }}>
+                    R
+                  </span>
+                  <input
+                    id="fee-amount-input"
+                    className="input"
+                    type="number"
+                    style={{ paddingLeft: 34 }}
+                    placeholder="0.00"
+                    value={feeAmount}
+                    onChange={(e) => setFeeAmount(e.target.value)}
+                    min="0.01"
+                    step="0.01"
+                  />
                 </div>
               </div>
 
               {/* Fee Division Options */}
-              <div className="field">
-                <label className="field-label" style={{ marginBottom: 'var(--space-2)' }}>
+              <div className="field" style={{ gridColumn: '1 / -1' }}>
+                <span className="field-label" style={{ marginBottom: 'var(--space-2)', display: 'block' }}>
                   How should this fee be divided? *
-                </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                </span>
+                <div role="radiogroup" aria-label="Fee allocation method" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                   {HUMAN_FEE_OPTIONS.map((opt) => {
                     const isSelected = normalizeFeeAllocationType(feeType) === opt.value;
                     return (
                       <label
                         key={opt.value}
                         className={`fee-option-card ${isSelected ? 'is-selected' : ''}`}
-                        onClick={() => setFeeType(opt.value)}
                       >
                         <input
                           type="radio"

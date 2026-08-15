@@ -26,10 +26,14 @@ export function openWhatsApp(payload: SharePayload): void {
     // Strip non-digits and ensure SA country code
     const digits = phone.replace(/\D/g, '');
     const e164 = digits.startsWith('0') ? '27' + digits.slice(1) : digits;
-    window.open(`https://wa.me/${e164}?text=${encoded}`, '_blank');
+    if (e164.length >= 7) {
+      window.open(`https://wa.me/${e164}?text=${encoded}`, '_blank', 'noopener,noreferrer');
+    } else {
+      window.open(`https://wa.me/?text=${encoded}`, '_blank', 'noopener,noreferrer');
+    }
   } else {
     // No phone — open WhatsApp without a recipient (user picks manually)
-    window.open(`https://wa.me/?text=${encoded}`, '_blank');
+    window.open(`https://wa.me/?text=${encoded}`, '_blank', 'noopener,noreferrer');
   }
 }
 

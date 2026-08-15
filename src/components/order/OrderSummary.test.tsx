@@ -134,16 +134,14 @@ describe('OrderSummary', () => {
     });
 
     expect(container.textContent).toContain('Order overview');
+
+
     expect(container.textContent).toContain('People settlement');
     expect(container.textContent).toContain('Finalize order');
     expect(container.textContent).toContain('Save to Past Orders');
     expect(container.textContent).toContain('Delete order');
     expect(container.textContent).not.toContain('Payment state');
     expect(container.textContent).not.toContain('Invoices and sharing');
-    expect(container.textContent).toContain('Download PDF');
-    expect(container.textContent).toContain('WhatsApp');
-    expect(container.textContent).toContain('Email');
-    expect(container.textContent).toContain('Copy payment summary');
   });
 
   it('keeps invoice previews collapsed by default and reveals them when expanded', () => {
@@ -162,6 +160,10 @@ describe('OrderSummary', () => {
     clickButtonByText(container, 'View details');
 
     expect(container.textContent).toContain('Payment Instructions');
+    expect(container.textContent).toContain('Download PDF');
+    expect(container.textContent).toContain('WhatsApp');
+    expect(container.textContent).toContain('Email');
+    expect(container.textContent).toContain('Copy payment summary');
   });
 
   it('updates payment status from the per-person settlement row', async () => {
