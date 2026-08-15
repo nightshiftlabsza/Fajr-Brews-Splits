@@ -1520,6 +1520,149 @@ tr:hover td {
   color: var(--color-paid);
 }
 
+/* ── Order Cockpit Layout (Step 4) ─────────────────────────── */
+
+.order-cockpit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding-bottom: 80px;
+}
+
+.order-cockpit-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.cockpit-main-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.cockpit-sidebar-column {
+  display: none;
+}
+
+.cockpit-mobile-summary-card {
+  display: block;
+}
+
+.cockpit-card {
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-bg));
+  border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
+  border-radius: 22px;
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-5);
+}
+
+.cockpit-hero-total {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-4) var(--space-5);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--color-accent-light) 46%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-accent) 24%, var(--color-border));
+  margin-bottom: var(--space-4);
+}
+
+.cockpit-hero-total-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.cockpit-hero-total-amount {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 2.5vw, 2.25rem);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.cockpit-line-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.cockpit-line-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  padding: 4px 0;
+}
+
+.cockpit-line-item strong {
+  color: var(--color-text-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cockpit-vitals-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.cockpit-vital-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.cockpit-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+@media (min-width: 1024px) {
+  .order-cockpit {
+    padding-bottom: var(--space-6);
+  }
+
+  .order-cockpit-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(320px, 380px);
+    gap: var(--space-6);
+    align-items: start;
+  }
+
+  .cockpit-sidebar-column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    position: sticky;
+    top: 80px;
+  }
+
+  .cockpit-mobile-summary-card {
+    display: none;
+  }
+
+  .summary-sticky-bar {
+    display: none;
+  }
+}
+
 .order-summary-metrics {
   gap: var(--space-3);
 }

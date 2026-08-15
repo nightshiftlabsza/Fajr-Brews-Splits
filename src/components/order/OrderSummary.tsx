@@ -104,62 +104,154 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
   const savingPastOrder = order.isArchived;
 
   return (
-    <div className="wizard-step-stack order-summary-stack">
-      <section className="wizard-panel order-summary-overview">
-        <div className="order-summary-overview-top">
-          <div>
-            <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Order overview</div>
-            <div className="order-summary-title-row">
-              {orderRoaster && (
-                <RoasterAvatar
-                  name={orderRoaster.name}
-                  logoUrl={orderRoaster.logoUrl}
-                  size={42}
-                />
-              )}
-              <h3 className="wizard-card-title">{order.name || 'Untitled order'}</h3>
-              <span className={`summary-status-pill is-${orderStatus.tone}`}>{orderStatus.label}</span>
+    <div className="order-cockpit">
+      <div className="order-cockpit-grid">
+        {/* Main Left Workspace Column */}
+        <div className="cockpit-main-column">
+          <section className="wizard-panel order-summary-overview">
+            <div className="order-summary-overview-top">
+              <div>
+                <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Order overview</div>
+                <div className="order-summary-title-row">
+                  {orderRoaster && (
+                    <RoasterAvatar
+                      name={orderRoaster.name}
+                      logoUrl={orderRoaster.logoUrl}
+                      size={42}
+                    />
+                  )}
+                  <h3 className="wizard-card-title">{order.name || 'Untitled order'}</h3>
+                  <span className={`summary-status-pill is-${orderStatus.tone}`}>{orderStatus.label}</span>
+                </div>
+                {orderRoaster && (
+                  <div className="field-hint" style={{ marginTop: 'var(--space-2)' }}>
+                    Roaster: {orderRoaster.name}
+                  </div>
+                )}
+              </div>
+
+              <div className="wizard-chip-row">
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => onJumpToStep('setup')}>Edit setup</button>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => onJumpToStep('coffees')}>Edit coffees</button>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => onJumpToStep('goods')}>Edit goods</button>
+              </div>
             </div>
-            {orderRoaster && (
-              <div className="field-hint" style={{ marginTop: 'var(--space-2)' }}>
-                Roaster: {orderRoaster.name}
+          </section>
+
+          {/* Mobile-only Financial Summary Card */}
+          <section className="wizard-panel cockpit-mobile-summary-card">
+            <div className="cockpit-hero-total">
+              <span className="cockpit-hero-total-label">Grand Total</span>
+              <span className="cockpit-hero-total-amount">{formatZAR(result.totalOrderZar)}</span>
+            </div>
+            <div className="cockpit-line-items">
+              <div className="cockpit-line-item">
+                <span>Goods subtotal</span>
+                <strong>{formatZAR(result.totalGoodsZar)}</strong>
+              </div>
+              <div className="cockpit-line-item">
+                <span>Fees subtotal</span>
+                <strong>{formatZAR(result.totalFeesZar)}</strong>
+              </div>
+              <div className="cockpit-line-item">
+                <span>People charged</span>
+                <strong>{result.personIds.length}</strong>
+              </div>
+            </div>
+            {Math.abs(result.roundingAbsorbed) > 0.001 && (
+              <div className="wizard-inline-note order-summary-note">
+                Rounding absorbed by {payer?.name || 'payer'}: {formatZAR(Math.abs(result.roundingAbsorbed))}
+                {result.roundingAbsorbed > 0 ? ' (payer pays more)' : ' (payer pays less)'}
               </div>
             )}
-          </div>
+          </section>
 
-          <div className="wizard-chip-row">
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onJumpToStep('setup')}>Edit setup</button>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onJumpToStep('coffees')}>Edit coffees</button>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onJumpToStep('goods')}>Edit goods</button>
-          </div>
+          <CoffeeCostSummary result={result} />
+
+          <SettlementPacks
+            order={order}
+            people={people}
+            result={result}
+            onPaymentChange={updatePayment}
+            paymentEditingEnabled
+          />
         </div>
 
-        <div className="wizard-summary-grid order-summary-metrics">
-          <SummaryMetric label="Goods subtotal" value={formatZAR(result.totalGoodsZar)} />
-          <SummaryMetric label="Fees subtotal" value={formatZAR(result.totalFeesZar)} />
-          <SummaryMetric label="Grand total" value={formatZAR(result.totalOrderZar)} emphasize />
-          <SummaryMetric label="People charged" value={String(result.personIds.length)} />
-        </div>
+        {/* Desktop Sticky Financial & Action Cockpit Sidebar */}
+        <aside className="cockpit-sidebar-column">
+          <section className="cockpit-card">
+            <div className="section-label" style={{ marginBottom: 'var(--space-3)' }}>Order Total & Finalization</div>
+            <div className="cockpit-hero-total">
+              <span className="cockpit-hero-total-label">Grand Total</span>
+              <span className="cockpit-hero-total-amount">{formatZAR(result.totalOrderZar)}</span>
+            </div>
+            <div className="cockpit-line-items">
+              <div className="cockpit-line-item">
+                <span>Goods subtotal</span>
+                <strong>{formatZAR(result.totalGoodsZar)}</strong>
+              </div>
+              <div className="cockpit-line-item">
+                <span>Fees subtotal</span>
+                <strong>{formatZAR(result.totalFeesZar)}</strong>
+              </div>
+              <div className="cockpit-line-item">
+                <span>People charged</span>
+                <strong>{result.personIds.length}</strong>
+              </div>
+            </div>
 
-        {Math.abs(result.roundingAbsorbed) > 0.001 && (
-          <div className="wizard-inline-note order-summary-note">
-            Rounding absorbed by {payer?.name || 'payer'}: {formatZAR(Math.abs(result.roundingAbsorbed))}
-            {result.roundingAbsorbed > 0 ? ' (payer pays more)' : ' (payer pays less)'}
-          </div>
-        )}
-      </section>
+            {Math.abs(result.roundingAbsorbed) > 0.001 && (
+              <div className="wizard-inline-note order-summary-note" style={{ marginBottom: 'var(--space-4)' }}>
+                Rounding absorbed by {payer?.name || 'payer'}: {formatZAR(Math.abs(result.roundingAbsorbed))}
+              </div>
+            )}
 
-      <CoffeeCostSummary result={result} />
+            <div className="divider" style={{ margin: 'var(--space-4) 0' }} />
 
-      <SettlementPacks
-        order={order}
-        people={people}
-        result={result}
-        onPaymentChange={updatePayment}
-        paymentEditingEnabled
-      />
+            <div className="cockpit-actions">
+              <button
+                type="button"
+                className="btn btn-primary btn-lg w-full"
+                onClick={handleFinalizeOrder}
+                disabled={finalizing || deleting}
+              >
+                {finalizing ? (
+                  <span className="spinner" style={{ width: 16, height: 16 }} />
+                ) : savingPastOrder ? (
+                  'Save changes'
+                ) : (
+                  'Save to Past Orders'
+                )}
+              </button>
+              {!savingPastOrder && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm w-full"
+                  style={{ color: 'var(--color-unpaid)' }}
+                  onClick={() => setConfirmDeleteOpen(true)}
+                  disabled={deleting || finalizing}
+                >
+                  {deleting ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Delete order'}
+                </button>
+              )}
+            </div>
 
-      {/* Persistent Sticky Finalize Action Bar */}
+            {finalizeError && (
+              <div className="alert alert-error" style={{ marginTop: 'var(--space-3)' }}>
+                {finalizeError}
+              </div>
+            )}
+
+            {deleteError && (
+              <div className="alert alert-error" style={{ marginTop: 'var(--space-3)' }}>
+                {deleteError}
+              </div>
+            )}
+          </section>
+        </aside>
+      </div>
+
+      {/* Mobile Sticky Action Bar */}
       <div className="summary-sticky-bar" role="region" aria-label="Finalize order">
         <span className="sr-only">Finalize order</span>
         <div className="summary-sticky-status-group">
@@ -196,18 +288,6 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
         </div>
       </div>
 
-      {finalizeError && (
-        <div className="alert alert-error" style={{ marginTop: 'var(--space-4)' }}>
-          {finalizeError}
-        </div>
-      )}
-
-      {deleteError && (
-        <div className="alert alert-error" style={{ marginTop: 'var(--space-4)' }}>
-          {deleteError}
-        </div>
-      )}
-
       {/* Custom Delete Confirmation Modal */}
       {confirmDeleteOpen && (
         <ConfirmModal
@@ -222,15 +302,6 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
           onCancel={() => setConfirmDeleteOpen(false)}
         />
       )}
-    </div>
-  );
-}
-
-function SummaryMetric({ label, value, emphasize = false }: { label: string; value: string; emphasize?: boolean }) {
-  return (
-    <div className={`wizard-metric ${emphasize ? 'is-emphasized' : ''}`}>
-      <div className="wizard-metric-label">{label}</div>
-      <div className="wizard-metric-value">{value}</div>
     </div>
   );
 }
