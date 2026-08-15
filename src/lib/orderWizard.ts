@@ -80,8 +80,9 @@ function normalizeParticipant(
 }
 
 function buildLegacyBagDrafts(lot: CoffeeLot): BagAllocationDraft[] {
-  const sharesWithBagIndex = lot.shares.filter((share) => typeof share.bagIndex === 'number');
-  if (sharesWithBagIndex.length === lot.shares.length && sharesWithBagIndex.length > 0) {
+  const shares = lot.shares ?? [];
+  const sharesWithBagIndex = shares.filter((share) => typeof share.bagIndex === 'number');
+  if (sharesWithBagIndex.length === shares.length && sharesWithBagIndex.length > 0) {
     const sharesByBagIndex = new Map<number, ShareLine[]>();
     for (const share of sharesWithBagIndex) {
       const bagIndex = share.bagIndex ?? 0;
@@ -113,7 +114,7 @@ function buildLegacyBagDrafts(lot: CoffeeLot): BagAllocationDraft[] {
   }
 
   const bags: BagAllocationDraft[] = [];
-  const shareQueue = lot.shares.map((share, shareIndex) => ({
+  const shareQueue = (lot.shares ?? []).map((share, shareIndex) => ({
     ...share,
     remaining: share.shareGrams,
     shareIndex,

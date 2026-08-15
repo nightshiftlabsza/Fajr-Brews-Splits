@@ -494,3 +494,169 @@ describe('appStore roaster actions', () => {
     );
   });
 });
+
+describe('appStore Realtime JSONB Hydration & Data Integrity', () => {
+  it('correctly hydrates stringified JSONB columns delivered by Supabase Realtime', async () => {
+    let realtimeCallback: ((payload: unknown) => void) | null = null;
+
+    const { useAppStore, supabase } = await loadStore();
+    const channelObj: any = {
+      on: vi.fn().mockImplementation((event: string, filter: any, callback: any) => {
+        if (filter?.table === 'orders') {
+          realtimeCallback = callback;
+        }
+        return channelObj;
+      }),
+      subscribe: vi.fn().mockImplementation(() => channelObj),
+      unsubscribe: vi.fn(),
+    };
+    (supabase.channel as any).mockReturnValue(channelObj);
+
+    useAppStore.setState({ _realtimeChannel: null, orders: [] });
+    useAppStore.getState()._setupRealtime('workspace-1');
+
+    expect(realtimeCallback).toBeTruthy();
+
+    const stringifiedPayload = {
+      eventType: 'UPDATE',
+      new: {
+        id: 'order-realtime-1',
+        workspace_id: 'workspace-1',
+        name: 'Realtime March Drop',
+        order_date: '2026-08-15',
+        status: 'planning',
+        roaster_id: 'roaster-1',
+        roaster_snapshot: JSON.stringify({ id: 'roaster-1', name: 'Father Coffee' }),
+        payer_id: 'person-1',
+        payer_bank: JSON.stringify({ bankName: 'Investec', accountNumber: '987654321', beneficiary: 'Alice' }),
+        reference_template: 'FAJR-{ORDER}-{NAME}',
+        payer_note: 'Please pay ASAP',
+        goods_total_zar: '1200.0000',
+        lots: JSON.stringify([
+          {
+            id: 'lot-realtime-1',
+            name: 'Kenya AA Nyeri',
+            foreignPricePerBag: 22,
+            gramsPerBag: 250,
+            quantity: 2,
+            bags: [
+              { id: 'bag-1', splitMode: 'full', buyers: [{ id: 'b-1', personId: 'person-1', grams: 250 }] },
+              { id: 'bag-2', splitMode: 'full', buyers: [{ id: 'b-2', personId: 'person-2', grams: 250 }] },
+            ],
+            shares: [
+              { id: 'b-1', personId: 'person-1', shareGrams: 250, bagIndex: 0 },
+              { id: 'b-2', personId: 'person-2', shareGrams: 250, bagIndex: 1 },
+            ],
+            bagAllocations: [
+              { id: 'bag-1', bagIndex: 0, mode: 'single', participants: [{ id: 'b-1', personId: 'person-1', shareGrams: 250, sourceShareId: 'b-1' }] },
+              { id: 'bag-2', bagIndex: 1, mode: 'single', participants: [{ id: 'b-2', personId: 'person-2', shareGrams: 250, sourceShareId: 'b-2' }] },
+            ],
+          },
+        ]),
+        fees: JSON.stringify([
+          { id: 'fee-1', label: 'Shipping', amountZar: 200, allocationType: 'equal_per_person', personId: null },
+        ]),
+        payments: JSON.stringify({
+          'person-1': { status: 'paid', amountPaid: 700 },
+        }),
+        is_archived: false,
+        created_at: '2026-08-15T08:00:00.000Z',
+        updated_at: '2026-08-15T08:30:00.000Z',
+      },
+      old: { id: 'order-realtime-1' },
+    };
+
+    realtimeCallback!(stringifiedPayload);
+
+    const orders = useAppStore.getState().orders;
+    expect(orders).toHaveLength(1);
+    const order = orders[0];
+
+    // Assert lots, bags, shares, fees, payments, bank, roasterSnapshot are all correctly parsed
+    expect(order.lots).toHaveLength(1);
+    expect(order.lots[0]!.name).toBe('Kenya AA Nyeri');
+    expect(order.lots[0]!.bags).toHaveLength(2);
+    expect(order.lots[0]!.bags![0]!.buyers[0]!.personId).toBe('person-1');
+    expect(order.fees).toHaveLength(1);
+    expect(order.fees[0]!.label).toBe('Shipping');
+    expect(order.fees[0]!.amountZar).toBe(200);
+    expect(order.payments['person-1']?.status).toBe('paid');
+    expect(order.payerBank.bankName).toBe('Investec');
+    expect(order.roasterSnapshot?.name).toBe('Father Coffee');
+  });
+
+  it('preserves existing valid order state if Realtime payload is corrupted', async () => {
+    let realtimeCallback: ((payload: unknown) => void) | null = null;
+
+    const { useAppStore, supabase } = await loadStore();
+    const channelObj: any = {
+      on: vi.fn().mockImplementation((event: string, filter: any, callback: any) => {
+        if (filter?.table === 'orders') {
+          realtimeCallback = callback;
+        }
+        return channelObj;
+      }),
+      subscribe: vi.fn().mockImplementation(() => channelObj),
+      unsubscribe: vi.fn(),
+    };
+    (supabase.channel as any).mockReturnValue(channelObj);
+
+    const initialOrder = makeStoreOrder({
+      id: 'order-existing-1',
+      name: 'Existing Safe Order',
+      lots: [
+        {
+          id: 'lot-safe',
+          name: 'Panama Geisha',
+          foreignPricePerBag: 45,
+          gramsPerBag: 250,
+          quantity: 1,
+          bags: [{ id: 'b-1', splitMode: 'full', buyers: [{ id: 'buy-1', personId: 'person-1', grams: 250 }] }],
+          shares: [{ id: 'buy-1', personId: 'person-1', shareGrams: 250, bagIndex: 0 }],
+          bagAllocations: [{ id: 'b-1', bagIndex: 0, mode: 'single', participants: [{ id: 'buy-1', personId: 'person-1', shareGrams: 250, sourceShareId: 'buy-1' }] }],
+        },
+      ],
+      fees: [{ id: 'fee-safe', label: 'Air freight', amountZar: 350, allocationType: 'equal_per_person', personId: null }],
+    });
+
+    useAppStore.setState({ _realtimeChannel: null, orders: [initialOrder] });
+    useAppStore.getState()._setupRealtime('workspace-1');
+
+    // Corrupted payload with invalid JSON
+    const corruptedPayload = {
+      eventType: 'UPDATE',
+      new: {
+        id: 'order-existing-1',
+        workspace_id: 'workspace-1',
+        name: 'Existing Safe Order',
+        order_date: '2026-08-15',
+        status: 'planning',
+        roaster_id: null,
+        roaster_snapshot: 'INVALID_JSON_ROASTER',
+        payer_id: 'person-1',
+        payer_bank: 'INVALID_JSON_BANK',
+        reference_template: 'FAJR-{ORDER}-{NAME}',
+        goods_total_zar: '1200',
+        lots: 'CORRUPTED_JSON_STRING_THAT_CANNOT_BE_PARSED',
+        fees: 'CORRUPTED_FEES_STRING',
+        payments: 'CORRUPTED_PAYMENTS_STRING',
+        is_archived: false,
+        created_at: '2026-08-15T08:00:00.000Z',
+        updated_at: '2026-08-15T08:35:00.000Z',
+      },
+      old: { id: 'order-existing-1' },
+    };
+
+    realtimeCallback!(corruptedPayload);
+
+    const orders = useAppStore.getState().orders;
+    expect(orders).toHaveLength(1);
+    const order = orders[0];
+
+    // Assert existing valid lots and fees were preserved, not wiped to []!
+    expect(order.lots).toHaveLength(1);
+    expect(order.lots[0].name).toBe('Panama Geisha');
+    expect(order.fees).toHaveLength(1);
+    expect(order.fees[0].label).toBe('Air freight');
+  });
+});

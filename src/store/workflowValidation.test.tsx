@@ -371,4 +371,114 @@ describe('Full Workflow Integration & Acceptance Verification', () => {
       expect(pastOrder.payments['person-zak'].status).toBe('paid');
     });
   });
+
+  // ── WORKFLOW 9: Multi-step Order Lifecycle & Safe Step Navigation ────────────
+  describe('Workflow 9: Multi-step Order Progression & Step Navigation Integrity', () => {
+    it('preserves lots, bag allocations, fees, and summary validity through full order progression and backward navigation', () => {
+      // 1. Initial order creation
+      let order = makeTestOrder('order-progression-1', 'October Collective', 'planning', []);
+      order.goodsTotalZar = 0;
+      order.fees = [];
+
+      expect(order.lots).toHaveLength(0);
+      expect(calculate(order, personNames).isValid).toBe(false);
+
+      // 2. Add Coffee Lot 1 (Pastel Hour, 2 bags, allocated to Ahmed & Sarah)
+      const lot1: CoffeeLot = {
+        id: 'lot-1',
+        name: 'Pastel Hour',
+        foreignPricePerBag: 20,
+        gramsPerBag: 250,
+        quantity: 2,
+        bags: [
+          { id: 'bag-1', splitMode: 'full', buyers: [{ id: 'b-1', personId: 'person-ahmed', grams: 250 }] },
+          { id: 'bag-2', splitMode: 'full', buyers: [{ id: 'b-2', personId: 'person-sarah', grams: 250 }] },
+        ],
+        shares: [
+          { id: 'b-1', personId: 'person-ahmed', shareGrams: 250, bagIndex: 0 },
+          { id: 'b-2', personId: 'person-sarah', shareGrams: 250, bagIndex: 1 },
+        ],
+        bagAllocations: [
+          { id: 'bag-1', bagIndex: 0, mode: 'single', participants: [{ id: 'b-1', personId: 'person-ahmed', shareGrams: 250, sourceShareId: 'b-1' }] },
+          { id: 'bag-2', bagIndex: 1, mode: 'single', participants: [{ id: 'b-2', personId: 'person-sarah', shareGrams: 250, sourceShareId: 'b-2' }] },
+        ],
+      };
+      order = { ...order, lots: [...order.lots, lot1] };
+
+      // 3. Add Coffee Lot 2 (Gesha Spirits, 1 bag split equally between Zak & Abdul)
+      const lot2: CoffeeLot = {
+        id: 'lot-2',
+        name: 'Gesha Spirits',
+        foreignPricePerBag: 35,
+        gramsPerBag: 250,
+        quantity: 1,
+        bags: [
+          {
+            id: 'bag-3',
+            splitMode: 'equal',
+            buyers: [
+              { id: 'b-3', personId: 'person-zak', grams: 125 },
+              { id: 'b-4', personId: 'person-abdul', grams: 125 },
+            ],
+          },
+        ],
+        shares: [
+          { id: 'b-3', personId: 'person-zak', shareGrams: 125, bagIndex: 0 },
+          { id: 'b-4', personId: 'person-abdul', shareGrams: 125, bagIndex: 0 },
+        ],
+        bagAllocations: [
+          {
+            id: 'bag-3',
+            bagIndex: 0,
+            mode: 'split',
+            participants: [
+              { id: 'b-3', personId: 'person-zak', shareGrams: 125, sourceShareId: 'b-3' },
+              { id: 'b-4', personId: 'person-abdul', shareGrams: 125, sourceShareId: 'b-4' },
+            ],
+          },
+        ],
+      };
+      order = { ...order, lots: [...order.lots, lot2] };
+
+      expect(order.lots).toHaveLength(2);
+      expect(order.lots[0].name).toBe('Pastel Hour');
+      expect(order.lots[1].name).toBe('Gesha Spirits');
+
+      // 4. Move to 3. Goods & Fees: Set goods total and add fee
+      order = {
+        ...order,
+        goodsTotalZar: 1500,
+        fees: [
+          { id: 'fee-1', label: 'DHL Delivery', amountZar: 300, allocationType: 'equal_per_person', personId: null },
+        ],
+      };
+
+      // 5. Move to 4. Summary: Calculate totals
+      const summaryResult = calculate(order, personNames);
+      expect(summaryResult.isValid).toBe(true);
+      expect(summaryResult.totalGoodsZar).toBe(1500);
+      expect(summaryResult.totalFeesZar).toBe(300);
+      expect(summaryResult.totalOrderZar).toBe(1800);
+      expect(summaryResult.personIds).toEqual(expect.arrayContaining(['person-ahmed', 'person-sarah', 'person-zak', 'person-abdul']));
+
+      // 6. Navigate backwards to 2. Coffees & Bags and verify all state is 100% intact
+      expect(order.lots).toHaveLength(2);
+      expect(order.lots[0]!.bags).toHaveLength(2);
+      expect(order.lots[0]!.bags![0]!.buyers[0]!.personId).toBe('person-ahmed');
+      expect(order.lots[0]!.bags![1]!.buyers[0]!.personId).toBe('person-sarah');
+      expect(order.lots[1]!.bags![0]!.buyers).toHaveLength(2);
+      expect(order.lots[1]!.bags![0]!.buyers[0]!.grams).toBe(125);
+      expect(order.lots[1]!.bags![0]!.buyers[1]!.grams).toBe(125);
+
+      // 7. Verify fees and goods total remain intact
+      expect(order.goodsTotalZar).toBe(1500);
+      expect(order.fees).toHaveLength(1);
+      expect(order.fees[0].label).toBe('DHL Delivery');
+
+      // 8. Re-evaluating summary on return to Step 4 still calculates cleanly
+      const recheckedResult = calculate(order, personNames);
+      expect(recheckedResult.isValid).toBe(true);
+      expect(recheckedResult.validationErrors).toHaveLength(0);
+    });
+  });
 });

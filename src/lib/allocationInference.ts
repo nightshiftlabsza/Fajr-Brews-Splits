@@ -193,6 +193,83 @@ export function proposeAllocationForLot(
 }
 
 /**
+ * Extracts the list of distinct person IDs assigned across all bags in a lot.
+ */
+export function getLotBuyers(bags: Bag[]): string[] {
+  const buyerSet = new Set<string>();
+  for (const bag of bags) {
+    for (const buyer of bag.buyers) {
+      if (buyer.personId) {
+        buyerSet.add(buyer.personId);
+      }
+    }
+  }
+  return Array.from(buyerSet);
+}
+
+/**
+ * Synchronizes a lot's bags when the user toggles selected buyer chips.
+ * Conservatively preserves any custom splits while applying smart defaults
+ * for standard cases (1 bag/1 buyer, 1 bag/2 buyers, N bags/N buyers).
+ */
+export function syncLotWithSelectedBuyers(
+  existingBags: Bag[],
+  selectedPersonIds: string[],
+  gramsPerBag: number,
+): Bag[] {
+  const validPersonIds = selectedPersonIds.filter(Boolean);
+  const bagCount = Math.max(1, existingBags.length);
+
+  if (validPersonIds.length === 0) {
+    return createEmptyBags(bagCount);
+  }
+
+  const allUnassigned = existingBags.every(
+    (b) => b.splitMode === 'unassigned' || b.buyers.length === 0,
+  );
+  const hasCustomSplit = existingBags.some((b) => b.splitMode === 'custom');
+
+  // If fresh or standard auto-allocation scenarios without custom modifications
+  if (
+    allUnassigned ||
+    (!hasCustomSplit &&
+      existingBags.every(
+        (b) => b.splitMode === 'full' || b.splitMode === 'equal' || b.splitMode === 'unassigned',
+      ))
+  ) {
+    // 1 bag scenarios
+    if (bagCount === 1) {
+      if (validPersonIds.length === 1) {
+        return [assignFullBag(existingBags[0] || createEmptyBag(), validPersonIds[0], gramsPerBag)];
+      }
+      return [splitBagEqually(existingBags[0] || createEmptyBag(), validPersonIds, gramsPerBag)];
+    }
+
+    // N bags + N buyers -> 1 bag each
+    if (bagCount === validPersonIds.length) {
+      return Array.from({ length: bagCount }, (_, i) =>
+        assignFullBag(existingBags[i] || createEmptyBag(), validPersonIds[i], gramsPerBag),
+      );
+    }
+
+    // N bags + K buyers (N > K) -> distribute bags greedily to buyers
+    if (bagCount > validPersonIds.length) {
+      const result: Bag[] = [];
+      let buyerIdx = 0;
+      for (let i = 0; i < bagCount; i++) {
+        const personId = validPersonIds[buyerIdx % validPersonIds.length];
+        result.push(assignFullBag(existingBags[i] || createEmptyBag(), personId, gramsPerBag));
+        buyerIdx++;
+      }
+      return result;
+    }
+  }
+
+  // Conservative non-destructive fallback: keep configured bags intact and allocate remaining
+  return proposeAllocationForLot(existingBags, validPersonIds, gramsPerBag);
+}
+
+/**
  * Formats a clean human-readable summary of a single bag.
  */
 export function formatBagSummary(bag: Bag, gramsPerBag: number, personNameMap: Record<string, string>): string {
@@ -312,4 +389,67 @@ export function formatLotAllocationSummary(
     isComplete,
     unassignedCount,
   };
+}
+
+/**
+ * Formats an ultra-compact inline allocation summary line for lot cards and forms.
+ * Examples:
+ * - "Abdul 1 bag · Zakariyya 1 bag"
+ * - "Abdul 125g · Zakariyya 125g"
+ * - "Abdul (250g)"
+ * - "Abdul 1 bag · (Zakariyya 125g + Sarah 125g)"
+ */
+export function formatCompactAllocationSummary(
+  bags: Bag[],
+  gramsPerBag: number,
+  personNameMap: Record<string, string>,
+): string {
+  if (bags.length === 0 || bags.every((b) => b.splitMode === 'unassigned' || b.buyers.length === 0)) {
+    return 'Unassigned';
+  }
+
+  // 1-bag cases
+  if (bags.length === 1) {
+    const bag = bags[0];
+    if (bag.splitMode === 'unassigned' || bag.buyers.length === 0) {
+      return 'Unassigned';
+    }
+    if (bag.splitMode === 'full') {
+      const name = personNameMap[bag.buyers[0]?.personId] || 'Unknown';
+      return `${name} (${formatGrams(gramsPerBag)})`;
+    }
+    // Split (equal or custom)
+    return bag.buyers
+      .filter((b) => b.personId)
+      .map((b) => `${personNameMap[b.personId] || 'Unknown'} ${formatGrams(b.grams)}`)
+      .join(' · ');
+  }
+
+  // Multi-bag cases: check if all are full bags
+  const allFull = bags.every((b) => b.splitMode === 'full' && b.buyers.length === 1);
+  if (allFull) {
+    const counts: Record<string, number> = {};
+    for (const b of bags) {
+      const pid = b.buyers[0]?.personId;
+      if (pid) counts[pid] = (counts[pid] || 0) + 1;
+    }
+    return Object.entries(counts)
+      .map(([pid, count]) => `${personNameMap[pid] || 'Unknown'} ${count} ${count === 1 ? 'bag' : 'bags'}`)
+      .join(' · ');
+  }
+
+  // Mixed or split multi-bag cases: describe bag by bag compactly
+  const parts = bags.map((b, i) => {
+    if (b.splitMode === 'unassigned' || b.buyers.length === 0) {
+      return `Bag ${i + 1}: Unassigned`;
+    }
+    if (b.splitMode === 'full') {
+      return `${personNameMap[b.buyers[0]?.personId] || 'Unknown'} 1 bag`;
+    }
+    const sub = b.buyers
+      .map((buy) => `${personNameMap[buy.personId] || 'Unknown'} ${formatGrams(buy.grams)}`)
+      .join(' + ');
+    return `(${sub})`;
+  });
+  return parts.join(' · ');
 }

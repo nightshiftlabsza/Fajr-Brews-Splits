@@ -121,13 +121,6 @@ function clickButtonByText(container: HTMLElement, label: string, within?: Eleme
   });
 }
 
-function setSelectValue(select: HTMLSelectElement, value: string) {
-  act(() => {
-    select.value = value;
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-  });
-}
-
 describe('CoffeeLotsSection', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -149,19 +142,23 @@ describe('CoffeeLotsSection', () => {
     container.remove();
   });
 
-  it('renders coffee lots and allows managing bags', () => {
+  it('renders coffee lots with inline allocation', () => {
     act(() => {
       root.render(<CoffeeLotsHarness initialOrder={makeOrder([
-        makeLot({ id: 'lot-1', name: 'Kenya AA' }),
+        makeLot({
+          id: 'lot-1',
+          name: 'Kenya AA',
+          bags: [{ id: 'bag-1', splitMode: 'full', buyers: [{ id: 'b-1', personId: 'person-1', grams: 250 }] }],
+        }),
       ])} />);
     });
 
     expect(container.textContent).toContain('Kenya AA');
-    expect(container.textContent).toContain('1 Physical Bag');
-    expect(container.textContent).toContain('Bag 1 (250g)');
+    expect(container.textContent).toContain('Alice (250g)');
+    expect(container.textContent).toContain('✓ Allocated');
   });
 
-  it('assigns full bag when a person is chosen from dropdown', () => {
+  it('assigns unassigned coffee with quick buyer chip', () => {
     act(() => {
       root.render(<CoffeeLotsHarness initialOrder={makeOrder([
         makeLot({
@@ -172,21 +169,116 @@ describe('CoffeeLotsSection', () => {
       ])} />);
     });
 
-    const select = container.querySelector('select') as HTMLSelectElement;
-    expect(select).toBeTruthy();
-    setSelectValue(select, 'person-2');
+    expect(container.textContent).toContain('Unassigned');
+    expect(container.textContent).toContain('+ Bilal');
+
+    clickButtonByText(container, '+ Bilal');
 
     expect(mockStoreState.updateOrder).toHaveBeenCalled();
   });
 
-  it('opens new coffee lot form when + Add Coffee Lot is clicked', () => {
+  it('opens new coffee lot form when + Add Coffee is clicked', () => {
     act(() => {
       root.render(<CoffeeLotsHarness initialOrder={makeOrder([])} />);
     });
 
-    expect(container.textContent).toContain('No coffee lots added');
-    clickButtonByText(container, 'Add First Coffee Lot');
+    expect(container.textContent).toContain('No coffees added yet');
+    clickButtonByText(container, 'Add Coffee');
 
-    expect(container.textContent).toContain('New Coffee Lot');
+    expect(container.textContent).toContain('New Coffee');
+  });
+
+  it('renders disabled Next button with unassigned hint when bags are not yet allocated', () => {
+    const onContinue = vi.fn();
+    act(() => {
+      root.render(
+        <CoffeeLotsSection
+          order={makeOrder([
+            makeLot({
+              id: 'lot-1',
+              name: 'Kenya AA',
+              bags: [{ id: 'bag-1', splitMode: 'unassigned', buyers: [] }],
+            }),
+          ])}
+          onContinue={onContinue}
+        />
+      );
+    });
+
+    expect(container.textContent).toContain('1 bag needs a buyer');
+    const nextBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('Next: Goods & Fees')
+    );
+    expect(nextBtn).toBeTruthy();
+    expect(nextBtn?.disabled).toBe(true);
+
+    if (nextBtn) {
+      act(() => {
+        nextBtn.click();
+      });
+    }
+    expect(onContinue).not.toHaveBeenCalled();
+  });
+
+  it('renders enabled Next button when all bags are allocated and triggers onContinue', () => {
+    const onContinue = vi.fn();
+    act(() => {
+      root.render(
+        <CoffeeLotsSection
+          order={makeOrder([
+            makeLot({
+              id: 'lot-1',
+              name: 'Kenya AA',
+              bags: [{ id: 'bag-1', splitMode: 'full', buyers: [{ id: 'b-1', personId: 'person-1', grams: 250 }] }],
+            }),
+            makeLot({
+              id: 'lot-2',
+              name: 'Pastel Hour',
+              bags: [
+                {
+                  id: 'bag-2',
+                  splitMode: 'equal',
+                  buyers: [
+                    { id: 'b-2', personId: 'person-1', grams: 125 },
+                    { id: 'b-3', personId: 'person-2', grams: 125 },
+                  ],
+                },
+              ],
+            }),
+          ])}
+          onContinue={onContinue}
+        />
+      );
+    });
+
+    const nextBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('Next: Goods & Fees')
+    );
+    expect(nextBtn).toBeTruthy();
+    expect(nextBtn?.disabled).toBe(false);
+    expect(container.textContent).not.toContain('needs a buyer');
+
+    act(() => {
+      nextBtn?.click();
+    });
+
+    expect(onContinue).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not render bottom Next button when no coffee lots exist', () => {
+    const onContinue = vi.fn();
+    act(() => {
+      root.render(
+        <CoffeeLotsSection
+          order={makeOrder([])}
+          onContinue={onContinue}
+        />
+      );
+    });
+
+    const nextBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('Next: Goods & Fees')
+    );
+    expect(nextBtn).toBeUndefined();
   });
 });

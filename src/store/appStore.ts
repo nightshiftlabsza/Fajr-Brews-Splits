@@ -18,6 +18,11 @@ import type {
   Person,
   Order,
   OrderStatus,
+  CoffeeLot,
+  Fee,
+  PaymentRecord,
+  PayerBank,
+  RoasterSnapshot,
   AppSettings,
   Theme,
   ThemeMode,
@@ -50,8 +55,56 @@ function mapPerson(row: DbPerson): Person {
   };
 }
 
-function mapOrder(row: DbOrder): Order {
+function parseJsonField<T>(value: unknown, fallback: T): T {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return fallback;
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      return (parsed !== null && parsed !== undefined ? parsed : fallback) as T;
+    } catch (err) {
+      console.warn('parseJsonField: Failed to parse JSON payload', value, err);
+      return fallback;
+    }
+  }
+  return value as T;
+}
+
+function parseJsonArray<T>(value: unknown, fallback: T[] = []): T[] {
+  const parsed = parseJsonField(value, fallback);
+  if (Array.isArray(parsed)) {
+    return parsed;
+  }
+  console.warn('parseJsonArray: Expected array but received', typeof parsed, value);
+  return fallback;
+}
+
+function parseJsonObject<T extends object | null>(value: unknown, fallback: T): T {
+  const parsed = parseJsonField(value, fallback);
+  if (parsed === null && fallback === null) return null as T;
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    return parsed as T;
+  }
+  if (parsed === null) return fallback;
+  console.warn('parseJsonObject: Expected object but received', typeof parsed, value);
+  return fallback;
+}
+
+function mapOrder(row: DbOrder, existingOrder?: Order | null): Order {
   const status = normalizeOrderStatus(row.status, row.is_archived);
+  const lots = parseJsonArray<CoffeeLot>(row.lots, existingOrder?.lots ?? []);
+  const fees = parseJsonArray<Fee>(row.fees, existingOrder?.fees ?? []);
+  const payments = parseJsonObject<Record<string, PaymentRecord>>(row.payments, existingOrder?.payments ?? {});
+  const payerBank = parseJsonObject<PayerBank>(
+    row.payer_bank,
+    existingOrder?.payerBank ?? { bankName: '', accountNumber: '', beneficiary: '' },
+  );
+  const roasterSnapshot = parseJsonObject<RoasterSnapshot | null>(
+    row.roaster_snapshot,
+    existingOrder?.roasterSnapshot ?? null,
+  );
+
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -59,17 +112,15 @@ function mapOrder(row: DbOrder): Order {
     orderDate: row.order_date,
     status,
     roasterId: row.roaster_id ?? null,
-    roasterSnapshot: row.roaster_snapshot ?? null,
+    roasterSnapshot,
     payerId: row.payer_id,
-    payerBank: row.payer_bank ?? { bankName: '', accountNumber: '', beneficiary: '' },
+    payerBank,
     referenceTemplate: row.reference_template,
     payerNote: row.payer_note ?? undefined,
     goodsTotalZar: Number(row.goods_total_zar),
-    lots: Array.isArray(row.lots) ? row.lots : [],
-    fees: Array.isArray(row.fees) ? row.fees : [],
-    payments: (row.payments && typeof row.payments === 'object' && !Array.isArray(row.payments))
-      ? row.payments
-      : {},
+    lots,
+    fees,
+    payments,
     isArchived: status === 'archived',
     ownerId: row.owner_id ?? row.created_by ?? undefined,
     createdBy: row.created_by ?? undefined,
@@ -651,7 +702,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }
 
       const people = sortPeopleByName(dedupePeopleById((peopleRows ?? []).map(mapPerson)));
-      const orders = (orderRows ?? []).map(mapOrder);
+      const orders = (orderRows ?? []).map((row) => mapOrder(row));
 
       await get()._loadSettings(session.user.id);
 
@@ -1429,13 +1480,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
           try {
               const { eventType, new: newRow, old: oldRow } = payload;
               if (eventType === 'INSERT') {
-                const order = mapOrder(newRow as DbOrder);
+                const existing = get().orders.find((o) => o.id === (newRow as DbOrder).id);
+                const order = mapOrder(newRow as DbOrder, existing);
                 const nextOrder = optimisticOrderSnapshots.get(order.id) ?? order;
                 set((s) => ({
                   orders: upsertOrderById(s.orders, nextOrder),
                 }));
               } else if (eventType === 'UPDATE') {
-                const order = mapOrder(newRow as DbOrder);
+                const existing = get().orders.find((o) => o.id === (newRow as DbOrder).id);
+                const order = mapOrder(newRow as DbOrder, existing);
                 const nextOrder = optimisticOrderSnapshots.get(order.id) ?? order;
                 set((s) => ({ orders: upsertOrderById(s.orders, nextOrder) }));
               } else if (eventType === 'DELETE') {

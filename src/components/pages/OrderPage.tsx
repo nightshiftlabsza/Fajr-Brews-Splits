@@ -393,7 +393,10 @@ export function OrderPage({ onNavigateToHistory }: Props) {
         )}
 
         {activeSection === 'coffees' && (
-          <CoffeeLotsSection order={currentOrder} />
+          <CoffeeLotsSection
+            order={currentOrder}
+            onContinue={() => void handleSectionChange('goods')}
+          />
         )}
 
         {activeSection === 'goods' && (

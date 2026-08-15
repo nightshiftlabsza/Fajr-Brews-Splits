@@ -311,11 +311,12 @@ describe('HistoryPage', () => {
     });
 
     clickButtonByText(container, 'Edit order');
-    clickExactButtonByText(container, 'Add new buyer');
+    clickButtonByText(container, 'Adjust allocation ⚙');
+    clickExactButtonByText(container, '+ Add Person');
 
     const nameInput = container.querySelector('input[placeholder="Full name"]') as HTMLInputElement;
     setInputValue(nameInput, 'Ahmed');
-    clickExactButtonByText(container, 'Add buyer');
+    clickExactButtonByText(container, 'Add Person');
 
     await act(async () => {
       await Promise.resolve();
@@ -375,11 +376,10 @@ describe('HistoryPage', () => {
     });
 
     clickButtonByText(container, 'Edit order');
-    clickExactButtonByText(container, '+ Add bag');
+    clickButtonByText(container, 'Adjust allocation ⚙');
+    clickExactButtonByText(container, '+ Add Bag');
 
-    const unassignedSelect = Array.from(container.querySelectorAll('select'))
-      .find((select) => select.textContent?.includes('Select a buyer (full bag)')) as HTMLSelectElement;
-    setSelectValue(unassignedSelect, 'person-1');
+    clickButtonByText(container, '+ Alice');
     clickButtonByText(container, 'Save changes');
 
     await act(async () => {

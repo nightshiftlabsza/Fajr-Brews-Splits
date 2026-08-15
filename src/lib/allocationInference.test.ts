@@ -5,12 +5,15 @@ import {
   calculateEqualSplitGrams,
   createEmptyBag,
   createEmptyBags,
+  formatCompactAllocationSummary,
   formatBagSummary,
   formatLotAllocationSummary,
+  getLotBuyers,
   proposeAllocationForLot,
   removeBagFromBags,
   setCustomSplit,
   splitBagEqually,
+  syncLotWithSelectedBuyers,
 } from './allocationInference';
 import type { Bag } from '../types';
 
@@ -201,6 +204,58 @@ describe('allocationInference', () => {
       expect(summary.headline).toBe('2 bags · 1 bag each');
       expect(summary.subtext).toBe('Abdul, Ahmed');
       expect(summary.isComplete).toBe(true);
+    });
+  });
+
+  describe('syncLotWithSelectedBuyers & getLotBuyers', () => {
+    const names = { abdul: 'Abdul', ahmed: 'Ahmed', sarah: 'Sarah', zak: 'Zakariyya' };
+
+    it('extracts unique buyers across bags with getLotBuyers', () => {
+      const bags = [
+        assignFullBag(createEmptyBag(), 'abdul', 250),
+        splitBagEqually(createEmptyBag(), ['ahmed', 'sarah'], 250),
+      ];
+      const buyers = getLotBuyers(bags);
+      expect(buyers).toHaveLength(3);
+      expect(buyers).toContain('abdul');
+      expect(buyers).toContain('ahmed');
+      expect(buyers).toContain('sarah');
+    });
+
+    it('syncLotWithSelectedBuyers handles 1 bag + 1 buyer -> 1 whole bag', () => {
+      const bags = syncLotWithSelectedBuyers(createEmptyBags(1), ['abdul'], 250);
+      expect(bags).toHaveLength(1);
+      expect(bags[0].splitMode).toBe('full');
+      expect(bags[0].buyers[0].personId).toBe('abdul');
+      expect(bags[0].buyers[0].grams).toBe(250);
+    });
+
+    it('syncLotWithSelectedBuyers handles 1 bag + 2 buyers -> automatic 50/50 split', () => {
+      const bags = syncLotWithSelectedBuyers(createEmptyBags(1), ['abdul', 'zak'], 250);
+      expect(bags).toHaveLength(1);
+      expect(bags[0].splitMode).toBe('equal');
+      expect(bags[0].buyers[0].grams).toBe(125);
+      expect(bags[0].buyers[1].grams).toBe(125);
+      expect(formatCompactAllocationSummary(bags, 250, names)).toBe('Abdul 125g · Zakariyya 125g');
+    });
+
+    it('syncLotWithSelectedBuyers handles 2 bags + 2 buyers -> 1 whole bag each', () => {
+      const bags = syncLotWithSelectedBuyers(createEmptyBags(2), ['abdul', 'zak'], 250);
+      expect(bags).toHaveLength(2);
+      expect(bags[0].splitMode).toBe('full');
+      expect(bags[0].buyers[0].personId).toBe('abdul');
+      expect(bags[1].splitMode).toBe('full');
+      expect(bags[1].buyers[0].personId).toBe('zak');
+      expect(formatCompactAllocationSummary(bags, 250, names)).toBe('Abdul 1 bag · Zakariyya 1 bag');
+    });
+
+    it('syncLotWithSelectedBuyers handles 3 bags + 3 buyers -> 1 whole bag each', () => {
+      const bags = syncLotWithSelectedBuyers(createEmptyBags(3), ['abdul', 'ahmed', 'sarah'], 250);
+      expect(bags).toHaveLength(3);
+      expect(bags[0].buyers[0].personId).toBe('abdul');
+      expect(bags[1].buyers[0].personId).toBe('ahmed');
+      expect(bags[2].buyers[0].personId).toBe('sarah');
+      expect(formatCompactAllocationSummary(bags, 250, names)).toBe('Abdul 1 bag · Ahmed 1 bag · Sarah 1 bag');
     });
   });
 });
