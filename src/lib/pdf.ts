@@ -1,5 +1,5 @@
 import type { CalculationResult, Order, Person, PersonCalculation } from '../types';
-import { formatZAR, formatDate, orderPdfFilename, pdfFilename } from './formatters';
+import { formatGrams, formatZAR, formatDate, orderPdfFilename, pdfFilename } from './formatters';
 import { buildInvoiceModel, formatFeeForOwner } from './invoiceFormatter';
 
 // Dynamic import to keep initial bundle smaller
@@ -135,34 +135,19 @@ export async function generateInvoicePDF(
   y = sectionHeader(doc, 'Coffee Shares', y);
 
   for (const line of invoice.coffeeLines) {
-    // Lot name
+    // Primary line: Coffee Name · Grams on left, Total amount on right
     setTextColor(doc, DARK);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text(line.name, 24, y);
-    y += 5;
-
-    // Grams detail line
-    setTextColor(doc, MID);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    doc.text(line.detail, 24, y);
-
-    if (line.splitWith.length > 0) {
-      doc.text(`Split with: ${line.splitWith.join(', ')}`, 24, y + 4.5);
-      y += 4.5;
-    }
-    y += 5;
-
-    setTextColor(doc, MID);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text(`Beans ${line.beansAmount}${line.feesAmount ? `  -  Fees ${line.feesAmount}` : ''}`, 24, y);
-
-    setTextColor(doc, DARK);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
+    doc.setFontSize(9.5);
+    doc.text(`${line.name} · ${formatGrams(line.shareGrams)}`, 24, y);
     doc.text(line.totalAmount, 186, y, { align: 'right' });
+    y += 4.5;
+
+    // Subordinate breakdown line: (R345.23 coffee + R42.10 fees)
+    setTextColor(doc, MID);
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(7.5);
+    doc.text(`(${line.breakdownSummary})`, 24, y);
 
     y += 5;
 
@@ -170,12 +155,9 @@ export async function generateInvoicePDF(
     y += 5;
   }
 
-  y += 2;
-
-  // ── Fees Summary ──────────────────────────────────────────
-  if (calc.feeBreakdowns.length > 0) {
-    y = sectionHeader(doc, 'Included Allocated Fees', y);
-
+  // If person has only standalone fees without coffee
+  if (invoice.coffeeLines.length === 0 && calc.feeBreakdowns.length > 0) {
+    y = sectionHeader(doc, 'Additional Charges', y);
     for (const fee of invoice.feeLines) {
       setTextColor(doc, MID);
       doc.setFont('helvetica', 'normal');

@@ -6,7 +6,11 @@ import { ConfirmModal } from '../ui/ConfirmModal';
 
 const emptyForm: PersonFormValues = { name: '', phone: '', email: '', note: '' };
 
-export function PeoplePage() {
+interface PeoplePageProps {
+  embedded?: boolean;
+}
+
+export function PeoplePage({ embedded = false }: PeoplePageProps = {}) {
   const { people, addPerson, updatePerson, deletePerson } = useAppStore();
   const [editingId, setEditingId] = useState<string | 'new' | null>(null);
   const [form, setForm] = useState<PersonFormValues>(emptyForm);
@@ -79,14 +83,16 @@ export function PeoplePage() {
     }
   }
 
-  return (
-    <div className="page-container">
-      <div style={{ marginBottom: 'var(--space-6)' }}>
-        <h2 style={{ marginBottom: 4 }}>People</h2>
-        <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-          Shared Fajr Brews directory — visible to all workspace members.
-        </p>
-      </div>
+  const content = (
+    <>
+      {!embedded && (
+        <div style={{ marginBottom: 'var(--space-6)' }}>
+          <h2 style={{ marginBottom: 4 }}>People</h2>
+          <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
+            Shared Fajr Brews directory — visible to all workspace members.
+          </p>
+        </div>
+      )}
 
       {/* Search + add */}
       <div style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }}>
@@ -200,6 +206,16 @@ export function PeoplePage() {
           onCancel={() => setDeleteTarget(null)}
         />
       )}
+    </>
+  );
+
+  if (embedded) {
+    return <div>{content}</div>;
+  }
+
+  return (
+    <div className="page-container">
+      {content}
     </div>
   );
 }

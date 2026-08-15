@@ -4,6 +4,7 @@ import type { Order, PayerBank, Person, Roaster } from '../../types';
 import { todayISO } from '../../lib/formatters';
 import { dedupePeopleById } from '../../lib/storeState';
 import { createRoasterSnapshot } from '../../lib/roasters';
+import { normalizeFeeAllocationType } from '../../lib/invoiceFormatter';
 import { RoasterPicker } from '../roaster/RoasterPicker';
 
 

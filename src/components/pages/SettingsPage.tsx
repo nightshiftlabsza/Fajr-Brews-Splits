@@ -3,6 +3,7 @@ import { useAppStore } from '../../store/appStore';
 import type { Theme, ThemeMode, WorkspaceMember } from '../../types';
 import { formatDateShort } from '../../lib/formatters';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import { PeoplePage } from './PeoplePage';
 
 const THEMES: { id: Theme; name: string; description: string }[] = [
   { id: 'emerald', name: 'Emerald Ledger', description: 'Warm mineral · Deep emerald · Serif headings' },
@@ -21,6 +22,7 @@ export function SettingsPage() {
     workspaceMembers, fetchWorkspaceMembers, addMemberByEmail, removeMember,
   } = useAppStore();
 
+  const [activeTab, setActiveTab] = useState<'general' | 'people'>('general');
   const [membersLoaded, setMembersLoaded] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member');
@@ -73,15 +75,37 @@ export function SettingsPage() {
 
   return (
     <div className="page-container">
-      <div style={{ marginBottom: 'var(--space-6)' }}>
+      <div style={{ marginBottom: 'var(--space-5)' }}>
         <h2 style={{ marginBottom: 4 }}>Settings</h2>
         <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-          Personal preferences and workspace management.
+          Personal preferences, people directory, and workspace management.
         </p>
       </div>
 
-      {/* Account */}
-      <Section title="Account">
+      {/* Sub-tab navigation */}
+      <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-6)' }}>
+        <button
+          type="button"
+          className={`btn btn-sm ${activeTab === 'general' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('general')}
+        >
+          General Settings
+        </button>
+        <button
+          type="button"
+          className={`btn btn-sm ${activeTab === 'people' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setActiveTab('people')}
+        >
+          People Directory
+        </button>
+      </div>
+
+      {activeTab === 'people' ? (
+        <PeoplePage embedded={true} />
+      ) : (
+        <>
+          {/* Account */}
+          <Section title="Account">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
           <div>
             <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{user?.email}</div>
@@ -237,6 +261,9 @@ export function SettingsPage() {
         <div className="alert alert-info" style={{ fontSize: '0.8125rem' }}>
           Last backup exported: {formatDateShort(settings.lastExportDate.split('T')[0])}
         </div>
+      )}
+
+        </>
       )}
 
       {/* Remove Member Confirm Modal */}

@@ -6,7 +6,7 @@ import type {
   Person,
   PersonCalculation,
 } from '../types';
-import { formatDate, formatGrams, formatZAR, resolveReference } from './formatters';
+import { formatDate, formatGrams, formatZAR, generatePaymentReference } from './formatters';
 
 export type CanonicalFeeAllocationType =
   | 'equal_per_person'
@@ -17,10 +17,12 @@ export interface InvoiceCoffeeLine {
   id: string;
   name: string;
   detail: string;
+  shareGrams: number;
   splitWith: string[];
   beansAmount: string;
   feesAmount: string | null;
   totalAmount: string;
+  breakdownSummary: string;
 }
 
 export interface InvoiceFeeLine {
@@ -106,13 +108,29 @@ export function formatCoffeeDetail(line: {
   return `Bag ${line.bagIndex + 1}: ${formatGrams(line.shareGrams)} share from ${formatGrams(line.gramsPerBag)} bag`;
 }
 
+export function buildLineBreakdownSummary(
+  line: { goodsZar: number; feesZar: number },
+  personGoodsZar: number,
+  feeBreakdowns: FeePersonBreakdown[]
+): string {
+  const baseText = `${formatZAR(line.goodsZar)} coffee`;
+  if (line.feesZar <= 0 || feeBreakdowns.length === 0) {
+    return baseText;
+  }
+  if (feeBreakdowns.length === 1) {
+    const rawLabel = feeBreakdowns[0].label.trim();
+    const label = rawLabel.toLowerCase() === 'fees' ? 'fees' : rawLabel.toLowerCase();
+    return `${baseText} + ${formatZAR(line.feesZar)} ${label}`;
+  }
+  const components = feeBreakdowns.map((fee) => {
+    const share = personGoodsZar > 0 ? (line.goodsZar / personGoodsZar) * fee.amountZar : 0;
+    return `${formatZAR(share)} ${fee.label.toLowerCase()}`;
+  });
+  return `${baseText} + ${components.join(' + ')}`;
+}
+
 export function buildInvoiceModel({ order, person, payer, calc }: InvoicePayload): InvoiceModel {
-  const reference = resolveReference(
-    order.referenceTemplate,
-    order.name,
-    person.name,
-    order.orderDate,
-  );
+  const reference = generatePaymentReference(order, person.name);
   const payment = order.payments[person.id];
   const roundingAdjustment = calc.totalFinal - calc.totalPreRound;
 
@@ -129,10 +147,12 @@ export function buildInvoiceModel({ order, person, payer, calc }: InvoicePayload
     id: line.id,
     name: line.lotName,
     detail: formatCoffeeDetail(line),
+    shareGrams: line.shareGrams,
     splitWith: line.splitWith,
     beansAmount: formatZAR(line.goodsZar),
     feesAmount: line.feesZar > 0 ? formatZAR(line.feesZar) : null,
     totalAmount: formatZAR(line.totalZar),
+    breakdownSummary: buildLineBreakdownSummary(line, calc.goodsZar, calc.feeBreakdowns),
   }));
 
   const feeLines = calc.feeBreakdowns.map((fee): InvoiceFeeLine => ({
@@ -174,41 +194,92 @@ export function buildInvoiceModel({ order, person, payer, calc }: InvoicePayload
   };
 }
 
-export function buildPaymentSummaryText(payload: InvoicePayload): string {
+export function buildWhatsAppMessageText(payload: InvoicePayload): string {
+  const { order } = payload;
   const invoice = buildInvoiceModel(payload);
+  const roasterName = order.roasterSnapshot?.name || order.name || 'coffee';
+
   const lines: string[] = [
-    'Fajr Brews - Coffee Splitter',
-    `Order: ${invoice.orderName}`,
+    `Assalamualaykum Brother. Hope you are well. Attached are the amounts for the *${roasterName}* order - shukran.`,
     '',
-    'Coffee:',
-    ...invoice.coffeeLines.map((line) => {
-      const split = line.splitWith.length > 0 ? ` Split with: ${line.splitWith.join(', ')}.` : '';
-      return `- ${line.name}, ${line.detail}.${split} ${line.totalAmount}`;
-    }),
+    '*Your coffee:*',
+    '',
   ];
 
-  if (invoice.feeLines.length > 0) {
-    lines.push(
-      '',
-      'Fees:',
-      ...invoice.feeLines.map((line) => `- ${line.label} (${line.methodLabel}): ${line.amount}`),
-    );
+  if (invoice.coffeeLines.length > 0) {
+    for (const line of invoice.coffeeLines) {
+      lines.push(`*${line.name} · ${formatGrams(line.shareGrams)}* — *${line.totalAmount}*`);
+      lines.push(`_(${line.breakdownSummary})_`);
+      if (line.splitWith.length > 0) {
+        lines.push(`_Split with: ${line.splitWith.join(', ')}_`);
+      }
+      lines.push('');
+    }
+  } else if (invoice.feeLines.length > 0) {
+    lines.push('*Fees:*');
+    for (const fee of invoice.feeLines) {
+      lines.push(`- ${fee.label}: ${fee.amount}`);
+    }
+    lines.push('');
   }
 
-  lines.push(
-    '',
-    `Amount due: *${invoice.amountDue}*`,
-    `Payment reference: ${invoice.reference}`,
-    '',
-    'Pay to:',
-    ...invoice.paymentLines.map(([label, value]) => `  ${label}: ${value}`),
-  );
+  lines.push(`*Total due: ${invoice.amountDue}*`);
+  lines.push(`*Payment reference: ${invoice.reference}*`);
 
-  if (invoice.payerNote) {
-    lines.push('', `Note: ${invoice.payerNote}`);
+  if (order.payerBank.accountNumber && order.payerBank.bankName) {
+    lines.push('');
+    const beneficiary = order.payerBank.beneficiary ? ` (${order.payerBank.beneficiary})` : '';
+    lines.push(`*Pay to:* ${order.payerBank.bankName} ${order.payerBank.accountNumber}${beneficiary}`);
   }
 
-  return lines.join('\n');
+  return lines.join('\n').trim();
+}
+
+export function buildEmailMessageText(payload: InvoicePayload): string {
+  const { order } = payload;
+  const invoice = buildInvoiceModel(payload);
+  const roasterName = order.roasterSnapshot?.name || order.name || 'coffee';
+
+  const lines: string[] = [
+    `Assalamualaykum Brother. Hope you are well. Attached are the amounts for the ${roasterName} order - shukran.`,
+    '',
+    'Your coffee:',
+    '',
+  ];
+
+  if (invoice.coffeeLines.length > 0) {
+    for (const line of invoice.coffeeLines) {
+      lines.push(`${line.name} · ${formatGrams(line.shareGrams)} — ${line.totalAmount}`);
+      lines.push(`(${line.breakdownSummary})`);
+      if (line.splitWith.length > 0) {
+        lines.push(`Split with: ${line.splitWith.join(', ')}`);
+      }
+      lines.push('');
+    }
+  } else if (invoice.feeLines.length > 0) {
+    lines.push('Fees:');
+    for (const fee of invoice.feeLines) {
+      lines.push(`- ${fee.label}: ${fee.amount}`);
+    }
+    lines.push('');
+  }
+
+  lines.push(`Total due: ${invoice.amountDue}`);
+  lines.push(`Payment reference: ${invoice.reference}`);
+
+  if (invoice.paymentLines.length > 0) {
+    lines.push('');
+    lines.push('Pay to:');
+    for (const [label, value] of invoice.paymentLines) {
+      lines.push(`  ${label}: ${value}`);
+    }
+  }
+
+  return lines.join('\n').trim();
+}
+
+export function buildPaymentSummaryText(payload: InvoicePayload): string {
+  return buildEmailMessageText(payload);
 }
 
 export function formatFeeBreakdownLine(fee: FeePersonBreakdown): string {

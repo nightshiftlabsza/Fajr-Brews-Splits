@@ -27,7 +27,7 @@ export function CoffeeCostSummary({
             <tr>
               <th style={{ textAlign: 'left' }}>Coffee</th>
               <th style={{ textAlign: 'center', width: '80px' }}>Bags</th>
-              <th style={{ textAlign: 'right', width: '130px' }}>Cost / bag</th>
+              <th style={{ textAlign: 'right', width: '150px' }} title="Average across this order. Individual totals can differ when fees are allocated per person.">Average cost / bag</th>
               <th style={{ textAlign: 'right', width: '120px' }}>Total</th>
             </tr>
           </thead>

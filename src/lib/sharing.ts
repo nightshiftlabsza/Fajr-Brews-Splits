@@ -1,5 +1,10 @@
 import type { Order, Person, PersonCalculation } from '../types';
-import { buildInvoiceModel, buildPaymentSummaryText } from './invoiceFormatter';
+import {
+  buildEmailMessageText,
+  buildInvoiceModel,
+  buildPaymentSummaryText,
+  buildWhatsAppMessageText,
+} from './invoiceFormatter';
 
 interface SharePayload {
   order: Order;
@@ -8,8 +13,8 @@ interface SharePayload {
   calc: PersonCalculation;
 }
 
-function buildPaymentText({ order, person, payer, calc }: SharePayload): string {
-  return buildPaymentSummaryText({ order, person, payer, calc });
+function buildPaymentText(payload: SharePayload): string {
+  return buildPaymentSummaryText(payload);
 }
 
 export async function copyPaymentSummary(payload: SharePayload): Promise<void> {
@@ -19,7 +24,7 @@ export async function copyPaymentSummary(payload: SharePayload): Promise<void> {
 
 export function openWhatsApp(payload: SharePayload): void {
   const phone = payload.person.phone;
-  const text = buildPaymentText(payload);
+  const text = buildWhatsAppMessageText(payload);
   const encoded = encodeURIComponent(text);
 
   if (phone) {
@@ -40,8 +45,9 @@ export function openWhatsApp(payload: SharePayload): void {
 export function openEmail(payload: SharePayload): void {
   const email = payload.person.email;
   const ref = buildInvoiceModel(payload).reference;
-  const subject = encodeURIComponent(`Fajr Brews Invoice — ${payload.order.name} — ${ref}`);
-  const body = encodeURIComponent(buildPaymentText(payload));
+  const roasterName = payload.order.roasterSnapshot?.name || payload.order.name || 'Coffee';
+  const subject = encodeURIComponent(`Fajr Brews Invoice — ${roasterName} — ${ref}`);
+  const body = encodeURIComponent(buildEmailMessageText(payload));
 
   if (email) {
     window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_self');

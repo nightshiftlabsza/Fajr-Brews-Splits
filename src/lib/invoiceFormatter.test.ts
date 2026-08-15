@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Order, Person } from '../types';
 import { calculate } from './calculations';
-import { buildInvoiceModel, buildPaymentSummaryText } from './invoiceFormatter';
+import {
+  buildEmailMessageText,
+  buildInvoiceModel,
+  buildPaymentSummaryText,
+  buildWhatsAppMessageText,
+} from './invoiceFormatter';
 
 const abdul: Person = {
   id: 'abdul',
@@ -23,10 +28,10 @@ function makeOrder(): Order {
   return {
     id: 'order-1',
     workspaceId: 'workspace-1',
-    name: 'March Drop',
-    orderDate: '2026-03-01',
+    name: 'Blueberry Roasters',
+    orderDate: '2026-08-15',
     roasterId: null,
-    roasterSnapshot: null,
+    roasterSnapshot: { name: 'Blueberry Roasters' },
     payerId: abdul.id,
     payerBank: { bankName: 'Fajr Bank', accountNumber: '12345', beneficiary: 'Abdul' },
     referenceTemplate: 'FAJR-{ORDER}-{NAME}',
@@ -84,7 +89,42 @@ describe('invoiceFormatter', () => {
       expect.objectContaining({ label: 'DHL disbursement', methodLabel: 'Equal per person' }),
       expect.objectContaining({ label: 'PUDO courier to Ahmed', methodLabel: 'Specific person' }),
     ]);
-    expect(summary).toContain('PUDO courier to Ahmed (Specific person)');
+    expect(summary).toContain('Pastel Hour · 125g — R235.00');
+    expect(summary).toContain('(R100.00 coffee + R75.00 dhl disbursement + R60.00 pudo courier)');
+    expect(summary).toContain('Total due: R235.00');
     expect(summary.toLowerCase()).not.toContain('per gram');
+  });
+
+  it('formats WhatsApp message with requested greeting and *bold* / _italic_ syntax', () => {
+    const order = makeOrder();
+    const peopleById = { [abdul.id]: abdul.name, [ahmed.id]: ahmed.name };
+    const result = calculate(order, peopleById);
+    const ahmedCalc = result.personCalcs[ahmed.id];
+
+    const whatsapp = buildWhatsAppMessageText({ order, person: ahmed, payer: abdul, calc: ahmedCalc });
+
+    expect(whatsapp).toContain('Assalamualaykum Brother. Hope you are well. Attached are the amounts for the *Blueberry Roasters* order - shukran.');
+    expect(whatsapp).toContain('*Your coffee:*');
+    expect(whatsapp).toContain('*Pastel Hour · 125g* — *R235.00*');
+    expect(whatsapp).toContain('_(R100.00 coffee + R75.00 dhl disbursement + R60.00 pudo courier)_');
+    expect(whatsapp).toContain('*Total due: R235.00*');
+    expect(whatsapp).toContain('*Payment reference: AHMED-AUG26*');
+    expect(whatsapp).toContain('*Pay to:* Fajr Bank 12345 (Abdul)');
+  });
+
+  it('formats Email message with plain text', () => {
+    const order = makeOrder();
+    const peopleById = { [abdul.id]: abdul.name, [ahmed.id]: ahmed.name };
+    const result = calculate(order, peopleById);
+    const ahmedCalc = result.personCalcs[ahmed.id];
+
+    const email = buildEmailMessageText({ order, person: ahmed, payer: abdul, calc: ahmedCalc });
+
+    expect(email).toContain('Assalamualaykum Brother. Hope you are well. Attached are the amounts for the Blueberry Roasters order - shukran.');
+    expect(email).toContain('Your coffee:');
+    expect(email).toContain('Pastel Hour · 125g — R235.00');
+    expect(email).toContain('(R100.00 coffee + R75.00 dhl disbursement + R60.00 pudo courier)');
+    expect(email).toContain('Total due: R235.00');
+    expect(email).toContain('Payment reference: AHMED-AUG26');
   });
 });

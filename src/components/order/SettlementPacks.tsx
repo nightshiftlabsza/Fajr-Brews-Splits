@@ -57,10 +57,13 @@ export function SettlementPacks({
           const person = personMap.get(personId);
           const resolvedPerson: Person = person ?? {
             id: personId,
+            workspaceId: order.workspaceId,
             name: 'Deleted Person',
             phone: '',
             email: '',
             note: '',
+            createdAt: '',
+            updatedAt: '',
           };
           const calc = result.personCalcs[personId];
           const payment = order.payments[personId];

@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import type { Order, Person, PersonCalculation } from '../../types';
-import { formatZAR, formatDate } from '../../lib/formatters';
+import { formatZAR, formatDate, formatGrams } from '../../lib/formatters';
 import { buildInvoiceModel } from '../../lib/invoiceFormatter';
 
 interface Props {
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function InvoiceView({ order, person, payer, calc }: Props) {
+  const [showAudit, setShowAudit] = useState(false);
   const invoice = buildInvoiceModel({ order, person, payer, calc });
   const payment = order.payments[person.id];
   const roundingAdjustment = calc.totalFinal - calc.totalPreRound;
@@ -79,24 +81,17 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
               <div className="invoice-lot" key={line.id}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                   <div>
-                    <div className="invoice-lot-name">{line.name}</div>
-                    <div className="invoice-lot-meta">
-                      {line.detail}
+                    <div className="invoice-lot-name" style={{ fontWeight: 700 }}>
+                      {line.name} · {formatGrams(line.shareGrams)}
+                    </div>
+                    <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 2, fontStyle: 'italic' }}>
+                      ({line.breakdownSummary})
                     </div>
                     {line.splitWith.length > 0 && (
-                      <div className="invoice-lot-split">
+                      <div className="invoice-lot-split" style={{ marginTop: 2 }}>
                         Split with: {line.splitWith.join(', ')}
                       </div>
                     )}
-                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
-                      <span style={{ opacity: 0.8 }}>Beans: {line.beansAmount}</span>
-                      {line.feesAmount && (
-                        <>
-                          <span style={{ margin: '0 6px', opacity: 0.4 }}>•</span>
-                          <span style={{ opacity: 0.8 }}>Allocated fees: {line.feesAmount}</span>
-                        </>
-                      )}
-                    </div>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--color-text-primary)' }}>
@@ -109,10 +104,24 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
           })}
         </div>
 
-        {/* Allocated Fees */}
-        {calc.feeBreakdowns.length > 0 && (
+        {/* Audit Details Toggle */}
+        {(calc.feeBreakdowns.length > 0 || Math.abs(roundingAdjustment) > 0.001) && (
+          <div style={{ marginTop: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={{ fontSize: '0.75rem', padding: '2px 8px', color: 'var(--color-text-muted)' }}
+              onClick={() => setShowAudit((prev) => !prev)}
+            >
+              {showAudit ? 'Hide calculation details' : 'Show calculation details'}
+            </button>
+          </div>
+        )}
+
+        {/* Allocated Fees (Audit Level 3) */}
+        {showAudit && calc.feeBreakdowns.length > 0 && (
           <div className="invoice-section">
-            <div className="invoice-section-label">Included Allocated Fees</div>
+            <div className="invoice-section-label">Fee Calculation Details</div>
             {invoice.feeLines.map((fee) => (
               <div className="invoice-total-row" key={fee.id}>
                 <div style={{ color: 'var(--color-text-secondary)' }}>
@@ -124,22 +133,17 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
                 <span className="amount-small">{fee.amount}</span>
               </div>
             ))}
+            {Math.abs(roundingAdjustment) > 0.001 && (
+              <div className="invoice-total-row">
+                <span style={{ color: 'var(--color-text-secondary)' }}>Rounding adjustment</span>
+                <span className="amount-small">{formatZAR(roundingAdjustment)}</span>
+              </div>
+            )}
           </div>
         )}
 
         {/* Totals */}
         <div className="invoice-section">
-          <div className="invoice-section-label">Summary</div>
-          <div className="invoice-total-row">
-            <span style={{ color: 'var(--color-text-secondary)' }}>Coffee + allocated fees</span>
-            <span className="amount-small">{formatZAR(calc.totalPreRound)}</span>
-          </div>
-          {Math.abs(roundingAdjustment) > 0.001 && (
-            <div className="invoice-total-row">
-              <span style={{ color: 'var(--color-text-secondary)' }}>Rounding adjustment</span>
-              <span className="amount-small">{formatZAR(roundingAdjustment)}</span>
-            </div>
-          )}
           <div className="invoice-grand-total">
             <span style={{ fontSize: '0.8125rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
               Total due

@@ -47,6 +47,8 @@ describe('Header navigation', () => {
     expect(labels).toContain('Active Orders');
     expect(labels).toContain('My Stats');
     expect(labels).toContain('Past Orders');
+    expect(labels).toContain('Settings');
+    expect(labels).not.toContain('People');
     expect(labels).not.toContain('Invoices');
   });
 

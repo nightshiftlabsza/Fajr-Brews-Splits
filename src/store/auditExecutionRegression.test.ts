@@ -13,10 +13,13 @@ describe('Audit Execution Regression Test Suite', () => {
       name: 'Coffee Drop',
       orderDate: '2026-03-18',
       roasterId: null,
+      roasterSnapshot: null,
       payerId: 'payer-1',
       payerBank: { bankName: '', accountNumber: '', beneficiary: '' },
       referenceTemplate: 'FAJR-{ORDER}-{NAME}',
       goodsTotalZar: 100.01,
+      createdAt: '2026-03-18T00:00:00Z',
+      updatedAt: '2026-03-18T00:00:00Z',
       lots: [
         {
           id: 'lot-1',
@@ -30,9 +33,9 @@ describe('Audit Execution Regression Test Suite', () => {
               id: 'bag-1',
               splitMode: 'equal',
               buyers: [
-                { personId: 'buyer-1', grams: 100 },
-                { personId: 'buyer-2', grams: 100 },
-                { personId: 'buyer-3', grams: 100 },
+                { id: 'b1', personId: 'buyer-1', grams: 100 },
+                { id: 'b2', personId: 'buyer-2', grams: 100 },
+                { id: 'b3', personId: 'buyer-3', grams: 100 },
               ],
             },
           ],
@@ -66,8 +69,8 @@ describe('Audit Execution Regression Test Suite', () => {
   });
 
   it('normalizes accented Unicode characters into clean ASCII in slugify and pdfFilename', () => {
-    const ref = resolveReference('FAJR-{ORDER}-{NAME}', 'Café Météor', 'René & François');
-    expect(ref).toBe('FAJR-CAFE-METEOR-RENE-FRANCOIS');
+    const ref = resolveReference('FAJR-{ORDER}-{NAME}', 'Café Météor', 'René & François', '2026-05-15');
+    expect(ref).toBe('RENE-MAY26');
 
     const filename = pdfFilename('Café Special', 'Müller');
     expect(filename).toBe('fajr-brews-invoice-cafe-special-muller.pdf');
@@ -80,6 +83,7 @@ describe('Audit Execution Regression Test Suite', () => {
       name: 'Original Order',
       orderDate: '2026-01-01',
       roasterId: 'roaster-1',
+      roasterSnapshot: null,
       payerId: 'person-1',
       payerBank: { bankName: 'FNB', accountNumber: '123', beneficiary: 'Test' },
       referenceTemplate: 'FAJR-{ORDER}-{NAME}',
@@ -92,12 +96,14 @@ describe('Audit Execution Regression Test Suite', () => {
           gramsPerBag: 250,
           quantity: 1,
           shares: [{ id: 'share-old-1', personId: 'person-1', shareGrams: 250, bagIndex: 0 }],
-          bags: [{ id: 'bag-old-1', splitMode: 'full', buyers: [{ personId: 'person-1', grams: 250 }] }],
+          bags: [{ id: 'bag-old-1', splitMode: 'full', buyers: [{ id: 'buyer-old-1', personId: 'person-1', grams: 250 }] }],
         },
       ],
       fees: [{ id: 'fee-old-1', label: 'Courier', amountZar: 50, allocationType: 'equal_per_person' }],
       payments: { 'person-1': { status: 'paid', amountPaid: 250 } },
       isArchived: true,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
     };
 
     const duplicate = createDuplicatedOrderPayload(original, '2026-03-20');
@@ -108,16 +114,16 @@ describe('Audit Execution Regression Test Suite', () => {
 
     // Inner IDs must NOT match original IDs
     expect(duplicate.lots[0].id).not.toBe('lot-old-1');
-    expect(duplicate.lots[0].bags[0].id).not.toBe('bag-old-1');
+    expect(duplicate.lots[0].bags![0].id).not.toBe('bag-old-1');
     expect(duplicate.fees[0].id).not.toBe('fee-old-1');
     expect(duplicate.lots[0].shares[0].id).not.toBe('share-old-1');
   });
 
   it('sorts orders stably by orderDate descending with deterministic secondary tie-breaker', () => {
     const orders: Order[] = [
-      { id: 'b', workspaceId: '1', name: 'Order B', orderDate: '2026-03-18', payerId: null, payerBank: { bankName: '', accountNumber: '', beneficiary: '' }, referenceTemplate: '', goodsTotalZar: 0, lots: [], fees: [], payments: {}, isArchived: false, createdAt: '2026-03-18T10:00:00Z' },
-      { id: 'a', workspaceId: '1', name: 'Order A', orderDate: '2026-03-18', payerId: null, payerBank: { bankName: '', accountNumber: '', beneficiary: '' }, referenceTemplate: '', goodsTotalZar: 0, lots: [], fees: [], payments: {}, isArchived: false, createdAt: '2026-03-18T11:00:00Z' },
-      { id: 'c', workspaceId: '1', name: 'Order C', orderDate: '2026-03-19', payerId: null, payerBank: { bankName: '', accountNumber: '', beneficiary: '' }, referenceTemplate: '', goodsTotalZar: 0, lots: [], fees: [], payments: {}, isArchived: false, createdAt: '2026-03-19T09:00:00Z' },
+      { id: 'b', workspaceId: '1', name: 'Order B', orderDate: '2026-03-18', roasterId: null, roasterSnapshot: null, payerId: null, payerBank: { bankName: '', accountNumber: '', beneficiary: '' }, referenceTemplate: '', goodsTotalZar: 0, lots: [], fees: [], payments: {}, isArchived: false, createdAt: '2026-03-18T10:00:00Z', updatedAt: '2026-03-18T10:00:00Z' },
+      { id: 'a', workspaceId: '1', name: 'Order A', orderDate: '2026-03-18', roasterId: null, roasterSnapshot: null, payerId: null, payerBank: { bankName: '', accountNumber: '', beneficiary: '' }, referenceTemplate: '', goodsTotalZar: 0, lots: [], fees: [], payments: {}, isArchived: false, createdAt: '2026-03-18T11:00:00Z', updatedAt: '2026-03-18T11:00:00Z' },
+      { id: 'c', workspaceId: '1', name: 'Order C', orderDate: '2026-03-19', roasterId: null, roasterSnapshot: null, payerId: null, payerBank: { bankName: '', accountNumber: '', beneficiary: '' }, referenceTemplate: '', goodsTotalZar: 0, lots: [], fees: [], payments: {}, isArchived: false, createdAt: '2026-03-19T09:00:00Z', updatedAt: '2026-03-19T09:00:00Z' },
     ];
 
     const sorted = getActiveOrders(orders);
