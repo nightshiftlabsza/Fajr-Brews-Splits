@@ -12,6 +12,10 @@ export function CoffeeCostSummary({
   title = 'Coffee cost summary',
   description,
 }: Props) {
+  const lotsTotalZar = result.lotCalcs.reduce((sum, lot) => sum + lot.totalZar, 0);
+  const totalBags = result.lotCalcs.reduce((sum, lot) => sum + lot.quantity, 0);
+  const standaloneFeesZar = Math.max(0, Math.round((result.totalOrderZar - lotsTotalZar) * 100) / 100);
+
   return (
     <section className="wizard-panel coffee-cost-summary-panel">
       <div className="wizard-card-header" style={{ marginBottom: 'var(--space-3)' }}>
@@ -49,7 +53,38 @@ export function CoffeeCostSummary({
                 </td>
               </tr>
             ))}
+            {standaloneFeesZar > 0.005 && (
+              <tr key="standalone-fees">
+                <td>
+                  <div className="coffee-cost-name">Standalone &amp; participant fees</div>
+                  <div className="coffee-cost-meta">
+                    Direct fees not attached to coffee bags
+                  </div>
+                </td>
+                <td style={{ textAlign: 'center', color: 'var(--color-text-muted)' }}>—</td>
+                <td style={{ textAlign: 'right', color: 'var(--color-text-muted)' }}>—</td>
+                <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                  {formatZAR(standaloneFeesZar)}
+                </td>
+              </tr>
+            )}
           </tbody>
+          <tfoot>
+            <tr style={{ borderTop: '2px solid var(--color-border)', fontWeight: 700 }}>
+              <td style={{ textAlign: 'left', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                Order total
+              </td>
+              <td style={{ textAlign: 'center', fontWeight: 600 }}>
+                {totalBags}
+              </td>
+              <td style={{ textAlign: 'right', color: 'var(--color-text-muted)' }}>
+                {totalBags > 0 ? `${formatZAR(result.totalOrderZar / totalBags)} avg` : '—'}
+              </td>
+              <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                {formatZAR(result.totalOrderZar)}
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </section>

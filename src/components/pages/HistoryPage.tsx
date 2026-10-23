@@ -3,7 +3,7 @@ import { useAppStore } from '../../store/appStore';
 import type { Order } from '../../types';
 import { formatDateShort, formatZAR, todayISO } from '../../lib/formatters';
 import { calculate } from '../../lib/calculations';
-import { getActiveOrders, getPastOrders } from '../../lib/orderLifecycle';
+import { syncOrderStatusFlags } from '../../lib/orderLifecycle';
 import { getPastOrderSummary } from '../../lib/pastOrderSummary';
 import { SettlementPacks } from '../order/SettlementPacks';
 import { OrderSetup } from '../order/OrderSetup';
@@ -11,7 +11,7 @@ import { CoffeeLotsSection } from '../order/CoffeeLotsSection';
 import { GoodsAndFees } from '../order/GoodsAndFees';
 import { CoffeeCostSummary } from '../order/CoffeeCostSummary';
 import { generateOrderInvoicePDF } from '../../lib/pdf';
-import { getParticipantScopedOrders } from '../../lib/myStats';
+import { getParticipantScopedOrders, orderIncludesPerson } from '../../lib/myStats';
 import { resolveOrderRoaster } from '../../lib/roasters';
 import { RoasterAvatar } from '../roaster/RoasterAvatar';
 import { ConfirmModal } from '../ui/ConfirmModal';
@@ -72,9 +72,20 @@ export function HistoryPage({ participantOnly = false }: Props) {
           ? 'ambiguous'
           : 'unlinked'
     : 'ready';
-  const scopedOrders = participantOnly ? getParticipantScopedOrders(orders, linkedPersonId) : orders;
-  const activeOrders = getActiveOrders(scopedOrders);
-  const pastOrders = getPastOrders(scopedOrders);
+  const scopedOrders = participantOnly
+    ? orders.filter((order) => (
+        (linkedPersonId && orderIncludesPerson(order, linkedPersonId)) ||
+        (order.status !== 'archived' && order.status !== 'completed' && !order.isArchived)
+      ))
+    : orders;
+  const activeOrders = scopedOrders
+    .map(syncOrderStatusFlags)
+    .filter((order) => order.status !== 'archived' && order.status !== 'completed')
+    .sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
+  const pastOrders = scopedOrders
+    .map(syncOrderStatusFlags)
+    .filter((order) => order.status === 'archived' || order.status === 'completed')
+    .sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
   const selectedOrder = selectedOrderId ? pastOrders.find((order) => order.id === selectedOrderId) ?? null : null;
   const editingOrder = editingOrderId ? pastOrders.find((order) => order.id === editingOrderId) ?? null : null;
   const selectedOrderSummary = selectedOrder ? getPastOrderSummary(selectedOrder, personNames) : null;
@@ -227,7 +238,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
                   <h3 className="wizard-card-title">{selectedOrder.name}</h3>
                   <span className={`summary-status-pill is-${selectedOrderResult?.isValid ? 'complete' : 'ready'}`}>
-                    {selectedOrder.isArchived ? 'Archived' : 'Saved'}
+                    {selectedOrder.isArchived ? 'Archived' : selectedOrder.status === 'completed' ? 'Completed' : 'Saved'}
                   </span>
                 </div>
                 <div className="field-hint" style={{ marginTop: 'var(--space-2)' }}>
@@ -435,7 +446,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
                         <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--color-text-primary)' }}>
                           {order.name}
                         </div>
-                        <span className="wizard-badge wizard-badge-accent">Finalized</span>
+                        <span className="wizard-badge wizard-badge-accent">{order.status === 'completed' ? 'Completed' : 'Finalized'}</span>
                         {isEditing && <span className="wizard-badge wizard-badge-info">Editing</span>}
                       </div>
 

@@ -65,16 +65,43 @@ export function orderIncludesPerson(order: Order, personId: string): boolean {
     return true;
   }
 
-  return order.lots.some((lot) => (
-    lot.shares.some((share) => share.personId === personId && share.shareGrams > 0) ||
-    lot.bags?.some((bag) => bag.buyers.some((buyer) => buyer.personId === personId && buyer.grams > 0))
-  )) ||
-  order.fees.some((fee) => (
+  const inLots = order.lots.some((lot) => (
+    lot.shares.some((share) => share.personId === personId) ||
+    lot.bags?.some((bag) => bag.buyers.some((buyer) => buyer.personId === personId)) ||
+    lot.bagAllocations?.some((bag) => bag.participants.some((participant) => participant.personId === personId))
+  ));
+  if (inLots) {
+    return true;
+  }
+
+  const inFees = order.fees.some((fee) => (
     normalizeFeeAllocationType(fee.allocationType) === 'specific_person' &&
-    fee.personId === personId &&
-    fee.amountZar > 0
-  )) ||
-  Boolean(order.payments[personId] && order.payments[personId].status !== 'unpaid');
+    fee.personId === personId
+  ));
+  if (inFees) {
+    return true;
+  }
+
+  if (Boolean(order.payments && personId in order.payments)) {
+    return true;
+  }
+
+  const orderAny = order as unknown as {
+    participantIds?: string[];
+    participants?: Array<{ personId?: string; id?: string } | string>;
+  };
+  if (Array.isArray(orderAny.participantIds) && orderAny.participantIds.includes(personId)) {
+    return true;
+  }
+  if (Array.isArray(orderAny.participants)) {
+    if (orderAny.participants.some((p) => (
+      typeof p === 'string' ? p === personId : p.personId === personId || p.id === personId
+    ))) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function getParticipantScopedOrders(orders: Order[], personId: string | null): Order[] {
@@ -132,7 +159,7 @@ export function getParticipantFinalizedOrders(
   }
 
   return orders
-    .filter((order) => order.isArchived)
+    .filter((order) => order.isArchived || order.status === 'completed')
     .map((order) => {
       const result = calculate(order, personNames);
       if (!result.isValid) {

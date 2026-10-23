@@ -8,7 +8,7 @@ import { OrderPage } from './components/pages/OrderPage';
 import { PeoplePage } from './components/pages/PeoplePage';
 import { MyStatsPage } from './components/pages/MyStatsPage';
 import { HistoryPage } from './components/pages/HistoryPage';
-import { ResetPasswordPage } from './components/pages/ResetPasswordPage';
+import { ResetPasswordPage } from './components/auth/ResetPasswordPage';
 import { SettingsPage } from './components/pages/SettingsPage';
 import type { AppTab } from './types';
 import { HOME_PATH, RESET_PASSWORD_PATH } from './lib/appConfig';
@@ -21,6 +21,27 @@ function isRecoveryHash(hash: string): boolean {
   return hash.includes('type=recovery');
 }
 
+export function parseAuthHashError(hash: string): string | null {
+  if (!hash || !hash.includes('error=')) {
+    return null;
+  }
+  const cleanHash = hash.startsWith('#') ? hash.slice(1) : hash;
+  const params = new URLSearchParams(cleanHash);
+  const errorCode = params.get('error_code');
+  const errorDescription = params.get('error_description');
+
+  if (errorCode === 'otp_expired') {
+    return 'This password reset link has expired. Please request a new reset link.';
+  }
+  if (errorDescription) {
+    return errorDescription.replace(/\+/g, ' ');
+  }
+  if (params.get('error')) {
+    return 'Authentication error from link. Please try signing in again.';
+  }
+  return null;
+}
+
 function getCurrentPath(): string {
   if (typeof window === 'undefined') {
     return HOME_PATH;
@@ -29,7 +50,7 @@ function getCurrentPath(): string {
   return window.location.pathname || HOME_PATH;
 }
 
-function updatePath(
+export function updatePath(
   path: string,
   options: { replace?: boolean; preserveSearch?: boolean; preserveHash?: boolean } = {},
 ): void {
@@ -54,10 +75,22 @@ export function getAuthReinitializeOptions(isInitialized: boolean): { silent?: b
 }
 
 export default function App() {
-  const { initialize, isInitialized, isSyncing, user, accessStatus, linkResolution, dismissLinkResolution } = useAppStore();
+  const {
+    initialize,
+    isInitialized,
+    isSyncing,
+    user,
+    accessStatus,
+    linkResolution,
+    dismissLinkResolution,
+    confirmPersonLink,
+  } = useAppStore();
   const [currentTab, setCurrentTab] = useState<AppTab>('order');
   const [authMode, setAuthMode] = useState<'default' | 'recovery'>(() => (
     typeof window !== 'undefined' && isRecoveryHash(window.location.hash) ? 'recovery' : 'default'
+  ));
+  const [authError, setAuthError] = useState<string | null>(() => (
+    typeof window !== 'undefined' ? parseAuthHashError(window.location.hash) : null
   ));
   const [currentPath, setCurrentPath] = useState(getCurrentPath);
   const previousTabRef = useRef<AppTab>('order');
@@ -77,7 +110,13 @@ export default function App() {
     window.addEventListener('popstate', handlePopState);
     handlePopState();
 
-    if (isRecoveryHash(window.location.hash) && window.location.pathname !== RESET_PASSWORD_PATH) {
+    const hashError = parseAuthHashError(window.location.hash);
+    if (hashError) {
+      setAuthError(hashError);
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+      }
+    } else if (isRecoveryHash(window.location.hash) && window.location.pathname !== RESET_PASSWORD_PATH) {
       updatePath(RESET_PASSWORD_PATH, {
         replace: true,
         preserveSearch: true,
@@ -92,8 +131,14 @@ export default function App() {
       if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') return;
 
       const currentUser = useAppStore.getState().user;
-      if (event === 'SIGNED_IN' && currentUser && currentUser.id === session?.user?.id) {
-        return;
+      if (event === 'SIGNED_IN') {
+        setAuthError(null);
+        if (currentUser && currentUser.id === session?.user?.id) {
+          return;
+        }
+        if (getCurrentPath() === RESET_PASSWORD_PATH && authMode !== 'recovery') {
+          updatePath(HOME_PATH, { replace: true });
+        }
       }
 
       if (event === 'PASSWORD_RECOVERY') {
@@ -210,13 +255,13 @@ export default function App() {
   const [initTimeout, setInitTimeout] = useState(false);
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (!isInitialized) setInitTimeout(true);
+      if (!isInitialized || accessStatus === 'checking') setInitTimeout(true);
     }, 8000);
     return () => clearTimeout(timer);
-  }, [isInitialized]);
+  }, [isInitialized, accessStatus]);
 
-  // Loading splash
-  if (!isInitialized) {
+  // Loading splash: keep visible while initializing store or resolving auth session
+  if (!isInitialized || accessStatus === 'checking') {
     return (
       <div style={{
         minHeight: '100vh',
@@ -261,19 +306,27 @@ export default function App() {
   }
 
   if (authMode === 'recovery' || currentPath === RESET_PASSWORD_PATH) {
-    return (
-      <ResetPasswordPage
-        onComplete={() => {
-          setAuthMode('default');
-          updatePath(HOME_PATH, { replace: true });
-        }}
-      />
-    );
+    if (user && authMode !== 'recovery') {
+      updatePath(HOME_PATH, { replace: true });
+    } else {
+      return (
+        <ResetPasswordPage
+          onComplete={() => {
+            setAuthMode('default');
+            updatePath(HOME_PATH, { replace: true });
+          }}
+          onNavigateToSignIn={() => {
+            setAuthMode('default');
+            updatePath(HOME_PATH, { replace: true });
+          }}
+        />
+      );
+    }
   }
 
   // Not logged in
   if (!user) {
-    return <AuthPage />;
+    return <AuthPage initialError={authError || undefined} />;
   }
 
   // Logged in but not linked to any accessible records yet
@@ -325,6 +378,60 @@ export default function App() {
               >
                 Dismiss
               </button>
+            </div>
+          </div>
+        )}
+
+        {(linkResolution.status === 'needs-confirmation' || linkResolution.status === 'ambiguous') && (
+          <div className="page-container" style={{ paddingBottom: 0 }}>
+            <div
+              className="card card-padded"
+              style={{
+                marginBottom: 'var(--space-4)',
+                borderLeft: '4px solid var(--color-accent)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--space-3)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                <div>
+                  <h4 style={{ margin: 0, marginBottom: 4, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                    Confirm your participant profile
+                  </h4>
+                  <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
+                    {linkResolution.status === 'needs-confirmation'
+                      ? 'We found a possible match for your account in the workspace directory. Confirm to link your past orders and personal stats.'
+                      : 'We found multiple possible matching directory profiles for your account. Please select which person profile belongs to you.'}
+                  </p>
+                </div>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  type="button"
+                  onClick={dismissLinkResolution}
+                >
+                  Dismiss
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                {(linkResolution.candidates?.length > 0 ? linkResolution.candidates : (linkResolution.person ? [linkResolution.person] : [])).map((candidate) => (
+                  <button
+                    key={candidate.personId}
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={async () => {
+                      const err = await confirmPersonLink(candidate.personId);
+                      if (err) {
+                        alert(err);
+                      }
+                    }}
+                  >
+                    Link as {candidate.name}
+                    {candidate.email ? ` (${candidate.email})` : ''}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}

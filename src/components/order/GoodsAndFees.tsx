@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { Order, Fee, FeeAllocationType, Person } from '../../types';
 import { useAppStore } from '../../store/appStore';
-import { formatZAR } from '../../lib/formatters';
+import { formatZAR, parseMoneyInput } from '../../lib/formatters';
 import { getFeeAllocationLabel, normalizeFeeAllocationType } from '../../lib/invoiceFormatter';
+import { isOrderLocked } from '../../lib/orderLifecycle';
 import { ConfirmModal } from '../ui/ConfirmModal';
 
 function genId() {
@@ -42,6 +43,7 @@ interface Props {
 export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
   const { people, updateOrder } = useAppStore();
   const patchOrder = onOrderChange ?? ((patch: Partial<Order>) => updateOrder(order.id, patch));
+  const isLocked = !onOrderChange && isOrderLocked(order);
 
   const [goodsInput, setGoodsInput] = useState(order.goodsTotalZar > 0 ? String(order.goodsTotalZar) : '');
   const [editingFeeId, setEditingFeeId] = useState<string | 'new' | null>(null);
@@ -65,8 +67,9 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
   }, [registerCommit, goodsInput, order.id, order.goodsTotalZar]);
 
   function saveGoods() {
-    const val = parseFloat(goodsInput);
-    if (!isNaN(val) && val >= 0) {
+    if (isLocked) return;
+    const val = parseMoneyInput(goodsInput);
+    if (val >= 0 && goodsInput.trim() !== '') {
       if (val !== order.goodsTotalZar) {
         void patchOrder({ goodsTotalZar: val });
       }
@@ -78,8 +81,9 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
   }
 
   async function flushGoodsSave() {
-    const val = parseFloat(goodsInput);
-    if (!isNaN(val) && val >= 0 && val !== order.goodsTotalZar) {
+    if (isLocked) return;
+    const val = parseMoneyInput(goodsInput);
+    if (val >= 0 && goodsInput.trim() !== '' && val !== order.goodsTotalZar) {
       await patchOrder({ goodsTotalZar: val });
       return;
     }
@@ -89,6 +93,7 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
   }
 
   function openNewFee() {
+    if (isLocked) return;
     setFeeLabel('');
     setFeeAmount('');
     setFeeType('equal_per_person');
@@ -98,6 +103,7 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
   }
 
   function openEditFee(fee: Fee) {
+    if (isLocked) return;
     setFeeLabel(fee.label);
     setFeeAmount(String(fee.amountZar));
     setFeeType(normalizeFeeAllocationType(fee.allocationType));
@@ -107,9 +113,10 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
   }
 
   function saveFee() {
+    if (isLocked) return;
     if (!feeLabel.trim()) return setFeeError('Fee label is required.');
-    const amt = parseFloat(feeAmount);
-    if (isNaN(amt) || amt <= 0) return setFeeError('Amount must be greater than zero.');
+    const amt = parseMoneyInput(feeAmount);
+    if (amt <= 0) return setFeeError('Amount must be greater than zero.');
     if (normalizeFeeAllocationType(feeType) === 'specific_person' && !feePersonId) {
       return setFeeError('Please select who should pay this fee.');
     }
@@ -138,7 +145,7 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
   }
 
   function confirmDeleteFee() {
-    if (!deleteFeeTarget) return;
+    if (!deleteFeeTarget || isLocked) return;
     void patchOrder({ fees: order.fees.filter((f) => f.id !== deleteFeeTarget.id) });
     setDeleteFeeTarget(null);
   }
@@ -173,14 +180,14 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
             <input
               id="order-goods-total-zar"
               className="input"
-              type="number"
+              type="text"
+              inputMode="decimal"
               style={{ paddingLeft: 34, fontSize: '1.125rem', fontWeight: 600 }}
               value={goodsInput}
               onChange={(e) => setGoodsInput(e.target.value)}
               onBlur={saveGoods}
               placeholder="e.g. 1850.00"
-              min="0"
-              step="0.01"
+              disabled={isLocked}
             />
           </div>
         </div>
@@ -195,7 +202,7 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
               Shipping, foreign transaction fees, customs duties, or handling charges.
             </p>
           </div>
-          {editingFeeId === null && (
+          {editingFeeId === null && !isLocked && (
             <button className="btn btn-secondary btn-sm" type="button" onClick={openNewFee}>
               + Add Fee
             </button>
@@ -242,13 +249,12 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
                   <input
                     id="fee-amount-input"
                     className="input"
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     style={{ paddingLeft: 34 }}
                     placeholder="0.00"
                     value={feeAmount}
                     onChange={(e) => setFeeAmount(e.target.value)}
-                    min="0.01"
-                    step="0.01"
                   />
                 </div>
               </div>
@@ -360,21 +366,25 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
                     <strong style={{ fontSize: '1rem', color: 'var(--color-text-primary)' }}>
                       {formatZAR(fee.amountZar)}
                     </strong>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => openEditFee(fee)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      style={{ color: 'var(--color-unpaid)' }}
-                      onClick={() => setDeleteFeeTarget(fee)}
-                    >
-                      Delete
-                    </button>
+                    {!isLocked && (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => openEditFee(fee)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          style={{ color: 'var(--color-unpaid)' }}
+                          onClick={() => setDeleteFeeTarget(fee)}
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               );

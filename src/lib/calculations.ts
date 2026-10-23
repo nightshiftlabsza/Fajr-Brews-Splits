@@ -17,6 +17,10 @@ import { normalizeLotToBags } from './orderWizard';
 function validateOrder(order: Order): string[] {
   const errors: string[] = [];
 
+  if (!order.payerId || !order.payerId.trim()) {
+    errors.push('Order payer is required for rounding reconciliation.');
+  }
+
   if (!order.lots || order.lots.length === 0) {
     errors.push('Order has no coffee lots.');
     return errors;
@@ -233,11 +237,7 @@ export function calculate(
   }
 
   // ── E. Fee allocation ─────────────────────────────────────────
-  const eligiblePeople = personIds.filter((pid) => (
-    personTotalGrams[pid] > 0 ||
-    order.fees.some((fee) => normalizeFeeAllocationType(fee.allocationType) === 'specific_person' && fee.personId === pid) ||
-    Boolean(order.payments[pid] && order.payments[pid].status !== 'unpaid')
-  ));
+  const eligiblePeople = personIds.filter((pid) => personTotalGrams[pid] > 0);
   const personFees: Record<string, number> = {};
   for (const pid of personIds) personFees[pid] = 0;
 
@@ -357,20 +357,19 @@ export function calculate(
     personTotalsPreRound[pid] = personGoods[pid] + personFees[pid];
   }
 
-  const totalOrderZar =
-    order.goodsTotalZar + order.fees.reduce((s, f) => s + f.amountZar, 0);
-  const totalFeesZar = order.fees.reduce((s, f) => s + f.amountZar, 0);
+  const totalFeesZar = Math.round(order.fees.reduce((s, f) => s + f.amountZar, 0) * 100) / 100;
+  const totalOrderZar = Math.round((order.goodsTotalZar + totalFeesZar) * 100) / 100;
 
   // ── G. Rounding — non-payer floored, payer absorbs remainder ──
   const personTotalsFinal: Record<string, number> = {};
   let sumNonPayer = 0;
 
-  const payerId = order.payerId;
+  const payerId = order.payerId?.trim();
 
   for (const pid of personIds) {
     if (pid !== payerId) {
       // Floor to 2 decimal places — never overcharge
-      const floored = Math.floor(personTotalsPreRound[pid] * 100) / 100;
+      const floored = Math.floor((personTotalsPreRound[pid] + 1e-9) * 100) / 100;
       personTotalsFinal[pid] = floored;
       sumNonPayer += floored;
     }
@@ -408,7 +407,7 @@ export function calculate(
   return {
     personIds,
     personCalcs,
-    totalOrderZar,
+    totalOrderZar: Math.round(totalOrderZar * 100) / 100,
     totalGoodsZar: order.goodsTotalZar,
     totalFeesZar,
     roundingAbsorbed,

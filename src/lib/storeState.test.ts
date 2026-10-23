@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Order, Person, Roaster } from '../types';
 import { calculate } from './calculations';
-import { applyOrderPatches, upsertPersonById, upsertRoasterById } from './storeState';
+import { applyOrderPatches, mergeConcurrentOrderUpdate, upsertPersonById, upsertRoasterById } from './storeState';
 
 function makePerson(id: string, name: string): Person {
   return {
@@ -120,5 +120,67 @@ describe('store state helpers', () => {
     expect(firstSummaryRead.personIds).toEqual(['person-1', 'person-2']);
     expect(secondSummaryRead.totalOrderZar).toBe(firstSummaryRead.totalOrderZar);
     expect(secondSummaryRead.personCalcs['person-1'].lotBreakdowns).toHaveLength(2);
+  });
+
+  describe('mergeConcurrentOrderUpdate', () => {
+    it('returns remote order when neither localOrder nor baseSnapshot is provided', () => {
+      const remote = { ...baseOrder, name: 'Remote Order', goodsTotalZar: 999 };
+      expect(mergeConcurrentOrderUpdate(remote)).toEqual(remote);
+    });
+
+    it('merges remote fees while preserving local in-flight name edit', () => {
+      const base = { ...baseOrder, name: 'Original Name', fees: [] };
+      const local = { ...baseOrder, name: 'In-Flight Local Name', fees: [] };
+      const remote = {
+        ...baseOrder,
+        name: 'Original Name',
+        fees: [{ id: 'remote-fee-1', label: 'Customs', amountZar: 200, allocationType: 'equal_per_person' as const, personId: null }],
+      };
+
+      const result = mergeConcurrentOrderUpdate(remote, local, base);
+      expect(result.name).toBe('In-Flight Local Name');
+      expect(result.fees).toHaveLength(1);
+      expect(result.fees[0].id).toBe('remote-fee-1');
+    });
+
+    it('merges remote goods total update while preserving local lot edits', () => {
+      const base = { ...baseOrder, goodsTotalZar: 500, lots: [] };
+      const local = {
+        ...baseOrder,
+        goodsTotalZar: 500,
+        lots: [{
+          id: 'local-lot-1',
+          name: 'Geisha',
+          foreignPricePerBag: 30,
+          gramsPerBag: 250,
+          quantity: 1,
+          shares: [{ id: 's1', personId: 'person-1', shareGrams: 250 }],
+        }],
+      };
+      const remote = { ...baseOrder, goodsTotalZar: 750, lots: [] };
+
+      const result = mergeConcurrentOrderUpdate(remote, local, base);
+      expect(result.goodsTotalZar).toBe(750);
+      expect(result.lots).toHaveLength(1);
+      expect(result.lots[0].name).toBe('Geisha');
+    });
+
+    it('preserves local optimistic snapshot modifications against concurrent remote updates', () => {
+      const optimisticSnapshot = { ...baseOrder, name: 'Optimistic Edit' };
+      const remote = {
+        ...baseOrder,
+        name: 'Original Name',
+        fees: [{ id: 'fee-remote', label: 'Shipping', amountZar: 150, allocationType: 'equal_per_person' as const, personId: null }],
+      };
+
+      const result = mergeConcurrentOrderUpdate(remote, optimisticSnapshot, baseOrder);
+      expect(result.name).toBe('Optimistic Edit');
+      expect(result.fees).toHaveLength(1);
+      expect(result.fees[0].id).toBe('fee-remote');
+
+      const resultSingle = mergeConcurrentOrderUpdate(remote, null, optimisticSnapshot);
+      expect(resultSingle.name).toBe('Optimistic Edit');
+      expect(resultSingle.fees).toHaveLength(1);
+    });
   });
 });

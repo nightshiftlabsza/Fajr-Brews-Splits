@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import type { Bag, BagSplitMode, CoffeeLot, Order, Person } from '../../types';
-import { formatGrams } from '../../lib/formatters';
+import { formatGrams, parseMoneyInput } from '../../lib/formatters';
+import { isOrderLocked } from '../../lib/orderLifecycle';
 import {
   normalizeLotToBags,
   serializeLotFromBags,
@@ -79,25 +80,26 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
 
   const coffeeErrors = useMemo(() => validateCoffeeStep(order), [order]);
   const isAllocationComplete = order.lots.length > 0 && coffeeErrors.length === 0;
+  const isLocked = !onOrderChange && isOrderLocked(order);
 
   useEffect(() => {
     if (!registerCommit) return;
     registerCommit(async () => {
-      if (!editingLotId) return;
+      if (!editingLotId || isLocked) return;
       const gramsPerBag = parseInt(lotForm.gramsPerBag, 10);
       const bagCount = parseInt(lotForm.initialBagCount, 10);
-      const foreignPricePerBag = parseFloat(lotForm.foreignPricePerBag);
+      const foreignPricePerBag = parseMoneyInput(lotForm.foreignPricePerBag);
       if (
         lotForm.name.trim() &&
         Number.isInteger(gramsPerBag) && gramsPerBag >= 1 &&
         Number.isFinite(foreignPricePerBag) && foreignPricePerBag > 0 &&
         Number.isInteger(bagCount) && bagCount >= 1
       ) {
-        saveLot();
+        await saveLot();
       }
     });
     return () => registerCommit(null);
-  }, [registerCommit, editingLotId, lotForm, order]);
+  }, [registerCommit, editingLotId, lotForm, order, isLocked]);
 
   const allocationStats = useMemo(() => {
     let totalBags = 0;
@@ -115,6 +117,7 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
   }, [order.lots]);
 
   function openNew() {
+    if (isLocked) return;
     setLotForm({
       name: '',
       foreignPricePerBag: '',
@@ -129,6 +132,7 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
   }
 
   function openEdit(lot: CoffeeLot) {
+    if (isLocked) return;
     const bags = normalizeLotToBags(lot);
     const existingBuyers = getLotBuyers(bags);
     setLotForm({
@@ -144,10 +148,11 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
     setEditingLotId(lot.id);
   }
 
-  function saveLot() {
+  async function saveLot(): Promise<void> {
+    if (isLocked) return;
     const gramsPerBag = parseInt(lotForm.gramsPerBag, 10);
     const bagCount = parseInt(lotForm.initialBagCount, 10);
-    const foreignPricePerBag = parseFloat(lotForm.foreignPricePerBag);
+    const foreignPricePerBag = parseMoneyInput(lotForm.foreignPricePerBag);
 
     if (!lotForm.name.trim()) return setFormError('Coffee name is required.');
     if (!Number.isInteger(gramsPerBag) || gramsPerBag < 1) return setFormError('Grams per bag must be an integer ≥ 1.');
@@ -166,7 +171,7 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
     if (editingLotId === 'new') {
       const serialized = serializeLotFromBags(finalBags);
       const newLotId = genId();
-      void patchOrder({
+      await patchOrder({
         lots: [
           ...order.lots,
           {
@@ -211,7 +216,7 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
     }
 
     const serialized = serializeLotFromBags(nextBags);
-    void patchOrder({
+    await patchOrder({
       lots: order.lots.map((lot) => (lot.id === editingLotId
         ? {
             ...lot,
@@ -226,16 +231,16 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
     setFormError('');
   }
 
-  function commitBagSizeChange() {
-    if (!bagSizeConfirmTarget) return;
+  async function commitBagSizeChange() {
+    if (!bagSizeConfirmTarget || isLocked) return;
     const { lot, newGrams, nextBags } = bagSizeConfirmTarget;
     const serialized = serializeLotFromBags(nextBags);
-    void patchOrder({
+    await patchOrder({
       lots: order.lots.map((l) => (l.id === lot.id
         ? {
             ...l,
             name: lotForm.name.trim() || l.name,
-            foreignPricePerBag: parseFloat(lotForm.foreignPricePerBag) || l.foreignPricePerBag,
+            foreignPricePerBag: parseMoneyInput(lotForm.foreignPricePerBag) || l.foreignPricePerBag,
             gramsPerBag: newGrams,
             ...serialized,
           }
@@ -245,17 +250,19 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
     setEditingLotId(null);
   }
 
-  function deleteLot(lotId: string) {
+  async function deleteLot(lotId: string) {
+    if (isLocked) return;
     const remainingLots = order.lots.filter((lot) => lot.id !== lotId);
-    void patchOrder({ lots: remainingLots });
+    await patchOrder({ lots: remainingLots });
     if (editingLotId === lotId) setEditingLotId(null);
     if (adjustingLotId === lotId) setAdjustingLotId(null);
     setDeleteLotTarget(null);
   }
 
-  function updateLotBags(lotId: string, nextBags: Bag[]) {
+  async function updateLotBags(lotId: string, nextBags: Bag[]) {
+    if (isLocked) return;
     const serialized = serializeLotFromBags(nextBags);
-    void patchOrder({
+    await patchOrder({
       lots: order.lots.map((lot) => (lot.id === lotId ? { ...lot, ...serialized } : lot)),
     });
   }
@@ -321,7 +328,7 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
               Enter each coffee lot, bag size, and count. Buyer allocations are assigned automatically.
             </p>
           </div>
-          {editingLotId !== 'new' && (
+          {editingLotId !== 'new' && !isLocked && (
             <button className="btn btn-primary btn-sm" onClick={openNew}>
               + Add Coffee
             </button>
@@ -336,9 +343,11 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
             <div className="empty-state-icon">☕</div>
             <h3>No coffees added yet</h3>
             <p>Add your first coffee to automatically assign bags and calculate shares.</p>
-            <button className="btn btn-primary" onClick={openNew}>
-              Add Coffee
-            </button>
+            {!isLocked && (
+              <button className="btn btn-primary" onClick={openNew}>
+                Add Coffee
+              </button>
+            )}
           </div>
         </section>
       )}
@@ -354,7 +363,7 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
             people={people}
             personNameMap={personNameMap}
             onChange={setLotForm}
-            onSave={saveLot}
+            onSave={() => void saveLot()}
             onCancel={() => setEditingLotId(null)}
             onAddNewPerson={() => {
               setPersonEditorError('');
@@ -384,7 +393,7 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
                 people={people}
                 personNameMap={personNameMap}
                 onChange={setLotForm}
-                onSave={saveLot}
+                onSave={() => void saveLot()}
                 onCancel={() => setEditingLotId(null)}
                 onAddNewPerson={() => {
                   setPersonEditorError('');
@@ -409,22 +418,24 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
                   </div>
                 </div>
 
-                <div className="lot-actions">
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-xs"
-                    onClick={() => openEdit(lot)}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-xs btn-danger-text"
-                    onClick={() => setDeleteLotTarget(lot)}
-                  >
-                    Delete
-                  </button>
-                </div>
+                {!isLocked && (
+                  <div className="lot-actions">
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-xs"
+                      onClick={() => openEdit(lot)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-xs btn-danger-text"
+                      onClick={() => setDeleteLotTarget(lot)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Allocation Summary & Quick Toggles */}
@@ -442,18 +453,20 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  className={`btn btn-xs ${isAdjusting ? 'btn-secondary' : 'btn-ghost'}`}
-                  onClick={() => setAdjustingLotId(isAdjusting ? null : lot.id)}
-                  title="Fine-tune individual bags or custom splits"
-                >
-                  {isAdjusting ? 'Close adjustment ▲' : 'Adjust allocation ⚙'}
-                </button>
+                {!isLocked && (
+                  <button
+                    type="button"
+                    className={`btn btn-xs ${isAdjusting ? 'btn-secondary' : 'btn-ghost'}`}
+                    onClick={() => setAdjustingLotId(isAdjusting ? null : lot.id)}
+                    title="Fine-tune individual bags or custom splits"
+                  >
+                    {isAdjusting ? 'Close adjustment ▲' : 'Adjust allocation ⚙'}
+                  </button>
+                )}
               </div>
 
               {/* If unassigned, quick single-tap buyer chips */}
-              {!lotSummary.isComplete && !isAdjusting && (
+              {!lotSummary.isComplete && !isAdjusting && !isLocked && (
                 <div className="quick-assign-row">
                   <span className="quick-assign-label">Assign to:</span>
                   <div className="buyer-chips-wrap">

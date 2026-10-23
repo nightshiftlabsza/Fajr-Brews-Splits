@@ -29,6 +29,68 @@ export function sortRoasters(roasters: Roaster[]): Roaster[] {
   });
 }
 
+export function mergeConcurrentOrderUpdate(
+  remoteOrder: Order,
+  localOrder?: Order | null,
+  baseSnapshot?: Order | null,
+): Order {
+  if (!baseSnapshot && !localOrder) {
+    return remoteOrder;
+  }
+
+  const merged: Order = { ...remoteOrder };
+
+  const mutableFields: (keyof Order)[] = [
+    'name',
+    'orderDate',
+    'status',
+    'isArchived',
+    'roasterId',
+    'roasterSnapshot',
+    'payerId',
+    'payerBank',
+    'referenceTemplate',
+    'payerNote',
+    'goodsTotalZar',
+    'lots',
+    'fees',
+    'payments',
+    'ownerId',
+  ];
+
+  const areValuesEqual = (a: unknown, b: unknown): boolean => {
+    if (a === b) return true;
+    if (typeof a === 'object' && a !== null && typeof b === 'object' && b !== null) {
+      return JSON.stringify(a) === JSON.stringify(b);
+    }
+    return false;
+  };
+
+  for (const field of mutableFields) {
+    if (localOrder && baseSnapshot) {
+      const localChanged = !areValuesEqual(localOrder[field], baseSnapshot[field]);
+      if (localChanged) {
+        (merged as any)[field] = localOrder[field];
+      }
+    } else {
+      const inFlight = localOrder ?? baseSnapshot!;
+      if (!areValuesEqual(inFlight[field], remoteOrder[field])) {
+        if (
+          Array.isArray(inFlight[field]) &&
+          (inFlight[field] as any[]).length === 0 &&
+          Array.isArray(remoteOrder[field]) &&
+          (remoteOrder[field] as any[]).length > 0
+        ) {
+          continue;
+        }
+        (merged as any)[field] = inFlight[field];
+      }
+    }
+  }
+
+  return merged;
+}
+
 export function upsertRoasterById(roasters: Roaster[], roaster: Roaster): Roaster[] {
   return sortRoasters([
     ...roasters.filter((candidate) => candidate.id !== roaster.id),

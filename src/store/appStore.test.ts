@@ -18,6 +18,8 @@ type StoreTestConfig = {
   roasterInsert?: QueryResult;
   roasterUpdate?: QueryResult;
   orderUpdate?: QueryResult;
+  orderInsert?: QueryResult;
+  orderDelete?: QueryResult;
   logoUploadError?: { message: string; code?: string } | null;
 };
 
@@ -70,8 +72,45 @@ function createSupabaseMock(config: StoreTestConfig) {
   const roasterInsert = config.roasterInsert ?? { data: null, error: null };
   const roasterUpdate = config.roasterUpdate ?? { data: null, error: null };
   const orderUpdate = config.orderUpdate ?? { data: null, error: null };
+  const orderInsert = config.orderInsert ?? { data: null, error: null };
+  const orderDelete = config.orderDelete ?? { data: null, error: null };
   const orderUpdateMock = vi.fn().mockImplementation(() => ({
     eq: vi.fn().mockResolvedValue(orderUpdate),
+  }));
+  const orderDeleteMock = vi.fn().mockImplementation(() => ({
+    eq: vi.fn().mockResolvedValue(orderDelete),
+  }));
+  const orderInsertMock = vi.fn().mockImplementation((payload: any) => ({
+    select: vi.fn().mockReturnValue({
+      single: vi.fn().mockImplementation(() => {
+        if (orderInsert.error) {
+          return Promise.resolve(orderInsert);
+        }
+        const row = orderInsert.data ?? {
+          id: payload.id || `order-${Math.random().toString(36).slice(2, 8)}`,
+          workspace_id: payload.workspace_id,
+          name: payload.name,
+          order_date: payload.order_date,
+          status: payload.status,
+          roaster_id: payload.roaster_id,
+          roaster_snapshot: payload.roaster_snapshot,
+          payer_id: payload.payer_id,
+          payer_bank: payload.payer_bank,
+          reference_template: payload.reference_template,
+          payer_note: payload.payer_note,
+          goods_total_zar: String(payload.goods_total_zar ?? 0),
+          lots: payload.lots,
+          fees: payload.fees,
+          payments: payload.payments,
+          is_archived: payload.is_archived,
+          owner_id: payload.owner_id,
+          created_by: payload.created_by,
+          created_at: '2026-08-15T08:00:00.000Z',
+          updated_at: '2026-08-15T08:00:00.000Z',
+        };
+        return Promise.resolve({ data: row, error: null });
+      }),
+    }),
   }));
 
   const storageApi = {
@@ -105,6 +144,23 @@ function createSupabaseMock(config: StoreTestConfig) {
       if (table === 'people') {
         return {
           select: vi.fn().mockImplementation(() => createSelectBuilder(people)),
+          insert: vi.fn().mockImplementation((payload: any) => ({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockImplementation(() => {
+                const row = {
+                  id: `person-${Math.random().toString(36).slice(2, 8)}`,
+                  workspace_id: payload.workspace_id,
+                  name: payload.name,
+                  phone: payload.phone ?? null,
+                  email: payload.email ?? null,
+                  note: payload.note ?? null,
+                  created_at: '2026-03-18T00:00:00.000Z',
+                  updated_at: '2026-03-18T00:00:00.000Z',
+                };
+                return Promise.resolve({ data: row, error: null });
+              }),
+            }),
+          })),
         };
       }
 
@@ -112,6 +168,8 @@ function createSupabaseMock(config: StoreTestConfig) {
         return {
           select: vi.fn().mockImplementation(() => createSelectBuilder(orders)),
           update: orderUpdateMock,
+          insert: orderInsertMock,
+          delete: orderDeleteMock,
         };
       }
 
@@ -125,9 +183,23 @@ function createSupabaseMock(config: StoreTestConfig) {
       if (table === 'roasters') {
         return {
           select: vi.fn().mockImplementation(() => createSelectBuilder(roasters)),
-          insert: vi.fn().mockImplementation(() => ({
+          insert: vi.fn().mockImplementation((payload: any) => ({
             select: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue(roasterInsert),
+              single: vi.fn().mockImplementation(() => {
+                if (roasterInsert.data || roasterInsert.error) {
+                  return Promise.resolve(roasterInsert);
+                }
+                const row = {
+                  id: `roaster-${Math.random().toString(36).slice(2, 8)}`,
+                  workspace_id: payload.workspace_id,
+                  name: payload.name,
+                  logo_path: payload.logo_path ?? null,
+                  logo_url: payload.logo_url ?? null,
+                  created_at: '2026-03-18T00:00:00.000Z',
+                  updated_at: '2026-03-18T00:00:00.000Z',
+                };
+                return Promise.resolve({ data: row, error: null });
+              }),
             }),
           })),
           update: vi.fn().mockImplementation(() => ({
@@ -196,6 +268,7 @@ function makeStoreOrder(overrides: Partial<Order> = {}): Order {
     ],
     fees: overrides.fees ?? [],
     payments: overrides.payments ?? {},
+    status: overrides.status ?? (overrides.isArchived ? 'archived' : 'planning'),
     isArchived: overrides.isArchived ?? true,
     ownerId: overrides.ownerId,
     createdBy: overrides.createdBy,
@@ -693,5 +766,306 @@ describe('appStore Realtime JSONB Hydration & Data Integrity', () => {
     const state = useAppStore.getState();
     expect(state.orders.map((o) => o.id)).toEqual(['order-b']);
     expect(state.currentOrderId).toBe('order-b');
+  });
+
+  describe('M3 Bug Fixes: State Sync, Persistence & Errors', () => {
+    it('BUG-ORD-04: realtime UPDATE preserves concurrent remote updates when in-flight local snapshot exists', async () => {
+      let realtimeCallback: ((payload: any) => void) | null = null;
+      const { useAppStore, supabase } = await loadStore();
+      const channelObj: any = {
+        on: vi.fn().mockImplementation((_event: string, opts: any, callback: any) => {
+          if (opts?.table === 'orders') realtimeCallback = callback;
+          return channelObj;
+        }),
+        subscribe: vi.fn().mockImplementation(() => channelObj),
+        unsubscribe: vi.fn(),
+      };
+      (supabase.channel as any).mockReturnValue(channelObj);
+
+      const baseOrder = makeStoreOrder({
+        id: 'order-concurrent-1',
+        name: 'Initial Name',
+        goodsTotalZar: 500,
+        fees: [],
+        status: 'planning',
+        isArchived: false,
+      });
+
+      useAppStore.setState({
+        _realtimeChannel: null,
+        orders: [baseOrder],
+        people: storePeople,
+      });
+      useAppStore.getState()._setupRealtime('workspace-1');
+
+      let resolveUpdate: (val: any) => void;
+      const updatePromise = new Promise((resolve) => {
+        resolveUpdate = resolve;
+      });
+      (supabase.__mocks.orderUpdate as any).mockImplementation(() => ({
+        eq: vi.fn().mockReturnValue(updatePromise),
+      }));
+
+      const writePromise = useAppStore.getState().patchOrder('order-concurrent-1', { name: 'Local In-Flight Name' });
+
+      expect(useAppStore.getState().orders[0].name).toBe('Local In-Flight Name');
+
+      realtimeCallback!({
+        eventType: 'UPDATE',
+        new: {
+          id: 'order-concurrent-1',
+          workspace_id: 'workspace-1',
+          name: 'Initial Name',
+          order_date: '2026-03-18',
+          status: 'planning',
+          roaster_id: null,
+          roaster_snapshot: null,
+          payer_id: 'person-1',
+          payer_bank: { bankName: '', accountNumber: '', beneficiary: '' },
+          reference_template: 'FAJR-{ORDER}-{NAME}',
+          goods_total_zar: '500',
+          lots: baseOrder.lots,
+          fees: [{ id: 'fee-remote-1', label: 'Remote Courier Fee', amountZar: 150, allocationType: 'equal_per_person', personId: null }],
+          payments: {},
+          is_archived: false,
+          created_at: '2026-03-18T00:00:00.000Z',
+          updated_at: '2026-03-18T00:05:00.000Z',
+        },
+        old: { id: 'order-concurrent-1' },
+      });
+
+      const order = useAppStore.getState().orders.find((o) => o.id === 'order-concurrent-1')!;
+      expect(order.name).toBe('Local In-Flight Name');
+      expect(order.fees).toHaveLength(1);
+      expect(order.fees[0].id).toBe('fee-remote-1');
+      expect(order.fees[0].label).toBe('Remote Courier Fee');
+
+      resolveUpdate!({ data: null, error: null });
+      await writePromise;
+    });
+
+    it('BUG-ORD-06 / BUG-ERR-01 / BUG-ERR-02: patchOrder returns Promise, rolls back optimistic state and sets store error on failure', async () => {
+      const { useAppStore } = await loadStore({
+        orderUpdate: { data: null, error: { message: 'Database connection lost', code: 'PGRST001' } },
+      });
+
+      const order1 = makeStoreOrder({
+        id: 'order-err-1',
+        name: 'Pre-mutation Order Name',
+        goodsTotalZar: 400,
+      });
+
+      useAppStore.setState({ orders: [order1], people: storePeople, error: null });
+
+      const patchPromise = useAppStore.getState().patchOrder('order-err-1', {
+        name: 'Failed Optimistic Name',
+        goodsTotalZar: 9999,
+      });
+
+      expect(patchPromise).toBeInstanceOf(Promise);
+      await expect(patchPromise).rejects.toThrow('Database connection lost');
+
+      const orderAfterRollback = useAppStore.getState().orders.find((o) => o.id === 'order-err-1')!;
+      expect(orderAfterRollback.name).toBe('Pre-mutation Order Name');
+      expect(orderAfterRollback.goodsTotalZar).toBe(400);
+
+      expect(useAppStore.getState().error).toBe('Database connection lost');
+    });
+
+    it('BUG-ERR-03: deleteOrder catches error, surfaces in store error state and throws', async () => {
+      const { useAppStore } = await loadStore({
+        orderDelete: { data: null, error: { message: 'Delete forbidden by RLS', code: '42501' } },
+      });
+
+      const order = makeStoreOrder({ id: 'order-del-err', name: 'Undeletable' });
+      useAppStore.setState({ orders: [order], error: null });
+
+      await expect(useAppStore.getState().deleteOrder('order-del-err')).rejects.toThrow('Delete forbidden by RLS');
+
+      expect(useAppStore.getState().error).toBe('Delete forbidden by RLS');
+      expect(useAppStore.getState().orders).toHaveLength(1);
+    });
+
+    it('BUG-ERR-04: archiveOrder catches error, surfaces in store error state, and rolls back optimistic state', async () => {
+      const { useAppStore } = await loadStore({
+        orderUpdate: { data: null, error: { message: 'Failed to archive: lock error', code: '500' } },
+      });
+
+      const order = makeStoreOrder({
+        id: 'order-arch-err',
+        name: 'Active Order',
+        status: 'planning',
+        isArchived: false,
+      });
+
+      useAppStore.setState({ orders: [order], error: null });
+
+      await expect(useAppStore.getState().archiveOrder('order-arch-err')).rejects.toThrow('Failed to archive: lock error');
+
+      expect(useAppStore.getState().error).toBe('Failed to archive: lock error');
+      const current = useAppStore.getState().orders.find((o) => o.id === 'order-arch-err')!;
+      expect(current.status).toBe('planning');
+      expect(current.isArchived).toBe(false);
+    });
+
+    it('BUG-EDGE-01: importJSON preserves order status and isArchived, and does not overwrite currentOrderId for archived orders', async () => {
+      const { useAppStore } = await loadStore();
+
+      const activeOrder = makeStoreOrder({ id: 'active-stay', name: 'Active Working Order', status: 'planning', isArchived: false });
+      useAppStore.setState({
+        orders: [activeOrder],
+        currentOrderId: 'active-stay',
+      });
+
+      const backupJSON = JSON.stringify({
+        version: '2',
+        people: [],
+        roasters: [],
+        orders: [
+          {
+            id: 'archived-imported-1',
+            name: 'Historical Archive 2025',
+            orderDate: '2025-05-10',
+            status: 'archived',
+            isArchived: true,
+            goodsTotalZar: 800,
+            lots: [],
+            fees: [],
+            payments: {},
+          },
+          {
+            id: 'locked-imported-2',
+            name: 'Locked Finalizing Batch',
+            orderDate: '2026-01-15',
+            status: 'locked',
+            isArchived: false,
+            goodsTotalZar: 1200,
+            lots: [],
+            fees: [],
+            payments: {},
+          },
+        ],
+      });
+
+      await useAppStore.getState().importJSON(backupJSON);
+
+      const orders = useAppStore.getState().orders;
+      const importedArchived = orders.find((o) => o.id === 'archived-imported-1');
+      expect(importedArchived).toBeDefined();
+      expect(importedArchived?.status).toBe('archived');
+      expect(importedArchived?.isArchived).toBe(true);
+
+      const importedLocked = orders.find((o) => o.id === 'locked-imported-2');
+      expect(importedLocked).toBeDefined();
+      expect(importedLocked?.status).toBe('locked');
+      expect(importedLocked?.isArchived).toBe(false);
+
+      expect(useAppStore.getState().currentOrderId).toBe('active-stay');
+    });
+
+    it('BUG-EDGE-02: importJSON re-import does not duplicate existing orders', async () => {
+      const { useAppStore } = await loadStore();
+
+      const backupJSON = JSON.stringify({
+        version: '2',
+        people: [],
+        roasters: [],
+        orders: [
+          {
+            id: 'order-reimport-1',
+            name: 'Single Order Backup',
+            orderDate: '2026-03-20',
+            status: 'planning',
+            goodsTotalZar: 500,
+            lots: [],
+            fees: [],
+            payments: {},
+          },
+        ],
+      });
+
+      await useAppStore.getState().importJSON(backupJSON);
+      expect(useAppStore.getState().orders.filter((o) => o.name === 'Single Order Backup')).toHaveLength(1);
+
+      await useAppStore.getState().importJSON(backupJSON);
+      expect(useAppStore.getState().orders.filter((o) => o.name === 'Single Order Backup')).toHaveLength(1);
+    });
+
+    it('BUG-EDGE-03: importJSON remaps bagAllocations participant IDs, restores settings, and restores roaster logoUrl', async () => {
+      const { useAppStore } = await loadStore();
+      useAppStore.setState({ accessStatus: 'member' });
+
+      const backupJSON = JSON.stringify({
+        version: '2',
+        settings: {
+          theme: 'tokyo',
+          themeMode: 'dark',
+        },
+        people: [
+          { id: 'old-p-99', name: 'Zaid Zakariya', email: 'zaid@example.com' },
+        ],
+        roasters: [
+          { id: 'old-r-99', name: 'Rosetta Roastery', logoUrl: 'https://images.example.com/rosetta.png' },
+        ],
+        orders: [
+          {
+            id: 'order-bag-alloc-test',
+            name: 'Rosetta Order',
+            orderDate: '2026-03-25',
+            status: 'planning',
+            roasterId: 'old-r-99',
+            payerId: 'old-p-99',
+            goodsTotalZar: 600,
+            lots: [
+              {
+                id: 'lot-1',
+                name: 'Kainamui',
+                foreignPricePerBag: 25,
+                gramsPerBag: 250,
+                quantity: 1,
+                shares: [{ id: 's-1', personId: 'old-p-99', shareGrams: 250, bagIndex: 0 }],
+                bags: [{ id: 'b-1', splitMode: 'full', buyers: [{ id: 'b-1', personId: 'old-p-99', grams: 250 }] }],
+                bagAllocations: [
+                  {
+                    id: 'alloc-1',
+                    bagIndex: 0,
+                    mode: 'single',
+                    participants: [
+                      { id: 'part-1', personId: 'old-p-99', shareGrams: 250, sourceShareId: 's-1' },
+                    ],
+                  },
+                ],
+              },
+            ],
+            fees: [],
+            payments: {},
+          },
+        ],
+      });
+
+      await useAppStore.getState().importJSON(backupJSON);
+
+      const state = useAppStore.getState();
+
+      expect(state.settings.theme).toBe('tokyo');
+      expect(state.settings.themeMode).toBe('dark');
+
+      const roaster = state.roasters.find((r) => r.name === 'Rosetta Roastery');
+      expect(roaster).toBeDefined();
+      expect(roaster?.logoUrl).toBe('https://images.example.com/rosetta.png');
+
+      const person = state.people.find((p) => p.name === 'Zaid Zakariya');
+      expect(person).toBeDefined();
+      expect(person?.id).not.toBe('old-p-99');
+
+      const importedOrder = state.orders.find((o) => o.name === 'Rosetta Order')!;
+      expect(importedOrder).toBeDefined();
+      expect(importedOrder.payerId).toBe(person!.id);
+
+      const alloc = importedOrder.lots[0].bagAllocations?.[0];
+      expect(alloc).toBeDefined();
+      expect(alloc?.participants[0].personId).toBe(person!.id);
+      expect(alloc?.participants[0].personId).not.toBe('old-p-99');
+    });
   });
 });

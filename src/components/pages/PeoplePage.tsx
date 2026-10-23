@@ -11,7 +11,7 @@ interface PeoplePageProps {
 }
 
 export function PeoplePage({ embedded = false }: PeoplePageProps = {}) {
-  const { people, addPerson, updatePerson, deletePerson } = useAppStore();
+  const { people, addPerson, updatePerson, deletePerson, orders } = useAppStore();
   const [editingId, setEditingId] = useState<string | 'new' | null>(null);
   const [form, setForm] = useState<PersonFormValues>(emptyForm);
   const [error, setError] = useState('');
@@ -68,8 +68,55 @@ export function PeoplePage({ embedded = false }: PeoplePageProps = {}) {
     }
   }
 
+  function getActiveOrderBlockReason(person: Person): string | null {
+    if (!orders || orders.length === 0) return null;
+
+    const payerOrder = orders.find(
+      (o) => !o.isArchived && o.status !== 'archived' && o.payerId === person.id,
+    );
+    if (payerOrder) {
+      return `Cannot remove "${person.name}" because they are the designated payer for active order "${payerOrder.name}". Please reassign the payer before removing this person.`;
+    }
+
+    const participantOrder = orders.find(
+      (o) =>
+        !o.isArchived &&
+        o.status !== 'archived' &&
+        ((o.lots ?? []).some((l) => (l.shares ?? []).some((s) => s.personId === person.id)) ||
+          (o.lots ?? []).some((l) =>
+            l.bagAllocations?.some(
+              (b) =>
+                (b as unknown as { personId?: string }).personId === person.id ||
+                b.participants?.some((p) => p.personId === person.id),
+            ),
+          ) ||
+          (o.lots ?? []).some((l) => l.bags?.some((b) => b.buyers?.some((buyer) => buyer.personId === person.id)))),
+    );
+    if (participantOrder) {
+      return `Cannot remove "${person.name}" because they have assigned shares or allocations in active order "${participantOrder.name}". Please remove or reassign their shares before removing this person.`;
+    }
+
+    return null;
+  }
+
+  function handleDeleteClick(person: Person) {
+    setDeleteError('');
+    const blockReason = getActiveOrderBlockReason(person);
+    if (blockReason) {
+      setDeleteError(blockReason);
+      return;
+    }
+    setDeleteTarget(person);
+  }
+
   async function confirmDeletePerson() {
     if (!deleteTarget) return;
+    const blockReason = getActiveOrderBlockReason(deleteTarget);
+    if (blockReason) {
+      setDeleteError(blockReason);
+      setDeleteTarget(null);
+      return;
+    }
     setDeleting(true);
     setDeleteError('');
     try {
@@ -182,7 +229,7 @@ export function PeoplePage({ embedded = false }: PeoplePageProps = {}) {
                   <button
                     className="btn btn-ghost btn-sm"
                     style={{ color: 'var(--color-unpaid)' }}
-                    onClick={() => setDeleteTarget(person)}
+                    onClick={() => handleDeleteClick(person)}
                   >
                     Remove
                   </button>
