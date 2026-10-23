@@ -93,6 +93,7 @@ export default function App() {
     typeof window !== 'undefined' ? parseAuthHashError(window.location.hash) : null
   ));
   const [currentPath, setCurrentPath] = useState(getCurrentPath);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const previousTabRef = useRef<AppTab>('order');
   const tabScrollPositionsRef = useRef<Record<AppTab, number>>({
     order: 0,
@@ -212,6 +213,12 @@ export default function App() {
   const modeListenerRef = useRef<((e: MediaQueryListEvent) => void) | null>(null);
   const modeMediaRef = useRef<MediaQueryList | null>(null);
 
+  useEffect(() => {
+    if (user && authMode !== 'recovery' && currentPath === RESET_PASSWORD_PATH) {
+      updatePath(HOME_PATH, { replace: true });
+    }
+  }, [user, authMode, currentPath]);
+
   // Apply saved theme + mode on mount (also done in initialize, but ensures fast flash-of-wrong-theme prevention)
   useEffect(() => {
     try {
@@ -305,23 +312,19 @@ export default function App() {
     );
   }
 
-  if (authMode === 'recovery' || currentPath === RESET_PASSWORD_PATH) {
-    if (user && authMode !== 'recovery') {
-      updatePath(HOME_PATH, { replace: true });
-    } else {
-      return (
-        <ResetPasswordPage
-          onComplete={() => {
-            setAuthMode('default');
-            updatePath(HOME_PATH, { replace: true });
-          }}
-          onNavigateToSignIn={() => {
-            setAuthMode('default');
-            updatePath(HOME_PATH, { replace: true });
-          }}
-        />
-      );
-    }
+  if (authMode === 'recovery' || (!user && currentPath === RESET_PASSWORD_PATH)) {
+    return (
+      <ResetPasswordPage
+        onComplete={() => {
+          setAuthMode('default');
+          updatePath(HOME_PATH, { replace: true });
+        }}
+        onNavigateToSignIn={() => {
+          setAuthMode('default');
+          updatePath(HOME_PATH, { replace: true });
+        }}
+      />
+    );
   }
 
   // Not logged in
@@ -384,19 +387,10 @@ export default function App() {
 
         {(linkResolution.status === 'needs-confirmation' || linkResolution.status === 'ambiguous') && (
           <div className="page-container" style={{ paddingBottom: 0 }}>
-            <div
-              className="card card-padded"
-              style={{
-                marginBottom: 'var(--space-4)',
-                borderLeft: '4px solid var(--color-accent)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 'var(--space-3)',
-              }}
-            >
+            <div className="card card-padded alert-info" style={{ marginBottom: 'var(--space-4)' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
                 <div>
-                  <h4 style={{ margin: 0, marginBottom: 4, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                  <h4 style={{ margin: 0, marginBottom: 'var(--space-1)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
                     Confirm your participant profile
                   </h4>
                   <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
@@ -408,22 +402,32 @@ export default function App() {
                 <button
                   className="btn btn-ghost btn-sm"
                   type="button"
-                  onClick={dismissLinkResolution}
+                  onClick={() => {
+                    setLinkError(null);
+                    dismissLinkResolution();
+                  }}
                 >
                   Dismiss
                 </button>
               </div>
 
-              <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+              {linkError && (
+                <div className="alert alert-error" style={{ marginTop: 'var(--space-3)', marginBottom: 'var(--space-3)' }}>
+                  {linkError}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginTop: 'var(--space-3)' }}>
                 {(linkResolution.candidates?.length > 0 ? linkResolution.candidates : (linkResolution.person ? [linkResolution.person] : [])).map((candidate) => (
                   <button
                     key={candidate.personId}
                     type="button"
                     className="btn btn-secondary btn-sm"
                     onClick={async () => {
+                      setLinkError(null);
                       const err = await confirmPersonLink(candidate.personId);
                       if (err) {
-                        alert(err);
+                        setLinkError(err);
                       }
                     }}
                   >

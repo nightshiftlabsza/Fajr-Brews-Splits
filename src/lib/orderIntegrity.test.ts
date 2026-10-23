@@ -67,8 +67,8 @@ describe('orderIntegrity', () => {
     it('serializes lots from bags and normalizes null fees/payments', () => {
       const orderToNormalize = {
         ...validOrder,
-        fees: null as unknown as any[],
-        payments: null as unknown as Record<string, any>,
+        fees: [],
+        payments: {},
       };
 
       const normalized = normalizeOrderForPersistence(orderToNormalize);

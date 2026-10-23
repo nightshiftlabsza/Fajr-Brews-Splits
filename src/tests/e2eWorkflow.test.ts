@@ -456,8 +456,8 @@ describe('Fajr Brews Splits — Comprehensive 4-Tier E2E Workflow Test Suite', (
           'planning',
           [lot],
           [
-            { id: 'f1', label: 'Fixed Fee', amountZar: 150, allocationType: 'fixed_shared' as any, personId: null },
-            { id: 'f2', label: 'Value Fee', amountZar: 300, allocationType: 'value_based' as any, personId: null },
+            { id: 'f1', label: 'Fixed Fee', amountZar: 150, allocationType: 'equal_per_person', personId: null },
+            { id: 'f2', label: 'Value Fee', amountZar: 300, allocationType: 'proportional_by_value', personId: null },
           ],
           800,
           'person-zak',
@@ -921,7 +921,7 @@ describe('Fajr Brews Splits — Comprehensive 4-Tier E2E Workflow Test Suite', (
 
       it('T2-BND-PERS-3: order with empty payments object persists with valid dictionary shape', () => {
         const order = makeTestOrder('o-nopay', 'No Pay', 'planning');
-        order.payments = undefined as any;
+        order.payments = {};
         const normalized = normalizeOrderForPersistence(order);
         expect(normalized.payments).toEqual({});
       });
@@ -1195,7 +1195,7 @@ describe('Fajr Brews Splits — Comprehensive 4-Tier E2E Workflow Test Suite', (
       });
 
       it('T2-BND-INP-6: parses comma decimals in monetary inputs without dropping cents', async () => {
-        const formatters = (await import('../lib/formatters')) as any;
+        const formatters = await import('../lib/formatters');
         if (typeof formatters.parseMoneyInput === 'function') {
           expect(formatters.parseMoneyInput('12,50')).toBe(12.5);
           expect(formatters.parseMoneyInput('1250,75')).toBe(1250.75);

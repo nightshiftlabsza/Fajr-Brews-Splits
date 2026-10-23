@@ -34,29 +34,10 @@ export function mergeConcurrentOrderUpdate(
   localOrder?: Order | null,
   baseSnapshot?: Order | null,
 ): Order {
-  if (!baseSnapshot && !localOrder) {
+  const inFlight = localOrder ?? baseSnapshot;
+  if (!inFlight) {
     return remoteOrder;
   }
-
-  const merged: Order = { ...remoteOrder };
-
-  const mutableFields: (keyof Order)[] = [
-    'name',
-    'orderDate',
-    'status',
-    'isArchived',
-    'roasterId',
-    'roasterSnapshot',
-    'payerId',
-    'payerBank',
-    'referenceTemplate',
-    'payerNote',
-    'goodsTotalZar',
-    'lots',
-    'fees',
-    'payments',
-    'ownerId',
-  ];
 
   const areValuesEqual = (a: unknown, b: unknown): boolean => {
     if (a === b) return true;
@@ -66,29 +47,47 @@ export function mergeConcurrentOrderUpdate(
     return false;
   };
 
-  for (const field of mutableFields) {
+  const pickField = <K extends keyof Order>(field: K): Order[K] => {
     if (localOrder && baseSnapshot) {
       const localChanged = !areValuesEqual(localOrder[field], baseSnapshot[field]);
-      if (localChanged) {
-        (merged as any)[field] = localOrder[field];
-      }
-    } else {
-      const inFlight = localOrder ?? baseSnapshot!;
-      if (!areValuesEqual(inFlight[field], remoteOrder[field])) {
+      return localChanged ? localOrder[field] : remoteOrder[field];
+    }
+    if (inFlight) {
+      const inFlightVal = inFlight[field];
+      const remoteVal = remoteOrder[field];
+      if (!areValuesEqual(inFlightVal, remoteVal)) {
         if (
-          Array.isArray(inFlight[field]) &&
-          (inFlight[field] as any[]).length === 0 &&
-          Array.isArray(remoteOrder[field]) &&
-          (remoteOrder[field] as any[]).length > 0
+          Array.isArray(inFlightVal) &&
+          inFlightVal.length === 0 &&
+          Array.isArray(remoteVal) &&
+          remoteVal.length > 0
         ) {
-          continue;
+          return remoteVal;
         }
-        (merged as any)[field] = inFlight[field];
+        return inFlightVal;
       }
     }
-  }
+    return remoteOrder[field];
+  };
 
-  return merged;
+  return {
+    ...remoteOrder,
+    name: pickField('name'),
+    orderDate: pickField('orderDate'),
+    status: pickField('status'),
+    isArchived: pickField('isArchived'),
+    roasterId: pickField('roasterId'),
+    roasterSnapshot: pickField('roasterSnapshot'),
+    payerId: pickField('payerId'),
+    payerBank: pickField('payerBank'),
+    referenceTemplate: pickField('referenceTemplate'),
+    payerNote: pickField('payerNote'),
+    goodsTotalZar: pickField('goodsTotalZar'),
+    lots: pickField('lots'),
+    fees: pickField('fees'),
+    payments: pickField('payments'),
+    ownerId: pickField('ownerId'),
+  };
 }
 
 export function upsertRoasterById(roasters: Roaster[], roaster: Roaster): Roaster[] {

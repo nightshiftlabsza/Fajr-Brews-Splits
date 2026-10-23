@@ -86,7 +86,6 @@ export function PeoplePage({ embedded = false }: PeoplePageProps = {}) {
           (o.lots ?? []).some((l) =>
             l.bagAllocations?.some(
               (b) =>
-                (b as unknown as { personId?: string }).personId === person.id ||
                 b.participants?.some((p) => p.personId === person.id),
             ),
           ) ||

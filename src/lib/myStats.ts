@@ -86,21 +86,6 @@ export function orderIncludesPerson(order: Order, personId: string): boolean {
     return true;
   }
 
-  const orderAny = order as unknown as {
-    participantIds?: string[];
-    participants?: Array<{ personId?: string; id?: string } | string>;
-  };
-  if (Array.isArray(orderAny.participantIds) && orderAny.participantIds.includes(personId)) {
-    return true;
-  }
-  if (Array.isArray(orderAny.participants)) {
-    if (orderAny.participants.some((p) => (
-      typeof p === 'string' ? p === personId : p.personId === personId || p.id === personId
-    ))) {
-      return true;
-    }
-  }
-
   return false;
 }
 

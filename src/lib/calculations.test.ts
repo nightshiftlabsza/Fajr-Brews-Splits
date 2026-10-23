@@ -569,8 +569,8 @@ describe('6 Money Reconciliation & Regression Scenarios (BUG-MONEY-01, BUG-MONEY
           },
         ],
         fees: [
-          { id: 'f-shared', label: 'Disbursement', amountZar: 150, allocationType: allocationType1 as any },
-          { id: 'f-value', label: 'Customs', amountZar: 300, allocationType: allocationType2 as any },
+          { id: 'f-shared', label: 'Disbursement', amountZar: 150, allocationType: allocationType1 },
+          { id: 'f-value', label: 'Customs', amountZar: 300, allocationType: allocationType2 },
         ],
       };
     }
@@ -793,7 +793,7 @@ describe('6 Money Reconciliation & Regression Scenarios (BUG-MONEY-01, BUG-MONEY
   it('BUG-MONEY-02: validateOrder requires non-empty payerId for rounding remainder reconciliation', () => {
     const invalidOrder = {
       ...testOrder,
-      payerId: null as unknown as string,
+      payerId: '',
     };
     const res = calculate(invalidOrder, personNames);
     expect(res.isValid).toBe(false);
@@ -939,5 +939,78 @@ describe('6 Money Reconciliation & Regression Scenarios (BUG-MONEY-01, BUG-MONEY
 
     const sumFinal = res.personIds.reduce((sum, pid) => sum + res.personCalcs[pid].totalFinal, 0);
     expect(Math.round(sumFinal * 100) / 100).toBe(100.00);
+  });
+
+  it('Extra check: organiser/payer takes 0g coffee, others have grams, order has shared shipping fee and equal-per-person fee', () => {
+    // Payer (PERSON_A / organiser) has 0g coffee.
+    // PERSON_B and PERSON_C take coffee (125g each = 250g bag).
+    // Order has Goods R500, a proportional shared fee (shipping) of R100, and an equal_per_person fee of R50.
+    // Total order: R650.00.
+    // Expected: PERSON_A (payer) owes R0.00 (plus at most absorbed rounding cents).
+    // PERSON_B and PERSON_C split goods and all fees between them (R325.00 each).
+    // The totals add up to the order total to the cent (R650.00).
+    const zeroGramPayerOrder: Order = {
+      ...testOrder,
+      id: 'order-zero-gram-payer',
+      name: 'Zero-Gram Organiser Order',
+      orderDate: '2026-10-23',
+      status: 'planning',
+      isArchived: false,
+      payerId: PERSON_A,
+      goodsTotalZar: 500,
+      lots: [
+        {
+          id: 'lot-1',
+          name: 'Sidra Special',
+          foreignPricePerBag: 25,
+          gramsPerBag: 250,
+          quantity: 1,
+          shares: [
+            { id: 's-b', personId: PERSON_B, shareGrams: 125, bagIndex: 0 },
+            { id: 's-c', personId: PERSON_C, shareGrams: 125, bagIndex: 0 },
+          ],
+          bags: [
+            {
+              id: 'bag-1',
+              splitMode: 'equal',
+              buyers: [
+                { id: 'by-b', personId: PERSON_B, grams: 125 },
+                { id: 'by-c', personId: PERSON_C, grams: 125 },
+              ],
+            },
+          ],
+        },
+      ],
+      fees: [
+        { id: 'fee-shipping', label: 'Shipping', amountZar: 100, allocationType: 'proportional_by_value', personId: null },
+        { id: 'fee-admin', label: 'Disbursement', amountZar: 50, allocationType: 'equal_per_person', personId: null },
+      ],
+      payments: {},
+    };
+
+    const res = calculate(zeroGramPayerOrder, personNames);
+    expect(res.isValid).toBe(true);
+    expect(res.totalOrderZar).toBe(650.00);
+    expect(res.totalGoodsZar).toBe(500.00);
+    expect(res.totalFeesZar).toBe(150.00);
+
+    // Payer has 0g, 0 coffee goods, 0 fees
+    expect(res.personCalcs[PERSON_A].totalGrams).toBe(0);
+    expect(res.personCalcs[PERSON_A].goodsZar).toBe(0);
+    expect(res.personCalcs[PERSON_A].feesZar).toBe(0);
+    expect(res.personCalcs[PERSON_A].totalFinal).toBe(0.00);
+
+    // PERSON_B and PERSON_C share goods (250 each) and all fees (75 each) = 325 each
+    expect(res.personCalcs[PERSON_B].goodsZar).toBe(250.00);
+    expect(res.personCalcs[PERSON_B].feesZar).toBe(75.00);
+    expect(res.personCalcs[PERSON_B].totalFinal).toBe(325.00);
+
+    expect(res.personCalcs[PERSON_C].goodsZar).toBe(250.00);
+    expect(res.personCalcs[PERSON_C].feesZar).toBe(75.00);
+    expect(res.personCalcs[PERSON_C].totalFinal).toBe(325.00);
+
+    // Sum of all person totals must equal totalOrderZar exactly to the cent
+    const sumFinal = res.personIds.reduce((sum, pid) => sum + res.personCalcs[pid].totalFinal, 0);
+    expect(Math.round(sumFinal * 100) / 100).toBe(650.00);
   });
 });

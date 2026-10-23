@@ -353,4 +353,70 @@ describe('App loading shell', () => {
     expect(container.textContent).not.toContain('ResetPasswordPage');
     expect(window.location.pathname).toBe('/');
   });
+
+  it('does not cause React update while rendering warning when signed-in user lands on /reset-password', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    window.history.pushState({}, 'Reset Password', '/reset-password');
+    mockStoreState.isInitialized = true;
+    mockStoreState.accessStatus = 'member';
+    mockStoreState.user = { id: 'u1', email: 'test@example.com' };
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+    });
+
+    const updateDuringRenderWarnings = [...errorSpy.mock.calls, ...warnSpy.mock.calls].filter((call) =>
+      call.some((arg) => typeof arg === 'string' && (arg.includes('Cannot update a component') || arg.includes('update while rendering')))
+    );
+    expect(updateDuringRenderWarnings).toHaveLength(0);
+    expect(container.textContent).not.toContain('ResetPasswordPage');
+
+    errorSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it('renders inline error notice when confirmPersonLink fails', async () => {
+    mockStoreState.isInitialized = true;
+    mockStoreState.accessStatus = 'member';
+    mockStoreState.user = { id: 'u1', email: 'test@example.com' };
+    mockStoreState.confirmPersonLink = vi.fn().mockResolvedValue('Database linking failed');
+    mockStoreState.linkResolution = {
+      status: 'needs-confirmation',
+      linkedPersonId: null,
+      matchedBy: 'name',
+      person: {
+        personId: 'person-zaid',
+        name: 'Zaid',
+        email: 'zaid@example.com',
+        matchReason: 'name',
+      },
+      candidates: [
+        {
+          personId: 'person-zaid',
+          name: 'Zaid',
+          email: 'zaid@example.com',
+          matchReason: 'name',
+        },
+      ],
+    };
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+    });
+
+    const linkButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('Link as Zaid'));
+    expect(linkButton).toBeTruthy();
+
+    await act(async () => {
+      linkButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('Database linking failed');
+    expect(container.querySelector('.alert.alert-error')).toBeTruthy();
+  });
 });
