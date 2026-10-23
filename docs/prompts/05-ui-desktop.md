@@ -46,6 +46,7 @@ Layout, hierarchy, labels, empty/error/loading states, navigation and visual con
 - Work only on your own branch. Do not push to or merge into `main`.
 - Never use production Supabase credentials or data. Use mocked data only; there is no staging backend and `.env.local` must not point at the live project. Limit browser evidence to what mocks allow; do not fake it.
 - Never: apply SQL migrations anywhere, change RLS or auth config, rotate or print secrets, delete or rewrite data, change deploy settings, add dependencies (unless this prompt says so), skip or loosen tests.
+- Reuse first: read what your change touches, prefer existing helpers, components, tokens and platform features over new code, write the smallest version that works, and after any rename or signature change search every caller, including files outside your diff. Never cut validation, error handling, security, accessibility or tests for risky logic to make code smaller. (Full rule: `AGENTS.md`, Reuse first.)
 - No filler comments, speculative abstractions, dead code or unrequested features.
 - Gate after final edit, from a clean state: `npm run typecheck && npm test && npm run build`. Paste real output.
 - Screenshots: save under `docs/evidence/<prompt>/` only if asked below; otherwise describe what you inspected. Do not commit `.env*`, PDFs with real names, or secrets.
