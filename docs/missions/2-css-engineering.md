@@ -21,6 +21,13 @@ Make the styling layer coherent, token-driven and safe to change, without changi
 - Visual output at the five widths must be unchanged apart from the defect fixes. No redesign, no new animations, no new dependencies, no behaviour changes.
 - Do not restructure TSX beyond class names and removing inline styles. Do not touch `pdf.ts` or store logic.
 
+## Additional requirements (owner brief)
+- Diagnose before editing: record causes and affected files for duplicate/conflicting rules, fragile selectors, specificity fights, repeated UI patterns that deserve shared components, layout techniques causing clipping/overlap/unexpected scroll, unnecessary abstractions.
+- Fix layout problems at their source: no arbitrary overflow rules, fixed heights or z-index escalation to hide defects.
+- No new UI framework, styling library or build dependency; if you believe one is justified, stop and ask with the concrete benefit and cost.
+- Do not invent a visual direction: Mission 1 owns it and runs after you. Final diff review for duplicate rules, dead code, accidental logic changes.
+- Report remaining technical debt.
+
 ## Acceptance criteria
 - Before/after counts: hard-coded colours, `style={{` occurrences, total CSS lines, dead selectors removed.
 - Before/after screenshots at the five widths for Order and History in each theme saved in `docs/evidence/2-css/` and a short list of visible differences (should be only the defect fixes).

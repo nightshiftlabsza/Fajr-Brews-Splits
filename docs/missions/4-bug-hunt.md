@@ -20,6 +20,9 @@ Make the core group workflow trustworthy: create an order, add roaster/lots/bags
 6. Error states: Supabase failures must surface a visible message and not leave the UI claiming success.
 For each suspected bug: reproduce (test or browser), identify root cause, then fix.
 
+## Also cover
+Duplicate submissions and repeated clicks; async races and stale state; reconnect/refresh persistence; invalid actions at trust boundaries (what a non-owner can do); consistency between displayed orders, totals and invoice data; regressions from recent commits (`git log` since the "cockpit" and "short payment references" changes). Where the intended business rule is unclear, do not invent one: list it under "Ambiguities for the owner". Use independent sub-agents per area if supported, with one lead consolidating, de-duplicating and verifying. Fix in small batches, rerun relevant tests and review the diff after each batch. Ask before risky or irreversible changes. Separate confirmed defects from unverified suspicions.
+
 ## Scope
 - Fix confirmed bugs in the files above. Refactor only where the root cause requires it (e.g. splitting a function out of `appStore.ts` or `CoffeeLotsSection.tsx`), keeping behaviour covered by tests.
 - Do not touch `pdf.ts`, `invoiceFormatter.ts`, invoice components (Mission 5) or visual CSS/layout (Missions 1 and 2) except for minimal changes a fix requires.
