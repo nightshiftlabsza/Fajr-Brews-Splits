@@ -12,7 +12,7 @@ Make the styling layer coherent, token-driven and safe to change, without changi
 
 ## Investigate
 1. Measure first: count hard-coded colours/px/z-index values, duplicate or dead selectors (find selectors matching no class used in `src/`), conflicting rules for the same element, specificity fights, inline `style={{}}` usage in TSX, magic numbers for breakpoints.
-2. Run the app (staging backend) at 360, 390, 768, 1024, 1440 px widths, in all 3 themes and light and dark: capture screenshots of Order (each wizard step), People, My Stats, History, Settings, Auth, and modals. List concrete defects: horizontal overflow, clipped text, unreachable buttons, tap targets under 44 px, sticky elements covering content, unreadable contrast, focus states missing, themes with unset variables.
+2. Run the app at 360, 390, 768, 1024, 1440 px widths, in all 3 themes and light and dark: capture screenshots of Order (each wizard step), People, My Stats, History, Settings, Auth, and modals. List concrete defects: horizontal overflow, clipped text, unreachable buttons, tap targets under 44 px, sticky elements covering content, unreadable contrast, focus states missing, themes with unset variables.
 3. Check keyboard focus order and visible focus on interactive elements, and `prefers-reduced-motion`.
 
 ## Scope
@@ -39,7 +39,7 @@ Make the styling layer coherent, token-driven and safe to change, without changi
 - Repo: Fajr Brews Splits (React 18, TS strict, Vite, Zustand, Supabase, jsPDF, Vitest). Read `AGENTS.md` and `docs/PROJECT_BRIEF.md` first; they are binding. Money rule is in `README.md`.
 - You have high autonomy: investigate, delegate independent read-only investigations to sub-agents if available, refactor where demonstrably necessary, fix, test, and re-verify without asking. Do not let multiple agents edit the same file at once.
 - Work only on your own branch. Do not push to or merge into `main`.
-- Never use production Supabase credentials or data. Run the app only against the staging project in `.env.local`, or mock. If no staging backend exists, say so and limit browser evidence to what mocks allow; do not fake it.
+- Never use production Supabase credentials or data. Use mocked data only; there is no staging backend and `.env.local` must not point at the live project. Limit browser evidence to what mocks allow; do not fake it.
 - Never: apply SQL migrations anywhere, change RLS or auth config, rotate or print secrets, delete or rewrite data, change deploy settings, add dependencies (unless this mission says so), skip or loosen tests.
 - No filler comments, speculative abstractions, dead code or unrequested features.
 - Gate after final edit, from a clean state: `npm run typecheck && npm test && npm run build`. Paste real output.

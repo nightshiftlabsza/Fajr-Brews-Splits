@@ -14,8 +14,8 @@ Inspect the current official docs of `github.com/Leonxlnx/taste-skill`, decide w
 - Mission 2 has already centralised tokens and CSS structure; extend them rather than bypass them.
 
 ## Investigate first
-0. Before changing anything, run the app against staging and capture baseline screenshots (390, 768, 1440 px; default theme, light and dark) of every page and wizard step, with 1, 3 and 0 active orders. Inspect them, document layout defects and their causes, and record the brand identity and behaviours that must be preserved. No generic redesign: understand the product first. If your tooling supports it, use independent reviewers for visual design, mobile usability and order workflows.
-1. Walk each primary user journey in a real browser against staging as three roles (owner, ordinary member, pending-access user): start an order; add my share of a lot; see what I owe; open/share my invoice; check history; invite or link a person. Record each point of friction (extra taps, unclear labels, hidden state, dead ends, jargon like "inference", "settlement packs", ambiguous statuses).
+0. Before changing anything, run the app  and capture baseline screenshots (390, 768, 1440 px; default theme, light and dark) of every page and wizard step, with 1, 3 and 0 active orders. Inspect them, document layout defects and their causes, and record the brand identity and behaviours that must be preserved. No generic redesign: understand the product first. If your tooling supports it, use independent reviewers for visual design, mobile usability and order workflows.
+1. Walk each primary user journey in a real browser  as three roles (owner, ordinary member, pending-access user): start an order; add my share of a lot; see what I owe; open/share my invoice; check history; invite or link a person. Record each point of friction (extra taps, unclear labels, hidden state, dead ends, jargon like "inference", "settlement packs", ambiguous statuses).
 2. Check how multiple simultaneous active orders are presented: can I tell at a glance which order I am in, its status, my part, and switch safely on mobile?
 3. Produce a short ranked list (max 12) of the highest-value changes before editing. Implement in that order until done; discard changes that add polish without reducing friction.
 
@@ -35,7 +35,7 @@ Inspect the current official docs of `github.com/Leonxlnx/taste-skill`, decide w
 ## Acceptance criteria
 - The ranked friction list with a before/after note for each item implemented.
 - Screenshots before and after for: Order (every step), multi-order switcher, People, My Stats, History, Settings, Auth, one modal; at 390 px and 1440 px, default theme light and dark, plus one other theme. Save in `docs/evidence/1-ui/` and inspect each one yourself; report any flaw you see and fix it.
-- Journey walkthroughs repeated after changes with results (pass/fail per step).
+- Journey walkthroughs (with mocked data) repeated after changes with results (pass/fail per step).
 - No horizontal overflow at 360 px; AA text contrast; visible focus states; reduced-motion respected.
 - Component tests updated for changed markup (never weakened); gate passes.
 
@@ -43,7 +43,7 @@ Inspect the current official docs of `github.com/Leonxlnx/taste-skill`, decide w
 - Repo: Fajr Brews Splits (React 18, TS strict, Vite, Zustand, Supabase, jsPDF, Vitest). Read `AGENTS.md` and `docs/PROJECT_BRIEF.md` first; they are binding. Money rule is in `README.md`.
 - You have high autonomy: investigate, delegate independent read-only investigations to sub-agents if available, refactor where demonstrably necessary, fix, test, and re-verify without asking. Do not let multiple agents edit the same file at once.
 - Work only on your own branch. Do not push to or merge into `main`.
-- Never use production Supabase credentials or data. Run the app only against the staging project in `.env.local`, or mock. If no staging backend exists, say so and limit browser evidence to what mocks allow; do not fake it.
+- Never use production Supabase credentials or data. Use mocked data only; there is no staging backend and `.env.local` must not point at the live project. Limit browser evidence to what mocks allow; do not fake it.
 - Never: apply SQL migrations anywhere, change RLS or auth config, rotate or print secrets, delete or rewrite data, change deploy settings, add dependencies (unless this mission says so), skip or loosen tests.
 - No filler comments, speculative abstractions, dead code or unrequested features.
 - Gate after final edit, from a clean state: `npm run typecheck && npm test && npm run build`. Paste real output.

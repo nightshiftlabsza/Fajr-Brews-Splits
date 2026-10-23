@@ -16,9 +16,9 @@ Make the app reliable and pleasant for the Fajr Brews group (adoption so far: ow
 - Auth: Supabase email+password, password reset flow, `PendingAccess` gate until a member is added.
 
 ## Risks and unknowns
-1. **No non-production backend.** README points `.env.local` at the live Supabase project. Any browser testing with it touches real data. Unknown whether a staging project exists. Mitigation: create a second free Supabase project (or run the Supabase CLI locally, needs Docker), load `schema.sql` and synthetic data, and use it for all Antigravity runs. Owner action; agents must not use production credentials.
-2. Browser/e2e evidence cannot exist until (1) is solved or flows are mocked; Playwright would be a new dev dependency (needs owner OK per AGENTS.md).
-3. SQL tests are string assertions; actual RLS behaviour is unverified. Real checks need a staging DB.
+1. **No non-production backend** and the owner cannot add one (Supabase free tier: 2 projects, both used). README points `.env.local` at the live project, so agents must not run the app against it: use mocks only. Live-backend behaviour (RLS, realtime, auth) stays unverified until the owner runs a manual checklist.
+2. Browser screenshots need the app to render with mocked store data; no Playwright dependency exists (would need owner OK).
+3. SQL tests are string assertions; actual RLS behaviour is unverified. Real checks need a real database (none safe to use).
 4. `appStore.ts` and `CoffeeLotsSection.tsx` are large and shared by several workstreams: merge-conflict hotspots.
 5. Junk tracked in git: `test_output.txt`, `.claude/settings.local.json`. Left alone for now.
 6. README commits the Supabase URL and a publishable key. Publishable keys are designed to be public (security rests on RLS), but the key lives in git history; treat RLS as the only defence.

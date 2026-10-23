@@ -33,14 +33,14 @@ Duplicate submissions and repeated clicks; async races and stale state; reconnec
 - A findings table in the report: id, severity (blocks workflow / wrong money / annoying), repro steps, root cause (file:line), fixed yes/no.
 - Every fixed bug has a test that fails on the baseline and passes now (state how you proved the fail).
 - Scenario 3 results listed numerically with the independent recomputation.
-- Multi-order switching verified in a real browser against staging (or marked unverified with reason).
+- Multi-order switching verified in a real browser  (or marked unverified with reason).
 - Gate passes; test count rises; nothing in the baseline removed.
 
 ## Ground rules (all missions)
 - Repo: Fajr Brews Splits (React 18, TS strict, Vite, Zustand, Supabase, jsPDF, Vitest). Read `AGENTS.md` and `docs/PROJECT_BRIEF.md` first; they are binding. Money rule is in `README.md`.
 - You have high autonomy: investigate, delegate independent read-only investigations to sub-agents if available, refactor where demonstrably necessary, fix, test, and re-verify without asking. Do not let multiple agents edit the same file at once.
 - Work only on your own branch. Do not push to or merge into `main`.
-- Never use production Supabase credentials or data. Run the app only against the staging project in `.env.local`, or mock. If no staging backend exists, say so and limit browser evidence to what mocks allow; do not fake it.
+- Never use production Supabase credentials or data. Use mocked data only; there is no staging backend and `.env.local` must not point at the live project. Limit browser evidence to what mocks allow; do not fake it.
 - Never: apply SQL migrations anywhere, change RLS or auth config, rotate or print secrets, delete or rewrite data, change deploy settings, add dependencies (unless this mission says so), skip or loosen tests.
 - No filler comments, speculative abstractions, dead code or unrequested features.
 - Gate after final edit, from a clean state: `npm run typecheck && npm test && npm run build`. Paste real output.

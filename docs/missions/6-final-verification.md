@@ -13,7 +13,7 @@ Produce evidence for a YES/NO merge decision. Be adversarial: try to break the a
 ## Verify
 1. Diff review: `git diff pre-stabilisation...HEAD --stat` then read the substantive diffs. Flag unrelated changes, removed or weakened tests, new dependencies, committed secrets or `.env*`, debug code, TODOs, leftover evidence files with personal data, SQL files not mirrored in `schema.sql`.
 2. Gate from a clean clone: `npm ci` then the gate. Report counts versus baseline and list tests removed, skipped or changed.
-3. Browser journeys against staging with synthetic users, desktop (1440) and mobile (390): sign up/in/out, pending access, reset-password page, create three orders, switch between them, add roaster/lots/bags/shares, fees (fixed and proportional), join/leave, lock, mark paid, archive, history, My Stats, people, settings and themes, export/import JSON. Include two simultaneous sessions editing one order. Record pass/fail per step with screenshots in `docs/evidence/6-final/`, and inspect each screenshot.
+3. Browser journeys  with synthetic users, desktop (1440) and mobile (390): sign up/in/out, pending access, reset-password page, create three orders, switch between them, add roaster/lots/bags/shares, fees (fixed and proportional), join/leave, lock, mark paid, archive, history, My Stats, people, settings and themes, export/import JSON. Include two simultaneous sessions editing one order. Record pass/fail per step with screenshots in `docs/evidence/6-final/`, and inspect each screenshot.
 4. Money: independently recompute at least 8 scenarios and compare to the UI, history, My Stats, share text and PDFs; totals must reconcile exactly to the goods total.
 5. PDFs: generate per-person and order PDFs for 6 scenarios (short and long names, many people, many lots), view them as images, extract the text, and check arithmetic and one-page fit for typical invoices.
 6. Security: re-check the top findings from Mission 3 on the final code, and run `npm audit --omit=dev`. List what remains open.
@@ -22,7 +22,7 @@ Produce evidence for a YES/NO merge decision. Be adversarial: try to break the a
 
 ## Constraints
 - Report only. If you find a defect, document repro steps and file:line; do not fix it.
-- Staging or synthetic data only. Never touch production.
+- Mocked or synthetic data only. Never touch production.
 
 ## Acceptance criteria
 - A verification matrix: each item above marked verified / partially verified / unverified with evidence.
@@ -33,7 +33,7 @@ Produce evidence for a YES/NO merge decision. Be adversarial: try to break the a
 - Repo: Fajr Brews Splits (React 18, TS strict, Vite, Zustand, Supabase, jsPDF, Vitest). Read `AGENTS.md` and `docs/PROJECT_BRIEF.md` first; they are binding. Money rule is in `README.md`.
 - You have high autonomy: investigate, delegate independent read-only investigations to sub-agents if available, refactor where demonstrably necessary, fix, test, and re-verify without asking. Do not let multiple agents edit the same file at once.
 - Work only on your own branch. Do not push to or merge into `main`.
-- Never use production Supabase credentials or data. Run the app only against the staging project in `.env.local`, or mock. If no staging backend exists, say so and limit browser evidence to what mocks allow; do not fake it.
+- Never use production Supabase credentials or data. Use mocked data only; there is no staging backend and `.env.local` must not point at the live project. Limit browser evidence to what mocks allow; do not fake it.
 - Never: apply SQL migrations anywhere, change RLS or auth config, rotate or print secrets, delete or rewrite data, change deploy settings, add dependencies (unless this mission says so), skip or loosen tests.
 - No filler comments, speculative abstractions, dead code or unrequested features.
 - Gate after final edit, from a clean state: `npm run typecheck && npm test && npm run build`. Paste real output.

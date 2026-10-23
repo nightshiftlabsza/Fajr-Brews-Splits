@@ -4,7 +4,7 @@ Each file is a self-contained prompt: copy it whole into Antigravity. Every miss
 
 ## Before anything
 1. Merge PR #1 (adds `AGENTS.md`), then tag `main` as `pre-stabilisation` (rollback point).
-2. Create a staging Supabase project (free tier), run `supabase/schema.sql` there, add a synthetic workspace and 3 to 4 fake members. Put its URL and publishable key in `.env.local` only. Production credentials must never be used by agents. Missions 1, 2, 4, 5, 6 need this for browser checks.
+2. No staging database (Supabase free tier allows 2 projects, both used). Agents therefore never connect to Supabase: tests and screenshots use mocked data (a mocked store or Supabase module, as existing component tests do). Anything needing the real backend, such as RLS behaviour, realtime and live sign-in, is reported as unverified and covered by a short manual checklist you run on the real app at the end.
 3. Each mission runs on its own branch `mission/<n>-<name>` cut from the current integration branch.
 
 ## Sequence
@@ -18,7 +18,7 @@ Claude reviews each report before the next wave starts. Merge a branch only afte
 
 ## Security tools (primary repos checked 2026-10-23)
 - **First choice: Cloudflare Security Audit Skill** (`github.com/cloudflare/security-audit-skill`, MIT, free). Needs an agent with tool use and parallel sub-agents, Node.js, and an OS-enforced sandbox only if target code is to be executed; without one it stays read-only and marks leads `needs_validation`. Install: `npx skills add https://github.com/cloudflare/security-audit-skill --skill security-audit`. Its README does not name Antigravity, so Mission 3 tests that it loads and otherwise falls back to a manual review.
-- **Not used: Google Mantis.** Its README says "USE THIS ONLY IN ISOLATED, RESTRICTED ENVIRONMENTS", not for machines with production access or sensitive data, is a demonstration rather than an official product, needs Python plus Google Cloud credentials for its reference harness, and requires expert verification of findings. Does not fit an unsandboxed Antigravity workspace holding staging credentials.
+- **Not used: Google Mantis.** Its README says "USE THIS ONLY IN ISOLATED, RESTRICTED ENVIRONMENTS", not for machines with production access or sensitive data, is a demonstration rather than an official product, needs Python plus Google Cloud credentials for its reference harness, and requires expert verification of findings. Does not fit an unsandboxed Antigravity workspace.
 - **Not usable in Antigravity: Anthropic `security-guidance` plugin** (Claude Code only; its GitHub page could not be fetched, details from a secondary article). Claude runs its own `/security-review` on the final diff.
 - **Not used: OpenAI Codex Security** (`github.com/openai/codex-security`). Needs Node 22+/Python 3.10+, a `cs login` account or API key, and some protected findings need "Trusted Access for Cyber" approval; cost unstated.
 - Already available and used regardless: `npm audit`, secret scan of the tree and git history, manual review of RLS/functions/storage.

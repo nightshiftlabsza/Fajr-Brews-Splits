@@ -26,10 +26,10 @@ Use the smallest effective set:
    - Storage: who can upload/overwrite/delete logos, allowed types and sizes, public URL exposure.
    - Client: any `dangerouslySetInnerHTML`/`innerHTML`, `window.open` use (`sharing.ts`: phone/email into URLs), `importJSON` trust of imported data (can it write arbitrary fields or other workspaces' ids), localStorage contents, password reset redirect base `APP_URL`.
    - Deployment headers: no `_headers` file exists in `public/`; assess whether CSP/frame/referrer headers are worthwhile on Cloudflare Pages (free).
-   - Whether staging vs production separation exists and how an agent could accidentally hit production.
+   - There is no staging project; note how an agent could accidentally hit production.
 
 ## Constraints
-- Read-only against code. Do not connect to the production Supabase project, and do not probe any live system. If you test policies dynamically, use only a local or staging Supabase with synthetic users.
+- Read-only against code. Do not connect to the production Supabase project, and do not probe any live system. Review policies by reading SQL; dynamic RLS testing is out of scope (no safe database).
 - Do not print secrets or customer data. Redact in the report.
 - Do not apply or write migrations.
 
@@ -45,7 +45,7 @@ Use the smallest effective set:
 - Repo: Fajr Brews Splits (React 18, TS strict, Vite, Zustand, Supabase, jsPDF, Vitest). Read `AGENTS.md` and `docs/PROJECT_BRIEF.md` first; they are binding. Money rule is in `README.md`.
 - You have high autonomy: investigate, delegate independent read-only investigations to sub-agents if available, refactor where demonstrably necessary, fix, test, and re-verify without asking. Do not let multiple agents edit the same file at once.
 - Work only on your own branch. Do not push to or merge into `main`.
-- Never use production Supabase credentials or data. Run the app only against the staging project in `.env.local`, or mock. If no staging backend exists, say so and limit browser evidence to what mocks allow; do not fake it.
+- Never use production Supabase credentials or data. Use mocked data only; there is no staging backend and `.env.local` must not point at the live project. Limit browser evidence to what mocks allow; do not fake it.
 - Never: apply SQL migrations anywhere, change RLS or auth config, rotate or print secrets, delete or rewrite data, change deploy settings, add dependencies (unless this mission says so), skip or loosen tests.
 - No filler comments, speculative abstractions, dead code or unrequested features.
 - Gate after final edit, from a clean state: `npm run typecheck && npm test && npm run build`. Paste real output.
