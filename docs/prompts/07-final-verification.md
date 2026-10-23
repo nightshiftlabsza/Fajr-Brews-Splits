@@ -1,4 +1,4 @@
-# Prompt 6: Independent final release verification
+# Prompt 7: Independent final release verification
 
 Branch: `release/candidate` (the fully integrated branch). You verify; you do not fix. Do not rely on any earlier prompt report: re-derive everything.
 
@@ -13,7 +13,7 @@ Produce evidence for a YES/NO merge decision. Be adversarial: try to break the a
 ## Verify
 1. Diff review: `git diff pre-stabilisation...HEAD --stat` then read the substantive diffs. Flag unrelated changes, removed or weakened tests, new dependencies, committed secrets or `.env*`, debug code, TODOs, leftover evidence files with personal data, SQL files not mirrored in `schema.sql`.
 2. Gate from a clean clone: `npm ci` then the gate. Report counts versus baseline and list tests removed, skipped or changed.
-3. Browser journeys with mocked data (no real backend; live auth, realtime and two-session editing are marked unverified and left to the owner checklist), desktop (1440) and mobile (390): sign up/in/out, pending access, reset-password page, create three orders, switch between them, add roaster/lots/bags/shares, fees (fixed and proportional), join/leave, lock, mark paid, archive, history, My Stats, people, settings and themes, export/import JSON. Include two simultaneous sessions editing one order. Record pass/fail per step with screenshots in `docs/evidence/06-final/`, and inspect each screenshot.
+3. Browser journeys with mocked data (build fixtures and intercept Supabase requests in a scratch directory outside the repo, installed via `npx` and not added to `package.json`; nothing from it is committed) (no real backend; live auth, realtime and two-session editing are marked unverified and left to the owner checklist), desktop (1440) and mobile (390): sign up/in/out, pending access, reset-password page, create three orders, switch between them, add roaster/lots/bags/shares, fees (fixed and proportional), join/leave, lock, mark paid, archive, history, My Stats, people, settings and themes, export/import JSON. Include two simultaneous sessions editing one order. Record pass/fail per step with screenshots in `docs/evidence/06-final/`, and inspect each screenshot.
 4. Money: independently recompute at least 8 scenarios and compare to the UI, history, My Stats, share text and PDFs; totals must reconcile exactly to the goods total.
 5. PDFs: generate per-person and order PDFs for 6 scenarios (short and long names, many people, many lots), view them as images, extract the text, and check arithmetic and one-page fit for typical invoices.
 6. Security: re-check the top findings from Prompt 3 on the final code, and run `npm audit --omit=dev`. List what remains open.

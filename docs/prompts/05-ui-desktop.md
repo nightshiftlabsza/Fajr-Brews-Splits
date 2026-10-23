@@ -1,9 +1,9 @@
-# Prompt 5: UI/UX redesign
+# Prompt 5: UI/UX redesign, desktop first
 
-Branch: `prompt/05-ui-ux`, cut from the integration branch after Prompts 1, 2 and 4 are merged.
+Branch: `prompt/05-ui-desktop`, cut from the integration branch after Prompts 1, 2 and 4 are merged.
 
 ## Objective
-A coherent, calm, professional interface that makes the group's core job obvious: see the active order(s), know what is mine to do next, enter coffee and costs without confusion, and see what everyone owes. Usefulness first; no decoration for its own sake.
+Make the desktop interface (1024 px and wider, with 768 px tablet checked) coherent, calm and professional, so the group's core job is obvious: see the active order(s), know what is mine to do next, enter coffee and costs without confusion, and see what everyone owes. Desktop only: do not optimise phone layouts here (Prompt 6 does that afterwards), but do not break them: below 768 px nothing may get worse than baseline.
 
 ## Design guidance
 Inspect the current official docs of `github.com/Leonxlnx/taste-skill`, decide whether it suits redesigning an existing app screen set (say so in the report), and if so install and read the front-end skill (`github.com/Leonxlnx/taste-skill`, skill `design-taste-frontend`, v2.1 includes dashboards and app screens): `npx skills add https://github.com/Leonxlnx/taste-skill --skill "design-taste-frontend"` (needs Node 22+). If Antigravity cannot load it, clone the repo outside this project and read its `SKILL.md` and references directly. Apply its principles, but this project's constraints override it: no new dependencies, no images fetched from the internet, no gradients or glassmorphism, no animation beyond subtle state transitions, no decorative card stacks. Do not install anything into the repo.
@@ -13,30 +13,31 @@ Inspect the current official docs of `github.com/Leonxlnx/taste-skill`, decide w
 - Active-order experience: `OrderPage.tsx` (744 lines) with wizard steps `OrderSetup` -> `CoffeeLotsSection` (1453 lines) -> `GoodsAndFees` -> `SettlementPacks` -> `OrderSummary`; multiple active orders selected via `currentOrderId`; `lib/orderLifecycle.ts` labels (Planning, Locked, Completed, Past order). A recent commit introduced an "order cockpit" summary.
 - Prompt 4 has already centralised tokens and CSS structure; extend them rather than bypass them.
 
-## Investigate first
-0. Before changing anything, run the app  and capture baseline screenshots (390, 768, 1440 px; default theme, light and dark) of every page and wizard step, with 1, 3 and 0 active orders. Inspect them, document layout defects and their causes, and record the brand identity and behaviours that must be preserved. No generic redesign: understand the product first. If your tooling supports it, use independent reviewers for visual design, mobile usability and order workflows.
-1. Walk each primary user journey in a real browser  as three roles (owner, ordinary member, pending-access user): start an order; add my share of a lot; see what I owe; open/share my invoice; check history; invite or link a person. Record each point of friction (extra taps, unclear labels, hidden state, dead ends, jargon like "inference", "settlement packs", ambiguous statuses).
-2. Check how multiple simultaneous active orders are presented: can I tell at a glance which order I am in, its status, my part, and switch safely on mobile?
-3. Produce a short ranked list (max 12) of the highest-value changes before editing. Implement in that order until done; discard changes that add polish without reducing friction.
+## Rendering without a backend
+The app throws at import without `VITE_SUPABASE_URL`/`VITE_SUPABASE_PUBLISHABLE_KEY` and there is no safe database. Use dummy env values (a throwaway `.env.local` with placeholder URL and key is fine; never real ones) and serve fixture data: intercept the Supabase REST/auth/realtime requests in the browser (for example Playwright `page.route` from a scratch directory outside the repo, installed with `npx` and not added to `package.json`) or add a temporary local-only harness that you delete before committing. Fixtures must cover: signed-in owner and ordinary member, 0, 1 and 3 active orders in different statuses, long names, an order with many lots and people. Nothing from this harness is committed. State exactly how you did it.
 
-## Scope
-- Change layout, hierarchy, labels, empty states, error and loading states, navigation, mobile ergonomics (thumb reach, sticky actions, 44 px targets), and visual consistency across all pages and modals.
-- May restructure presentational TSX and split oversized components when it serves the above. Business logic stays in `src/lib` and the store; do not alter calculations, the rounding rule, data shapes or SQL.
-- No new features. No renaming of data fields. Keep all existing capabilities reachable.
-- Do not touch `pdf.ts`/invoice PDF layout (Prompt 2), only the on-screen styling around it.
+## Investigate first
+0. Before changing anything, capture baseline screenshots at 1440, 1280 and 1024 px (plus 768) in the default theme, light and dark, of every page and wizard step, with 0, 1 and 3 active orders. Inspect them, document layout defects and causes, and record the brand identity and behaviours that must be preserved. No generic redesign: understand the product first. If your tooling supports it, use independent reviewers for visual design and order workflows.
+1. Walk each primary journey as owner, ordinary member and pending-access user: start an order; add my share of a lot; see what I owe; open/share my invoice; check history; invite or link a person. Record each friction point (extra clicks, unclear labels, hidden state, dead ends, jargon like "inference" or "settlement packs", ambiguous statuses).
+2. Check how multiple simultaneous active orders are presented: can I tell at a glance which order I am in, its status, my part, and switch safely?
+3. Produce a ranked list (max 12) of the highest-value changes, then implement in that order; discard changes that add polish without reducing friction.
 
 ## Design objectives (owner brief)
 - The active order is unmistakable at first glance; several simultaneous orders are easy to tell apart and switch between.
-- Clear hierarchy for status, lots, quantities, prices, actions. No overlaps, clipping, cramped controls or unexplained whitespace. Mobile is first-class.
+- Clear hierarchy for status, lots, quantities, prices, actions. No overlaps, clipping, cramped controls or unexplained whitespace.
 - Standardised spacing, type, colour, buttons, fields, status indicators. Do not invent order states or change the lifecycle (`planning|locked|completed|archived`); label what exists.
 - Avoid decorative gradients, glassmorphism, oversized rounded cards, excess panels, random icons, needless animation.
-- Check long content, narrow screens, multiple in-progress orders, empty, loading and error states; fix the worst defects found in screenshot review, then re-inspect.
+- Preserve useful functionality and familiar workflows; no new features, no data-field renames, no changes to calculations, the rounding rule, data shapes or SQL. Business logic stays in `src/lib` and the store. Do not touch `pdf.ts`/invoice PDF layout (Prompt 2).
+
+## Scope
+Layout, hierarchy, labels, empty/error/loading states, navigation and visual consistency across all pages and modals on desktop. May restructure presentational TSX and split oversized components when it serves this.
 
 ## Acceptance criteria
-- The ranked friction list with a before/after note for each item implemented.
-- Screenshots before and after for: Order (every step), multi-order switcher, People, My Stats, History, Settings, Auth, one modal; at 390 px and 1440 px, default theme light and dark, plus one other theme. Save in `docs/evidence/05-ui/` and inspect each one yourself; report any flaw you see and fix it.
-- Journey walkthroughs (with mocked data) repeated after changes with results (pass/fail per step).
-- No horizontal overflow at 360 px; AA text contrast; visible focus states; reduced-motion respected.
+- The ranked friction list with a before/after note for each implemented item.
+- Before and after screenshots at 1440 and 1024 px for: Order (every step), multi-order switcher, People, My Stats, History, Settings, Auth, one modal; default theme light and dark plus one other theme. Save in `docs/evidence/05-ui-desktop/`, inspect each yourself, report and fix any flaw, re-inspect.
+- Journey walkthroughs (mocked data) repeated after changes, pass/fail per step.
+- AA text contrast, visible focus states, keyboard reachability, reduced-motion respected.
+- Phone widths (390) are no worse than baseline (screenshot comparison).
 - Component tests updated for changed markup (never weakened); gate passes.
 
 ## Ground rules (all prompts)

@@ -5,17 +5,20 @@ Each file is a self-contained prompt: copy it whole into Antigravity. Every prom
 ## Before anything
 1. Merge PR #1 (adds `AGENTS.md`), then tag `main` as `pre-stabilisation` (rollback point).
 2. No staging database (Supabase free tier allows 2 projects, both used). Agents therefore never connect to Supabase: tests and screenshots use mocked data (a mocked store or Supabase module, as existing component tests do). Anything needing the real backend, such as RLS behaviour, realtime and live sign-in, is reported as unverified and covered by a short manual checklist you run on the real app at the end.
-3. Each prompt runs on its own branch `prompt/<n>-<name>` cut from the current integration branch, in its own folder (git worktree), so parallel agents never share files. Example, run from the main project folder:
-   `git worktree add ../fajr-01 -b prompt/01-bug-hunt` then open `../fajr-01` in Antigravity and run `npm ci` there. Do the same for `../fajr-02` (`prompt/02-invoice-pdf`) and `../fajr-03` (`prompt/03-security`). Worktrees do not contain your gitignored `.env.local`, which also keeps the live Supabase keys away from the agents.
+3. Each prompt runs in a new Antigravity chat on the normal project folder, on its own branch `prompt/<n>-<name>` cut from the current integration branch. Rename `.env.local` to `.env.local.bak` first so agents cannot reach live Supabase keys.
 
 ## Run order (the numbers are the order)
-Only 1, 2 and 3 are safe to run simultaneously. 4 and 5 rewrite the same CSS and page components that 1 and 2 touch, and 5 depends on 4, so running them at the same time would produce merge conflicts and wasted work. 6 needs everything merged.
+Run them one at a time, in number order, merging each reviewed branch before starting the next. 1, 2 and 3 touch mostly different files and could run together only in separate git worktrees; 4 to 6 must follow one another because they rewrite the same CSS and page components; 7 needs everything merged.
 
 | Order | Prompt | Notes |
 |---|---|---|
-| 1, 2, 3 (run at the same time, each in its own worktree) | **01 Bug hunt**, **02 Invoice PDF**, **03 Security (report only)** | Mostly disjoint files: 01 owns store, lib and order components; 02 owns `pdf.ts`, `invoiceFormatter.ts` and the invoice components; 03 edits nothing. |
-| 4 then 5 (one after the other) | **04 CSS engineering**, then **05 UI/UX** | Both rewrite `globals.css` and page components, so they must follow 01 and 02. 04 first so 05 starts from a clean base. |
-| 6 | **06 Final verification** | Report only, on the fully integrated branch. Security fixes from 03 (a new prompt from Claude after reviewing the report) go in before this. |
+| 1 | **01 Bug hunt** | Owns store, lib and order components. |
+| 2 | **02 Invoice PDF** | Owns `pdf.ts`, `invoiceFormatter.ts`, invoice components. |
+| 3 | **03 Security (report only)** | Edits nothing; fixes follow as a new prompt from Claude after review. |
+| 4 | **04 CSS engineering** | Tokens and CSS structure, no visual change. |
+| 5 | **05 UI desktop** | Full desktop redesign; phones must not get worse. |
+| 6 | **06 UI mobile (adversarial)** | Attacks and fixes phone layouts once desktop is done. |
+| 7 | **07 Final verification** | Report only, on the fully integrated branch. |
 
 Claude reviews each report before the next wave starts. Merge a branch only after its review passes.
 

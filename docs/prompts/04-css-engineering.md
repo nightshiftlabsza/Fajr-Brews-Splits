@@ -3,12 +3,15 @@
 Branch: `prompt/04-css-engineering`, cut from the integration branch after prompts 1 and 2 are merged.
 
 ## Objective
-Make the styling layer coherent, token-driven and safe to change, without changing how the app looks (Prompt 5 changes the look afterwards). Fix responsive and layout defects that are engineering faults rather than design choices.
+Make the styling layer coherent, token-driven and safe to change, without changing how the app looks (Prompts 5 and 6 change the look afterwards). Fix responsive and layout defects that are engineering faults rather than design choices.
 
 ## Verified context
 - `src/styles/globals.css` is 2027 lines with only 7 `@media` blocks; `tokens.css` (254 lines) defines theme variables for 3 themes plus light/dark; `print.css` 123 lines. No CSS framework, no CSS modules, no `!important`. AGENTS.md rule: use `var(--color-*)`/`var(--font-*)`, no hard-coded colours, no new styling libraries.
 - Largest components: `CoffeeLotsSection.tsx` 1453 lines, `HistoryPage.tsx` 805, `OrderPage.tsx` 744, `GoodsAndFees.tsx` 448, `Header.tsx` (has a test).
 - Component tests exist for Header, CoffeeLotsSection, OrderSetup, OrderSummary, HistoryPage, MyStatsPage.
+
+## Rendering without a backend
+The app throws at import without `VITE_SUPABASE_URL`/`VITE_SUPABASE_PUBLISHABLE_KEY` and there is no safe database. Use dummy env values (a throwaway `.env.local` with placeholder URL and key is fine; never real ones) and serve fixture data: intercept the Supabase REST/auth/realtime requests in the browser (for example Playwright `page.route` from a scratch directory outside the repo, installed with `npx` and not added to `package.json`) or add a temporary local-only harness that you delete before committing. Fixtures must cover: signed-in owner and ordinary member, 0, 1 and 3 active orders in different statuses, long names, an order with many lots and people. Nothing from this harness is committed. State exactly how you did it.
 
 ## Investigate
 1. Measure first: count hard-coded colours/px/z-index values, duplicate or dead selectors (find selectors matching no class used in `src/`), conflicting rules for the same element, specificity fights, inline `style={{}}` usage in TSX, magic numbers for breakpoints.
@@ -25,7 +28,7 @@ Make the styling layer coherent, token-driven and safe to change, without changi
 - Diagnose before editing: record causes and affected files for duplicate/conflicting rules, fragile selectors, specificity fights, repeated UI patterns that deserve shared components, layout techniques causing clipping/overlap/unexpected scroll, unnecessary abstractions.
 - Fix layout problems at their source: no arbitrary overflow rules, fixed heights or z-index escalation to hide defects.
 - No new UI framework, styling library or build dependency; if you believe one is justified, stop and ask with the concrete benefit and cost.
-- Do not invent a visual direction: Prompt 5 owns it and runs after you. Final diff review for duplicate rules, dead code, accidental logic changes.
+- Do not invent a visual direction: Prompts 5 and 6 own it and run after you. Final diff review for duplicate rules, dead code, accidental logic changes.
 - Report remaining technical debt.
 
 ## Acceptance criteria
