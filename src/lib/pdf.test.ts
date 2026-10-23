@@ -4,6 +4,8 @@ import { calculate } from './calculations';
 
 const docMock = {
   addPage: vi.fn(),
+  getNumberOfPages: vi.fn(() => 1),
+  setPage: vi.fn(),
   line: vi.fn(),
   rect: vi.fn(),
   roundedRect: vi.fn(),
