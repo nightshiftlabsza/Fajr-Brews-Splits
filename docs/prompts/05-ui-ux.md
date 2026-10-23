@@ -1,6 +1,6 @@
-# Mission 1: UI/UX redesign (Wave 2, after Mission 2)
+# Prompt 5: UI/UX redesign
 
-Branch: `mission/1-ui-ux`, cut from the integration branch after Missions 4, 5 and 2 are merged.
+Branch: `prompt/05-ui-ux`, cut from the integration branch after Prompts 1, 2 and 4 are merged.
 
 ## Objective
 A coherent, calm, professional interface that makes the group's core job obvious: see the active order(s), know what is mine to do next, enter coffee and costs without confusion, and see what everyone owes. Usefulness first; no decoration for its own sake.
@@ -11,7 +11,7 @@ Inspect the current official docs of `github.com/Leonxlnx/taste-skill`, decide w
 ## Verified context
 - Tabs: `order`, `people`, `my-stats`, `history`, `settings` (`App.tsx`, `components/layout/Header.tsx`). Three themes + light/dark in `styles/tokens.css`; use variables only.
 - Active-order experience: `OrderPage.tsx` (744 lines) with wizard steps `OrderSetup` -> `CoffeeLotsSection` (1453 lines) -> `GoodsAndFees` -> `SettlementPacks` -> `OrderSummary`; multiple active orders selected via `currentOrderId`; `lib/orderLifecycle.ts` labels (Planning, Locked, Completed, Past order). A recent commit introduced an "order cockpit" summary.
-- Mission 2 has already centralised tokens and CSS structure; extend them rather than bypass them.
+- Prompt 4 has already centralised tokens and CSS structure; extend them rather than bypass them.
 
 ## Investigate first
 0. Before changing anything, run the app  and capture baseline screenshots (390, 768, 1440 px; default theme, light and dark) of every page and wizard step, with 1, 3 and 0 active orders. Inspect them, document layout defects and their causes, and record the brand identity and behaviours that must be preserved. No generic redesign: understand the product first. If your tooling supports it, use independent reviewers for visual design, mobile usability and order workflows.
@@ -23,7 +23,7 @@ Inspect the current official docs of `github.com/Leonxlnx/taste-skill`, decide w
 - Change layout, hierarchy, labels, empty states, error and loading states, navigation, mobile ergonomics (thumb reach, sticky actions, 44 px targets), and visual consistency across all pages and modals.
 - May restructure presentational TSX and split oversized components when it serves the above. Business logic stays in `src/lib` and the store; do not alter calculations, the rounding rule, data shapes or SQL.
 - No new features. No renaming of data fields. Keep all existing capabilities reachable.
-- Do not touch `pdf.ts`/invoice PDF layout (Mission 5), only the on-screen styling around it.
+- Do not touch `pdf.ts`/invoice PDF layout (Prompt 2), only the on-screen styling around it.
 
 ## Design objectives (owner brief)
 - The active order is unmistakable at first glance; several simultaneous orders are easy to tell apart and switch between.
@@ -34,20 +34,20 @@ Inspect the current official docs of `github.com/Leonxlnx/taste-skill`, decide w
 
 ## Acceptance criteria
 - The ranked friction list with a before/after note for each item implemented.
-- Screenshots before and after for: Order (every step), multi-order switcher, People, My Stats, History, Settings, Auth, one modal; at 390 px and 1440 px, default theme light and dark, plus one other theme. Save in `docs/evidence/1-ui/` and inspect each one yourself; report any flaw you see and fix it.
+- Screenshots before and after for: Order (every step), multi-order switcher, People, My Stats, History, Settings, Auth, one modal; at 390 px and 1440 px, default theme light and dark, plus one other theme. Save in `docs/evidence/05-ui/` and inspect each one yourself; report any flaw you see and fix it.
 - Journey walkthroughs (with mocked data) repeated after changes with results (pass/fail per step).
 - No horizontal overflow at 360 px; AA text contrast; visible focus states; reduced-motion respected.
 - Component tests updated for changed markup (never weakened); gate passes.
 
-## Ground rules (all missions)
+## Ground rules (all prompts)
 - Repo: Fajr Brews Splits (React 18, TS strict, Vite, Zustand, Supabase, jsPDF, Vitest). Read `AGENTS.md` and `docs/PROJECT_BRIEF.md` first; they are binding. Money rule is in `README.md`.
 - You have high autonomy: investigate, delegate independent read-only investigations to sub-agents if available, refactor where demonstrably necessary, fix, test, and re-verify without asking. Do not let multiple agents edit the same file at once.
 - Work only on your own branch. Do not push to or merge into `main`.
 - Never use production Supabase credentials or data. Use mocked data only; there is no staging backend and `.env.local` must not point at the live project. Limit browser evidence to what mocks allow; do not fake it.
-- Never: apply SQL migrations anywhere, change RLS or auth config, rotate or print secrets, delete or rewrite data, change deploy settings, add dependencies (unless this mission says so), skip or loosen tests.
+- Never: apply SQL migrations anywhere, change RLS or auth config, rotate or print secrets, delete or rewrite data, change deploy settings, add dependencies (unless this prompt says so), skip or loosen tests.
 - No filler comments, speculative abstractions, dead code or unrequested features.
 - Gate after final edit, from a clean state: `npm run typecheck && npm test && npm run build`. Paste real output.
-- Screenshots: save under `docs/evidence/<mission>/` only if asked below; otherwise describe what you inspected. Do not commit `.env*`, PDFs with real names, or secrets.
+- Screenshots: save under `docs/evidence/<prompt>/` only if asked below; otherwise describe what you inspected. Do not commit `.env*`, PDFs with real names, or secrets.
 - Rollback: one coherent commit series on your branch; state the base commit hash and that `git revert`/branch deletion restores the baseline.
 
 ## Report (end with exactly this, concise)

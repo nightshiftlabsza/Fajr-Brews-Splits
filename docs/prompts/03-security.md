@@ -1,9 +1,9 @@
-# Mission 3: Security assessment (Wave 1, REPORT ONLY)
+# Prompt 3: Security assessment (report only)
 
-Branch: `mission/3-security` (reports only; do not change application code or SQL in this mission)
+Branch: `prompt/03-security` (reports only; do not change application code or SQL in this prompt)
 
 ## Objective
-Find real, exploitable security and privacy weaknesses in this app and its Supabase configuration as committed, rank them by realistic threat, and propose precise fixes. A later mission applies the fixes after Claude reviews your report.
+Find real, exploitable security and privacy weaknesses in this app and its Supabase configuration as committed, rank them by realistic threat, and propose precise fixes. A later prompt applies the fixes after Claude reviews your report.
 
 ## Verified context
 - Client-only React app talking directly to Supabase with a publishable key; security therefore rests entirely on Row Level Security, storage policies and database functions in `supabase/schema.sql` and `supabase/migrations/*.sql` (20260330 roasters, 20260701 privacy projection, 20260814 order status and join, 20260814 participant privacy projection).
@@ -34,22 +34,22 @@ Use the smallest effective set:
 - Do not apply or write migrations.
 
 ## Acceptance criteria
-- A single findings table: id, severity and confidence as separate columns, status (confirmed / plausible hypothesis / false positive), location (file:line), security boundary and realistic attacker capability, concrete consequence, evidence, smallest effective fix (exact SQL or code sketch) and the regression test it needs, and whether it needs a production migration or owner validation. Auth architecture, migrations, RLS, permissions, credentials and deployment settings are proposed only, never changed, until the owner approves.
+- A single findings table: id, severity and confidence as separate columns, status (confirmed / plausible hypothesis / false positive), location (file:line), security boundary and realistic attacker capability, concrete consequence, evidence, smallest effective fix (exact SQL or code sketch) and the regression test it needs, and whether it needs a production migration or owner validation. Auth architecture, migrations, RLS, perprompts, credentials and deployment settings are proposed only, never changed, until the owner approves.
 - Also check for trust in client-supplied totals, prices, shares and identities: which values are recomputed server-side and which are accepted as sent.
 - Explicit "checked and found fine" list for the areas above, so gaps are visible.
 - Tool section: what the Cloudflare skill and `npm audit` actually reported, what you had to discard as false positives and why.
 - Recommended fix order and which fixes can ship as code-only versus need a production SQL change (owner approval).
 - No code changes; the report is your deliverable. Gate not required, but state `git status` is clean.
 
-## Ground rules (all missions)
+## Ground rules (all prompts)
 - Repo: Fajr Brews Splits (React 18, TS strict, Vite, Zustand, Supabase, jsPDF, Vitest). Read `AGENTS.md` and `docs/PROJECT_BRIEF.md` first; they are binding. Money rule is in `README.md`.
 - You have high autonomy: investigate, delegate independent read-only investigations to sub-agents if available, refactor where demonstrably necessary, fix, test, and re-verify without asking. Do not let multiple agents edit the same file at once.
 - Work only on your own branch. Do not push to or merge into `main`.
 - Never use production Supabase credentials or data. Use mocked data only; there is no staging backend and `.env.local` must not point at the live project. Limit browser evidence to what mocks allow; do not fake it.
-- Never: apply SQL migrations anywhere, change RLS or auth config, rotate or print secrets, delete or rewrite data, change deploy settings, add dependencies (unless this mission says so), skip or loosen tests.
+- Never: apply SQL migrations anywhere, change RLS or auth config, rotate or print secrets, delete or rewrite data, change deploy settings, add dependencies (unless this prompt says so), skip or loosen tests.
 - No filler comments, speculative abstractions, dead code or unrequested features.
 - Gate after final edit, from a clean state: `npm run typecheck && npm test && npm run build`. Paste real output.
-- Screenshots: save under `docs/evidence/<mission>/` only if asked below; otherwise describe what you inspected. Do not commit `.env*`, PDFs with real names, or secrets.
+- Screenshots: save under `docs/evidence/<prompt>/` only if asked below; otherwise describe what you inspected. Do not commit `.env*`, PDFs with real names, or secrets.
 - Rollback: one coherent commit series on your branch; state the base commit hash and that `git revert`/branch deletion restores the baseline.
 
 ## Report

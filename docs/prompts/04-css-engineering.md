@@ -1,9 +1,9 @@
-# Mission 2: CSS and frontend engineering quality (Wave 2, before Mission 1)
+# Prompt 4: CSS and frontend engineering quality
 
-Branch: `mission/2-css-engineering`, cut from the integration branch after Wave 1 is merged.
+Branch: `prompt/04-css-engineering`, cut from the integration branch after prompts 1 and 2 are merged.
 
 ## Objective
-Make the styling layer coherent, token-driven and safe to change, without changing how the app looks (Mission 1 changes the look afterwards). Fix responsive and layout defects that are engineering faults rather than design choices.
+Make the styling layer coherent, token-driven and safe to change, without changing how the app looks (Prompt 5 changes the look afterwards). Fix responsive and layout defects that are engineering faults rather than design choices.
 
 ## Verified context
 - `src/styles/globals.css` is 2027 lines with only 7 `@media` blocks; `tokens.css` (254 lines) defines theme variables for 3 themes plus light/dark; `print.css` 123 lines. No CSS framework, no CSS modules, no `!important`. AGENTS.md rule: use `var(--color-*)`/`var(--font-*)`, no hard-coded colours, no new styling libraries.
@@ -25,25 +25,25 @@ Make the styling layer coherent, token-driven and safe to change, without changi
 - Diagnose before editing: record causes and affected files for duplicate/conflicting rules, fragile selectors, specificity fights, repeated UI patterns that deserve shared components, layout techniques causing clipping/overlap/unexpected scroll, unnecessary abstractions.
 - Fix layout problems at their source: no arbitrary overflow rules, fixed heights or z-index escalation to hide defects.
 - No new UI framework, styling library or build dependency; if you believe one is justified, stop and ask with the concrete benefit and cost.
-- Do not invent a visual direction: Mission 1 owns it and runs after you. Final diff review for duplicate rules, dead code, accidental logic changes.
+- Do not invent a visual direction: Prompt 5 owns it and runs after you. Final diff review for duplicate rules, dead code, accidental logic changes.
 - Report remaining technical debt.
 
 ## Acceptance criteria
 - Before/after counts: hard-coded colours, `style={{` occurrences, total CSS lines, dead selectors removed.
-- Before/after screenshots at the five widths for Order and History in each theme saved in `docs/evidence/2-css/` and a short list of visible differences (should be only the defect fixes).
+- Before/after screenshots at the five widths for Order and History in each theme saved in `docs/evidence/04-css/` and a short list of visible differences (should be only the defect fixes).
 - Zero horizontal overflow at 360 px on every page (state how you checked).
 - Contrast of text on its background meets WCAG AA for the default theme in light and dark (list any exceptions).
 - Gate passes; existing component tests unchanged and green.
 
-## Ground rules (all missions)
+## Ground rules (all prompts)
 - Repo: Fajr Brews Splits (React 18, TS strict, Vite, Zustand, Supabase, jsPDF, Vitest). Read `AGENTS.md` and `docs/PROJECT_BRIEF.md` first; they are binding. Money rule is in `README.md`.
 - You have high autonomy: investigate, delegate independent read-only investigations to sub-agents if available, refactor where demonstrably necessary, fix, test, and re-verify without asking. Do not let multiple agents edit the same file at once.
 - Work only on your own branch. Do not push to or merge into `main`.
 - Never use production Supabase credentials or data. Use mocked data only; there is no staging backend and `.env.local` must not point at the live project. Limit browser evidence to what mocks allow; do not fake it.
-- Never: apply SQL migrations anywhere, change RLS or auth config, rotate or print secrets, delete or rewrite data, change deploy settings, add dependencies (unless this mission says so), skip or loosen tests.
+- Never: apply SQL migrations anywhere, change RLS or auth config, rotate or print secrets, delete or rewrite data, change deploy settings, add dependencies (unless this prompt says so), skip or loosen tests.
 - No filler comments, speculative abstractions, dead code or unrequested features.
 - Gate after final edit, from a clean state: `npm run typecheck && npm test && npm run build`. Paste real output.
-- Screenshots: save under `docs/evidence/<mission>/` only if asked below; otherwise describe what you inspected. Do not commit `.env*`, PDFs with real names, or secrets.
+- Screenshots: save under `docs/evidence/<prompt>/` only if asked below; otherwise describe what you inspected. Do not commit `.env*`, PDFs with real names, or secrets.
 - Rollback: one coherent commit series on your branch; state the base commit hash and that `git revert`/branch deletion restores the baseline.
 
 ## Report (end with exactly this, concise)

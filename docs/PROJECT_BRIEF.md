@@ -2,7 +2,7 @@
 
 Durable context for planning and review. Source of truth for conventions is `AGENTS.md`; for money rules, `README.md`. Last verified against `main` @ 0105f4b.
 
-## Mission and priorities
+## Prompt and priorities
 Make the app reliable and pleasant for the Fajr Brews group (adoption so far: owner plus one user). Priority order: (1) correct real workflows, (2) dependable active-order experience incl. several simultaneous orders, (3) coherent desktop and mobile UI, (4) correct compact PDF invoices, (5) security and privacy, (6) maintainable with regression tests, (7) simple release with evidence.
 
 ## Verified facts
@@ -26,6 +26,6 @@ Make the app reliable and pleasant for the Fajr Brews group (adoption so far: ow
 
 ## Decisions so far
 - Claude plans and reviews; Antigravity builds on isolated branches; owner merges.
-- No new dependencies, linter, or features unless a mission says so.
+- No new dependencies, linter, or features unless a prompt says so.
 - Production migrations, RLS, secrets, and deploy settings are never touched by agents.
-- Security tooling: see `docs/missions/README.md`.
+- Security tooling: see `docs/prompts/README.md`.

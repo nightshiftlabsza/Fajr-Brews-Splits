@@ -1,6 +1,6 @@
-# Mission 4: Functional bug hunt and fix (Wave 1)
+# Prompt 1: Functional bug hunt and fix
 
-Branch: `mission/4-bug-hunt`
+Branch: `prompt/01-bug-hunt`
 
 ## Objective
 Make the core group workflow trustworthy: create an order, add roaster/lots/bags/shares, add goods and fees, share with members, lock, produce per-person totals, mark paid, archive. Users have hit bugs here and abandoned the app. Find real defects by reproducing them, fix root causes, add regression tests.
@@ -21,11 +21,11 @@ Make the core group workflow trustworthy: create an order, add roaster/lots/bags
 For each suspected bug: reproduce (test or browser), identify root cause, then fix.
 
 ## Also cover
-Duplicate submissions and repeated clicks; async races and stale state; reconnect/refresh persistence; invalid actions at trust boundaries (what a non-owner can do); consistency between displayed orders, totals and invoice data; regressions from recent commits (`git log` since the "cockpit" and "short payment references" changes). Where the intended business rule is unclear, do not invent one: list it under "Ambiguities for the owner". Use independent sub-agents per area if supported, with one lead consolidating, de-duplicating and verifying. Fix in small batches, rerun relevant tests and review the diff after each batch. Ask before risky or irreversible changes. Separate confirmed defects from unverified suspicions.
+Duplicate subprompts and repeated clicks; async races and stale state; reconnect/refresh persistence; invalid actions at trust boundaries (what a non-owner can do); consistency between displayed orders, totals and invoice data; regressions from recent commits (`git log` since the "cockpit" and "short payment references" changes). Where the intended business rule is unclear, do not invent one: list it under "Ambiguities for the owner". Use independent sub-agents per area if supported, with one lead consolidating, de-duplicating and verifying. Fix in small batches, rerun relevant tests and review the diff after each batch. Ask before risky or irreversible changes. Separate confirmed defects from unverified suspicions.
 
 ## Scope
 - Fix confirmed bugs in the files above. Refactor only where the root cause requires it (e.g. splitting a function out of `appStore.ts` or `CoffeeLotsSection.tsx`), keeping behaviour covered by tests.
-- Do not touch `pdf.ts`, `invoiceFormatter.ts`, invoice components (Mission 5) or visual CSS/layout (Missions 1 and 2) except for minimal changes a fix requires.
+- Do not touch `pdf.ts`, `invoiceFormatter.ts`, invoice components (Prompt 2) or visual CSS/layout (Prompts 4 and 5) except for minimal changes a fix requires.
 - Do not alter the rounding rule or SQL. If a bug needs SQL, write the proposed migration under `supabase/migrations/` mirrored in `schema.sql` plus test update, mark it NOT APPLIED, and flag it.
 - Do not add features. If something is missing rather than broken, list it as a finding.
 
@@ -36,15 +36,15 @@ Duplicate submissions and repeated clicks; async races and stale state; reconnec
 - Multi-order switching verified in a real browser  (or marked unverified with reason).
 - Gate passes; test count rises; nothing in the baseline removed.
 
-## Ground rules (all missions)
+## Ground rules (all prompts)
 - Repo: Fajr Brews Splits (React 18, TS strict, Vite, Zustand, Supabase, jsPDF, Vitest). Read `AGENTS.md` and `docs/PROJECT_BRIEF.md` first; they are binding. Money rule is in `README.md`.
 - You have high autonomy: investigate, delegate independent read-only investigations to sub-agents if available, refactor where demonstrably necessary, fix, test, and re-verify without asking. Do not let multiple agents edit the same file at once.
 - Work only on your own branch. Do not push to or merge into `main`.
 - Never use production Supabase credentials or data. Use mocked data only; there is no staging backend and `.env.local` must not point at the live project. Limit browser evidence to what mocks allow; do not fake it.
-- Never: apply SQL migrations anywhere, change RLS or auth config, rotate or print secrets, delete or rewrite data, change deploy settings, add dependencies (unless this mission says so), skip or loosen tests.
+- Never: apply SQL migrations anywhere, change RLS or auth config, rotate or print secrets, delete or rewrite data, change deploy settings, add dependencies (unless this prompt says so), skip or loosen tests.
 - No filler comments, speculative abstractions, dead code or unrequested features.
 - Gate after final edit, from a clean state: `npm run typecheck && npm test && npm run build`. Paste real output.
-- Screenshots: save under `docs/evidence/<mission>/` only if asked below; otherwise describe what you inspected. Do not commit `.env*`, PDFs with real names, or secrets.
+- Screenshots: save under `docs/evidence/<prompt>/` only if asked below; otherwise describe what you inspected. Do not commit `.env*`, PDFs with real names, or secrets.
 - Rollback: one coherent commit series on your branch; state the base commit hash and that `git revert`/branch deletion restores the baseline.
 
 ## Report (end with exactly this, concise)
