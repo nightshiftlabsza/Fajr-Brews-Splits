@@ -10,8 +10,17 @@ interface PeoplePageProps {
   embedded?: boolean;
 }
 
+function getPersonInitials(name: string): string {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return name.slice(0, 1).toUpperCase();
+}
+
 export function PeoplePage({ embedded = false }: PeoplePageProps = {}) {
-  const { people, addPerson, updatePerson, deletePerson, orders } = useAppStore();
+  const { people, addPerson, updatePerson, deletePerson, orders, linkedPersonId } = useAppStore();
   const [editingId, setEditingId] = useState<string | 'new' | null>(null);
   const [form, setForm] = useState<PersonFormValues>(emptyForm);
   const [error, setError] = useState('');
@@ -156,21 +165,6 @@ export function PeoplePage({ embedded = false }: PeoplePageProps = {}) {
         </button>
       </div>
 
-      {/* New person form */}
-      {editingId === 'new' && (
-        <div className="card card-padded" style={{ marginBottom: 'var(--space-4)' }}>
-          <div className="section-label" style={{ marginBottom: 'var(--space-4)' }}>New person</div>
-          <PersonEditor
-            initialValues={form}
-            error={error}
-            saving={saving}
-            submitLabel="Save"
-            onSave={handleSave}
-            onCancel={() => setEditingId(null)}
-          />
-        </div>
-      )}
-
       {deleteError && (
         <div className="alert alert-error" style={{ marginBottom: 'var(--space-3)' }}>{deleteError}</div>
       )}
@@ -184,60 +178,103 @@ export function PeoplePage({ embedded = false }: PeoplePageProps = {}) {
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+      <div className="people-grid">
         {filtered.map((person) => (
-          <div key={person.id} className="card">
-            {editingId === person.id ? (
-              <div className="card-padded">
-                <div className="section-label" style={{ marginBottom: 'var(--space-4)' }}>Edit — {person.name}</div>
-                <PersonEditor
-                  initialValues={form}
-                  error={error}
-                  saving={saving}
-                  submitLabel="Save"
-                  onSave={handleSave}
-                  onCancel={() => setEditingId(null)}
-                />
+          <div key={person.id} className="person-directory-card card-padded" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 'var(--space-4)' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)' }}>
+              <div className="person-avatar" aria-hidden="true">
+                {getPersonInitials(person.name)}
               </div>
-            ) : (
-              <div className="card-padded" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-                <div style={{
-                  width: 42, height: 42, borderRadius: '50%',
-                  background: 'var(--color-accent-light)',
-                  color: 'var(--color-accent)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontWeight: 700, fontSize: '1rem', flexShrink: 0,
-                }}>
-                  {person.name[0]?.toUpperCase()}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--color-text-primary)' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      fontSize: '0.9375rem',
+                      color: 'var(--color-text-primary)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={person.name}
+                  >
                     {person.name}
                   </div>
-                  <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
-                    {[person.phone, person.email].filter(Boolean).join(' · ') || 'No contact details'}
-                  </div>
-                  {person.note && (
-                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 2, fontStyle: 'italic' }}>
-                      {person.note}
-                    </div>
+                  {linkedPersonId === person.id && (
+                    <span className="wizard-badge wizard-badge-info" style={{ fontSize: '0.6875rem', padding: '1px 6px', flexShrink: 0 }}>
+                      You
+                    </span>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
-                  <button className="btn btn-ghost btn-sm" onClick={() => openEdit(person)}>Edit</button>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    style={{ color: 'var(--color-unpaid)' }}
-                    onClick={() => handleDeleteClick(person)}
-                  >
-                    Remove
-                  </button>
+                <div
+                  style={{
+                    fontSize: '0.8125rem',
+                    color: 'var(--color-text-muted)',
+                    marginTop: 2,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={[person.phone, person.email].filter(Boolean).join(' · ') || 'No contact details'}
+                >
+                  {[person.phone, person.email].filter(Boolean).join(' · ') || 'No contact details'}
                 </div>
+                {person.note && (
+                  <div
+                    style={{
+                      fontSize: '0.75rem',
+                      color: 'var(--color-text-muted)',
+                      marginTop: 4,
+                      fontStyle: 'italic',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={person.note}
+                  >
+                    {person.note}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
+            <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-2)', marginTop: 'auto' }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => openEdit(person)}>Edit</button>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ color: 'var(--color-unpaid)' }}
+                onClick={() => handleDeleteClick(person)}
+              >
+                Remove
+              </button>
+            </div>
           </div>
         ))}
       </div>
+
+      {/* Modal Editor */}
+      {editingId !== null && (
+        <div
+          className="fb-modal-backdrop"
+          onClick={() => setEditingId(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="person-editor-modal-title"
+        >
+          <div className="fb-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div id="person-editor-modal-title" className="section-label" style={{ marginBottom: 'var(--space-4)' }}>
+              {editingId === 'new' ? 'New person' : `Edit — ${form.name || 'Person'}`}
+            </div>
+            <PersonEditor
+              initialValues={form}
+              error={error}
+              saving={saving}
+              submitLabel="Save"
+              onSave={handleSave}
+              onCancel={() => setEditingId(null)}
+            />
+          </div>
+        </div>
+      )}
 
       {deleteTarget && (
         <ConfirmModal

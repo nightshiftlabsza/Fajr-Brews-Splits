@@ -12,6 +12,7 @@ describe('CoffeeCostSummary Component (BUG-MONEY-03)', () => {
   let root: Root | null = null;
 
   beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -135,4 +136,64 @@ describe('CoffeeCostSummary Component (BUG-MONEY-03)', () => {
     expect(standaloneFees).toBe(65);
     expect(lotsTotal + standaloneFees).toBe(result.totalOrderZar);
   });
+
+  it('applies tabular-nums font variant to quantity and financial numeric table cells', () => {
+    const order: Order = {
+      id: 'order-3',
+      workspaceId: 'ws-1',
+      name: 'Order 3',
+      orderDate: '2026-10-23',
+      roasterId: null,
+      roasterSnapshot: null,
+      payerId: 'buyer-1',
+      payerBank: { bankName: '', accountNumber: '', beneficiary: '' },
+      referenceTemplate: 'FAJR-{ORDER}-{NAME}',
+      goodsTotalZar: 300,
+      lots: [
+        {
+          id: 'lot-1',
+          name: 'Colombia Pink Bourbon',
+          foreignPricePerBag: 15,
+          gramsPerBag: 250,
+          quantity: 2,
+          bags: [
+            { id: 'b1', splitMode: 'full', buyers: [{ id: 'by1', personId: 'buyer-1', grams: 250 }] },
+            { id: 'b2', splitMode: 'full', buyers: [{ id: 'by2', personId: 'buyer-2', grams: 250 }] },
+          ],
+          shares: [],
+        },
+      ],
+      fees: [],
+      payments: {},
+      isArchived: false,
+      createdAt: '2026-10-23T00:00:00Z',
+      updatedAt: '2026-10-23T00:00:00Z',
+    };
+
+    renderComponent(order);
+
+    const table = container!.querySelector('.coffee-cost-table');
+    expect(table).toBeTruthy();
+
+    // Check tbody numeric cells
+    const bodyRows = table!.querySelectorAll('tbody tr');
+    expect(bodyRows.length).toBeGreaterThan(0);
+    const firstRowCells = bodyRows[0].querySelectorAll('td');
+
+    // Cell 1: Bags quantity (center)
+    expect(firstRowCells[1].style.fontVariantNumeric).toBe('tabular-nums');
+    // Cell 2: Average cost per bag (right)
+    expect(firstRowCells[2].style.fontVariantNumeric).toBe('tabular-nums');
+    // Cell 3: Total (right)
+    expect(firstRowCells[3].style.fontVariantNumeric).toBe('tabular-nums');
+
+    // Check tfoot summary row
+    const footRow = table!.querySelector('tfoot tr');
+    expect(footRow).toBeTruthy();
+    const footCells = footRow!.querySelectorAll('td');
+    expect(footCells[1].style.fontVariantNumeric).toBe('tabular-nums');
+    expect(footCells[2].style.fontVariantNumeric).toBe('tabular-nums');
+    expect(footCells[3].style.fontVariantNumeric).toBe('tabular-nums');
+  });
 });
+

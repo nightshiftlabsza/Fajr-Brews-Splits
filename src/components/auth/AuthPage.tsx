@@ -318,11 +318,12 @@ export function AuthPage({
         .auth-card {
           width: 100%;
           max-width: 420px;
+          margin: 40px auto;
           background: var(--color-surface);
           border: 1px solid var(--color-border);
           border-radius: var(--radius-lg);
-          box-shadow: var(--shadow-lg);
-          padding: var(--space-8) var(--space-8);
+          box-shadow: none;
+          padding: var(--space-8);
         }
 
         @media (max-width: 480px) {

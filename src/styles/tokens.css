@@ -8,6 +8,15 @@
 
 /* ── Shared tokens (theme-independent) ──────────────────── */
 :root {
+  /* Layout constraints */
+  --content-max-width: 1200px;
+  --nav-top-height:    64px;
+
+  /* Semantic status defaults */
+  --color-primary:    #1B5E40;
+  --color-warning:    #d97706;
+  --color-warning-bg: #fef3c7;
+
   /* Spacing rhythm (base 4px) */
   --space-1:  4px;
   --space-2:  8px;
@@ -65,8 +74,11 @@
   --color-paid-bg:        #C2E0CF;
   --color-partial:        #7A5A14;
   --color-partial-bg:     #FAF0D0;
+  --color-warning:        #d97706;
+  --color-warning-bg:     #fef3c7;
   --color-unpaid:         #8B2020;
   --color-unpaid-bg:      #F8DADA;
+  --color-primary:        #1B5E40;
 
   --color-backdrop:       rgba(13, 26, 16, 0.45);
 
@@ -105,8 +117,11 @@
   --color-paid-bg:        #1A3C24;
   --color-partial:        #F5D060;
   --color-partial-bg:     #2A2010;
+  --color-warning:        #f59e0b;
+  --color-warning-bg:     #78350f;
   --color-unpaid:         #F87171;
   --color-unpaid-bg:      #2A1010;
+  --color-primary:        #4ADE80;
 
   --color-backdrop:       rgba(0, 0, 0, 0.65);
 
@@ -142,8 +157,11 @@
     --color-paid-bg:        #1A3C24;
     --color-partial:        #F5D060;
     --color-partial-bg:     #2A2010;
+    --color-warning:        #f59e0b;
+    --color-warning-bg:     #78350f;
     --color-unpaid:         #F87171;
     --color-unpaid-bg:      #2A1010;
+    --color-primary:        #4ADE80;
 
     --color-backdrop:       rgba(0, 0, 0, 0.65);
 
@@ -181,8 +199,11 @@
   --color-paid-bg:        #D4EDDF;
   --color-partial:        #7A5C1B;
   --color-partial-bg:     #F5EDD0;
+  --color-warning:        #d97706;
+  --color-warning-bg:     #fef3c7;
   --color-unpaid:         #8B2020;
   --color-unpaid-bg:      #F8DADA;
+  --color-primary:        #2E4DAA;
 
   --color-backdrop:       rgba(17, 24, 39, 0.45);
 
@@ -221,8 +242,11 @@
   --color-paid-bg:        #1A3C24;
   --color-partial:        #F5D060;
   --color-partial-bg:     #2A2010;
+  --color-warning:        #f59e0b;
+  --color-warning-bg:     #78350f;
   --color-unpaid:         #F87171;
   --color-unpaid-bg:      #2A1010;
+  --color-primary:        #7B9FE8;
 
   --color-backdrop:       rgba(0, 0, 0, 0.65);
 
@@ -258,8 +282,11 @@
     --color-paid-bg:        #1A3C24;
     --color-partial:        #F5D060;
     --color-partial-bg:     #2A2010;
+    --color-warning:        #f59e0b;
+    --color-warning-bg:     #78350f;
     --color-unpaid:         #F87171;
     --color-unpaid-bg:      #2A1010;
+    --color-primary:        #7B9FE8;
 
     --color-backdrop:       rgba(0, 0, 0, 0.65);
 

@@ -44,11 +44,11 @@ export function CoffeeCostSummary({
                     {formatGrams(lot.gramsPerBag)}/bag · Beans: {formatZAR(lot.goodsZar)} · Fees: {formatZAR(lot.feesZar)}
                   </div>
                 </td>
-                <td style={{ textAlign: 'center', fontWeight: 600 }}>{lot.quantity}</td>
-                <td style={{ textAlign: 'right' }}>
+                <td style={{ textAlign: 'center', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{lot.quantity}</td>
+                <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                   <span className="coffee-cost-per-bag">{formatZAR(lot.finalZarPerBag)}</span>
                 </td>
-                <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
                   {formatZAR(lot.totalZar)}
                 </td>
               </tr>
@@ -63,7 +63,7 @@ export function CoffeeCostSummary({
                 </td>
                 <td style={{ textAlign: 'center', color: 'var(--color-text-muted)' }}>—</td>
                 <td style={{ textAlign: 'right', color: 'var(--color-text-muted)' }}>—</td>
-                <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
                   {formatZAR(standaloneFeesZar)}
                 </td>
               </tr>
@@ -74,13 +74,13 @@ export function CoffeeCostSummary({
               <td style={{ textAlign: 'left', fontWeight: 700, color: 'var(--color-text-primary)' }}>
                 Order total
               </td>
-              <td style={{ textAlign: 'center', fontWeight: 600 }}>
+              <td style={{ textAlign: 'center', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                 {totalBags}
               </td>
-              <td style={{ textAlign: 'right', color: 'var(--color-text-muted)' }}>
+              <td style={{ textAlign: 'right', color: 'var(--color-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
                 {totalBags > 0 ? `${formatZAR(result.totalOrderZar / totalBags)} avg` : '—'}
               </td>
-              <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+              <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--color-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
                 {formatZAR(result.totalOrderZar)}
               </td>
             </tr>
