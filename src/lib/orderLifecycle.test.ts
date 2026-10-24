@@ -6,6 +6,7 @@ import {
   getOrderLifecycleLabel,
   getPastOrders,
   getPreferredActiveOrderId,
+  isOrderLocked,
 } from './orderLifecycle';
 
 function makeOrder(id: string, orderDate: string, isArchived: boolean): Order {
@@ -59,5 +60,14 @@ describe('orderLifecycle helpers', () => {
   it('labels order lifecycle state for the UI', () => {
     expect(getOrderLifecycleLabel(makeOrder('draft', '2026-03-18', false))).toBe('Planning');
     expect(getOrderLifecycleLabel(makeOrder('past', '2026-03-18', true))).toBe('Past order');
+  });
+
+  it('determines whether an order is locked from planning edits', () => {
+    expect(isOrderLocked(makeOrder('draft', '2026-03-18', false))).toBe(false);
+    expect(isOrderLocked({ status: 'planning', isArchived: false })).toBe(false);
+    expect(isOrderLocked({ status: 'locked', isArchived: false })).toBe(true);
+    expect(isOrderLocked({ status: 'completed', isArchived: false })).toBe(true);
+    expect(isOrderLocked({ status: 'planning', isArchived: true })).toBe(true);
+    expect(isOrderLocked({ status: 'archived', isArchived: true })).toBe(true);
   });
 });

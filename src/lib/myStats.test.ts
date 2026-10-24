@@ -5,6 +5,7 @@ import {
   filterParticipantOrdersByRange,
   getParticipantFinalizedOrders,
   getParticipantScopedOrders,
+  orderIncludesPerson,
   resolveLinkedStatsPerson,
   type StatsDateRange,
 } from './myStats';
@@ -90,6 +91,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
       { id: 'fee-1', label: 'Shipping', amountZar: 100, allocationType: 'fixed_shared' },
     ],
     payments: overrides.payments ?? {},
+    status: overrides.status,
     isArchived: overrides.isArchived ?? true,
     createdAt: overrides.createdAt ?? '2026-03-01T00:00:00.000Z',
     updatedAt: overrides.updatedAt ?? '2026-03-01T00:00:00.000Z',
@@ -217,5 +219,73 @@ describe('myStats helpers', () => {
 
     const summary = calculateMyStatsSummary(entries);
     expect(summary.favoriteRoaster?.name).toBe('Rosetta');
+  });
+
+  it('BUG-ORD-08: includes participant in scoped orders even when shareGrams is 0', () => {
+    const zeroGramShareOrder = makeOrder({
+      id: 'order-zero-gram',
+      payerId: 'person-99',
+      lots: [
+        {
+          id: 'lot-1',
+          name: 'Kenya AA',
+          foreignPricePerBag: 15,
+          gramsPerBag: 250,
+          quantity: 1,
+          shares: [
+            { id: 'share-1', personId: 'person-1', shareGrams: 0, bagIndex: 0 },
+          ],
+        },
+      ],
+    });
+
+    expect(orderIncludesPerson(zeroGramShareOrder, 'person-1')).toBe(true);
+    expect(getParticipantScopedOrders([zeroGramShareOrder], 'person-1')).toEqual([zeroGramShareOrder]);
+  });
+
+  it('BUG-ORD-08: includes participant in scoped orders when assigned to bags or bagAllocations even with 0 grams', () => {
+    const bagOrder = makeOrder({
+      id: 'order-bag-buyer',
+      payerId: 'person-99',
+      lots: [
+        {
+          id: 'lot-1',
+          name: 'Colombia',
+          foreignPricePerBag: 10,
+          gramsPerBag: 250,
+          quantity: 1,
+          shares: [],
+          bags: [
+            {
+              id: 'bag-1',
+              splitMode: 'custom',
+              buyers: [{ id: 'bb-1', personId: 'person-1', grams: 0 }],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(orderIncludesPerson(bagOrder, 'person-1')).toBe(true);
+    expect(getParticipantScopedOrders([bagOrder], 'person-1')).toEqual([bagOrder]);
+  });
+
+  it('BUG-MONEY-04: includes orders with status completed in finalized orders for stats metrics', () => {
+    const completedOrder = makeOrder({
+      id: 'order-completed',
+      status: 'completed',
+      isArchived: false,
+    });
+
+    const entries = getParticipantFinalizedOrders(
+      [completedOrder],
+      'person-1',
+      { 'person-1': 'Amina', 'person-2': 'Bilal' },
+      roasters,
+    );
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].order.id).toBe('order-completed');
+    expect(entries[0].personCalc.totalGrams).toBe(250);
   });
 });

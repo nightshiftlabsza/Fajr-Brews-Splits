@@ -26,6 +26,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
     people,
     roasters,
     user,
+    memberRole,
     currentOrderId,
     createOrder,
     updateOrderStatus,
@@ -44,6 +45,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
   });
 
   const [activeSection, setActiveSection] = useState<OrderSection>('coffees');
+  const [orderSections, setOrderSections] = useState<Record<string, OrderSection>>({});
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [archiveTargetOrder, setArchiveTargetOrder] = useState<Order | null>(null);
   const [archiving, setArchiving] = useState(false);
@@ -53,14 +55,21 @@ export function OrderPage({ onNavigateToHistory }: Props) {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const commitStepRef = useRef<(() => Promise<void>) | null>(null);
 
-  // Sync active order if currentOrderId changes from outside
+  // Sync active order if activeOrderId is invalid or currentOrderId changes from outside
   useEffect(() => {
-    if (currentOrderId && activeOrders.some((o) => o.id === currentOrderId) && currentOrderId !== activeOrderId) {
+    const isCurrentActive = Boolean(currentOrderId && activeOrders.some((o) => o.id === currentOrderId));
+    const isActiveOrderValid = Boolean(activeOrderId && activeOrders.some((o) => o.id === activeOrderId));
+
+    if (!isActiveOrderValid) {
+      const nextId = isCurrentActive ? currentOrderId : (activeOrders[0]?.id ?? null);
+      setActiveOrderId(nextId);
+      if (nextId && nextId !== currentOrderId) {
+        setCurrentOrderId(nextId);
+      }
+    } else if (isCurrentActive && currentOrderId !== activeOrderId) {
       setActiveOrderId(currentOrderId);
-    } else if (!activeOrderId && activeOrders.length > 0) {
-      setActiveOrderId(activeOrders[0].id);
     }
-  }, [currentOrderId, activeOrders, activeOrderId]);
+  }, [currentOrderId, activeOrders, activeOrderId, setCurrentOrderId]);
 
   // Click outside to close actions menu
   useEffect(() => {
@@ -83,9 +92,30 @@ export function OrderPage({ onNavigateToHistory }: Props) {
     [activeOrders, activeOrderId],
   );
 
+  // Safely fallback to 'coffees' if the currently viewed order has no lots and section is on invoices or summary
+  useEffect(() => {
+    if (currentOrder && currentOrder.lots.length === 0 && (activeSection === 'invoices' || activeSection === 'summary')) {
+      setActiveSection('coffees');
+    }
+  }, [currentOrder?.id, currentOrder?.lots.length, activeSection]);
+
   async function handleSelectOrder(orderId: string) {
     if (commitStepRef.current) {
       await commitStepRef.current();
+    }
+    if (activeOrderId) {
+      setOrderSections((prev) => ({ ...prev, [activeOrderId]: activeSection }));
+    }
+    const nextOrder = activeOrders.find((o) => o.id === orderId);
+    const targetSection = orderSections[orderId];
+    if (targetSection) {
+      if ((targetSection === 'invoices' || targetSection === 'summary') && (nextOrder?.lots.length ?? 0) === 0) {
+        setActiveSection('coffees');
+      } else {
+        setActiveSection(targetSection);
+      }
+    } else if ((activeSection === 'invoices' || activeSection === 'summary') && (nextOrder?.lots.length ?? 0) === 0) {
+      setActiveSection('coffees');
     }
     setActiveOrderId(orderId);
     setCurrentOrderId(orderId);
@@ -166,6 +196,9 @@ export function OrderPage({ onNavigateToHistory }: Props) {
     if (commitStepRef.current) {
       await commitStepRef.current();
     }
+    if (activeOrderId) {
+      setOrderSections((prev) => ({ ...prev, [activeOrderId]: section }));
+    }
     setActiveSection(section);
   }
 
@@ -187,7 +220,8 @@ export function OrderPage({ onNavigateToHistory }: Props) {
     );
   }
 
-  const isOwner = !currentOrder.ownerId || currentOrder.ownerId === user?.id;
+  const isWorkspaceManager = memberRole === 'owner' || memberRole === 'admin';
+  const isOwner = !currentOrder.ownerId || currentOrder.ownerId === user?.id || isWorkspaceManager;
   const resolvedRoaster = resolveOrderRoaster(currentOrder, roasters);
   const orderResult = calculate(currentOrder, personNames);
   const currentStatus = normalizeOrderStatus(currentOrder.status, currentOrder.isArchived);
@@ -270,39 +304,43 @@ export function OrderPage({ onNavigateToHistory }: Props) {
 
           {actionsMenuOpen && (
             <div className="order-actions-dropdown">
-              <div className="dropdown-label">Order Status</div>
-              <button
-                type="button"
-                className={`dropdown-item ${currentStatus === 'planning' ? 'is-selected' : ''}`}
-                onClick={() => {
-                  void updateOrderStatus(currentOrder.id, 'planning');
-                  setActionsMenuOpen(false);
-                }}
-              >
-                ● Planning (Accepting changes)
-              </button>
-              <button
-                type="button"
-                className={`dropdown-item ${currentStatus === 'locked' ? 'is-selected' : ''}`}
-                onClick={() => {
-                  void updateOrderStatus(currentOrder.id, 'locked');
-                  setActionsMenuOpen(false);
-                }}
-              >
-                ● Locked (Finalizing)
-              </button>
-              <button
-                type="button"
-                className={`dropdown-item ${currentStatus === 'completed' ? 'is-selected' : ''}`}
-                onClick={() => {
-                  void updateOrderStatus(currentOrder.id, 'completed');
-                  setActionsMenuOpen(false);
-                }}
-              >
-                ● Completed
-              </button>
+              {isOwner && (
+                <>
+                  <div className="dropdown-label">Order Status</div>
+                  <button
+                    type="button"
+                    className={`dropdown-item ${currentStatus === 'planning' ? 'is-selected' : ''}`}
+                    onClick={() => {
+                      void updateOrderStatus(currentOrder.id, 'planning');
+                      setActionsMenuOpen(false);
+                    }}
+                  >
+                    ● Planning (Accepting changes)
+                  </button>
+                  <button
+                    type="button"
+                    className={`dropdown-item ${currentStatus === 'locked' ? 'is-selected' : ''}`}
+                    onClick={() => {
+                      void updateOrderStatus(currentOrder.id, 'locked');
+                      setActionsMenuOpen(false);
+                    }}
+                  >
+                    ● Locked (Finalizing)
+                  </button>
+                  <button
+                    type="button"
+                    className={`dropdown-item ${currentStatus === 'completed' ? 'is-selected' : ''}`}
+                    onClick={() => {
+                      void updateOrderStatus(currentOrder.id, 'completed');
+                      setActionsMenuOpen(false);
+                    }}
+                  >
+                    ● Completed
+                  </button>
 
-              <div className="dropdown-divider" />
+                  <div className="dropdown-divider" />
+                </>
+              )}
 
               <button
                 type="button"
@@ -320,18 +358,22 @@ export function OrderPage({ onNavigateToHistory }: Props) {
                 📋 Duplicate Order
               </button>
 
-              <div className="dropdown-divider" />
+              {isOwner && (
+                <>
+                  <div className="dropdown-divider" />
 
-              <button
-                type="button"
-                className="dropdown-item dropdown-item-danger"
-                onClick={() => {
-                  setActionsMenuOpen(false);
-                  setArchiveTargetOrder(currentOrder);
-                }}
-              >
-                📦 Archive Order
-              </button>
+                  <button
+                    type="button"
+                    className="dropdown-item dropdown-item-danger"
+                    onClick={() => {
+                      setActionsMenuOpen(false);
+                      setArchiveTargetOrder(currentOrder);
+                    }}
+                  >
+                    📦 Archive Order
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -382,6 +424,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
       <div className="order-section-stage">
         {activeSection === 'setup' && (
           <OrderSetup
+            key={currentOrder.id}
             order={currentOrder}
             registerCommit={(commit) => { commitStepRef.current = commit; }}
           />
@@ -389,6 +432,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
 
         {activeSection === 'coffees' && (
           <CoffeeLotsSection
+            key={currentOrder.id}
             order={currentOrder}
             registerCommit={(commit) => { commitStepRef.current = commit; }}
             onContinue={() => void handleSectionChange('goods')}
@@ -397,6 +441,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
 
         {activeSection === 'goods' && (
           <GoodsAndFees
+            key={currentOrder.id}
             order={currentOrder}
             registerCommit={(commit) => { commitStepRef.current = commit; }}
           />
@@ -404,6 +449,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
 
         {activeSection === 'summary' && (
           <OrderSummary
+            key={currentOrder.id}
             order={currentOrder}
             onJumpToStep={(step) => void handleSectionChange(step)}
             onFinalize={onNavigateToHistory}
@@ -411,9 +457,10 @@ export function OrderPage({ onNavigateToHistory }: Props) {
         )}
 
         {activeSection === 'invoices' && (
-          <div style={{ marginTop: 'var(--space-4)' }}>
+          <div key={currentOrder.id} style={{ marginTop: 'var(--space-4)' }}>
             {orderResult.isValid ? (
               <SettlementPacks
+                key={currentOrder.id}
                 order={currentOrder}
                 people={people}
                 result={orderResult}

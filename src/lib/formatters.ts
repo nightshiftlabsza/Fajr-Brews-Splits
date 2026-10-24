@@ -1,5 +1,69 @@
 // ─── Currency ─────────────────────────────────────────────────
 
+export function parseMoneyInput(val: string | number | null | undefined): number {
+  if (val === null || val === undefined) {
+    return 0;
+  }
+  if (typeof val === 'number') {
+    return Number.isFinite(val) ? val : 0;
+  }
+  if (typeof val !== 'string') {
+    return 0;
+  }
+
+  let cleaned = val.trim();
+  if (!cleaned) {
+    return 0;
+  }
+
+  let isNegative = false;
+  if (cleaned.startsWith('-')) {
+    isNegative = true;
+    cleaned = cleaned.slice(1).trim();
+  }
+
+  // Remove common currency symbols (R, ZAR, $, €, £) from start or end
+  cleaned = cleaned.replace(/^(?:R\s*|ZAR\s*|[$€£]\s*)/i, '');
+  cleaned = cleaned.replace(/(?:\s*ZAR)$/i, '');
+  cleaned = cleaned.trim();
+  if (!cleaned) {
+    return 0;
+  }
+
+  if (cleaned.startsWith('-')) {
+    isNegative = true;
+    cleaned = cleaned.slice(1).trim();
+  }
+
+  // Remove whitespace thousands separators (e.g. "1 250,50")
+  cleaned = cleaned.replace(/\s+/g, '');
+
+  if (cleaned.includes('.') && cleaned.includes(',')) {
+    const lastDot = cleaned.lastIndexOf('.');
+    const lastComma = cleaned.lastIndexOf(',');
+    if (lastComma > lastDot) {
+      // European format: 1.250,50 -> remove dot, replace comma with dot
+      cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+    } else {
+      // Standard format: 1,250.50 -> remove commas
+      cleaned = cleaned.replace(/,/g, '');
+    }
+  } else if (cleaned.includes(',')) {
+    // Only commas present: if single comma, treat as decimal separator (e.g. "12,50" or "1250,50")
+    const parts = cleaned.split(',');
+    if (parts.length === 2) {
+      cleaned = `${parts[0]}.${parts[1]}`;
+    } else {
+      // Multiple commas (e.g. "1,000,000") -> remove grouping commas
+      cleaned = cleaned.replace(/,/g, '');
+    }
+  }
+
+  const parsed = parseFloat(cleaned);
+  if (!Number.isFinite(parsed)) return 0;
+  return isNegative ? -parsed : parsed;
+}
+
 export function formatZAR(amount: number): string {
   return `R${amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
 }

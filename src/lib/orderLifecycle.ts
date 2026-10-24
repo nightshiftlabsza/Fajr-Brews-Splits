@@ -62,3 +62,7 @@ export function getOrderLifecycleLabel(order: Order): 'Planning' | 'Locked' | 'C
   if (normalized === 'completed') return 'Completed';
   return 'Planning';
 }
+
+export function isOrderLocked(order: { status?: OrderStatus | null; isArchived?: boolean }): boolean {
+  return normalizeOrderStatus(order.status, order.isArchived) !== 'planning';
+}

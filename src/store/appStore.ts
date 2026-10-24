@@ -5,6 +5,7 @@ import type { OrderWizardStep } from '../lib/orderWizard';
 import { supabase, WORKSPACE_ID } from '../lib/supabase';
 import {
   dedupePeopleById,
+  mergeConcurrentOrderUpdate,
   mergeOrderPatch,
   sortPeopleByName,
   upsertOrderById,
@@ -192,13 +193,15 @@ interface AppStore {
   deletePerson: (id: string) => Promise<void>;
 
   // ── Roaster Actions ───────────────────────────────────────
-  createRoaster: (data: { name: string; logoFile?: File | null }) => Promise<Roaster>;
+  createRoaster: (data: { name: string; logoFile?: File | null; logoUrl?: string | null }) => Promise<Roaster>;
   updateRoaster: (id: string, data: { name?: string; logoFile?: File | null; removeLogo?: boolean }) => Promise<Roaster>;
 
   // ── Order Actions ─────────────────────────────────────────
-  createOrder: (data: Omit<Order, 'id' | 'workspaceId' | 'status' | 'isArchived' | 'createdBy' | 'createdAt' | 'updatedAt'> & { status?: OrderStatus }) => Promise<Order | null>;
+  createOrder: (data: Omit<Order, 'id' | 'workspaceId' | 'status' | 'isArchived' | 'createdBy' | 'createdAt' | 'updatedAt'> & { id?: string; status?: OrderStatus; isArchived?: boolean }) => Promise<Order | null>;
   updateOrder: (id: string, data: Partial<Order>) => Promise<void>;
+  patchOrder: (id: string, data: Partial<Order>) => Promise<void>;
   updateOrderStatus: (id: string, status: OrderStatus) => Promise<void>;
+  archiveOrder: (id: string) => Promise<void>;
   deleteOrder: (id: string) => Promise<void>;
   joinOrder: (orderId: string) => Promise<void>;
   leaveOrder: (orderId: string) => Promise<void>;
@@ -915,7 +918,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   // ── Roasters ──────────────────────────────────────────────
-  createRoaster: async ({ name, logoFile }) => {
+  createRoaster: async ({ name, logoFile, logoUrl }) => {
     const trimmedName = name.trim().replace(/\s+/g, ' ');
     if (!trimmedName) {
       throw new Error('Roaster name is required.');
@@ -939,6 +942,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       .insert({
         workspace_id: WORKSPACE_ID,
         name: trimmedName,
+        logo_url: logoUrl || null,
       })
       .select()
       .single();
@@ -1081,36 +1085,51 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // ── Orders ────────────────────────────────────────────────
   createOrder: async (data) => {
     const userId = get().user?.id;
-    const initialStatus = normalizeOrderStatus(data.status, false);
+    const initialStatus = normalizeOrderStatus(data.status, data.isArchived ?? false);
+    const isArchived = initialStatus === 'archived' || Boolean(data.isArchived);
+    const insertPayload: Record<string, unknown> = {
+      workspace_id: WORKSPACE_ID,
+      name: data.name,
+      order_date: data.orderDate,
+      status: initialStatus,
+      roaster_id: data.roasterId,
+      roaster_snapshot: data.roasterSnapshot,
+      payer_id: data.payerId,
+      payer_bank: data.payerBank,
+      reference_template: data.referenceTemplate,
+      payer_note: data.payerNote || null,
+      goods_total_zar: data.goodsTotalZar,
+      lots: data.lots,
+      fees: data.fees,
+      payments: data.payments,
+      is_archived: isArchived,
+      owner_id: userId ?? null,
+      created_by: userId ?? null,
+    };
+    if (data.id) {
+      insertPayload.id = data.id;
+    }
+
     const { data: row, error } = await supabase
       .from('orders')
-      .insert({
-        workspace_id: WORKSPACE_ID,
-        name: data.name,
-        order_date: data.orderDate,
-        status: initialStatus,
-        roaster_id: data.roasterId,
-        roaster_snapshot: data.roasterSnapshot,
-        payer_id: data.payerId,
-        payer_bank: data.payerBank,
-        reference_template: data.referenceTemplate,
-        payer_note: data.payerNote || null,
-        goods_total_zar: data.goodsTotalZar,
-        lots: data.lots,
-        fees: data.fees,
-        payments: data.payments,
-        is_archived: initialStatus === 'archived',
-        owner_id: userId ?? null,
-        created_by: userId ?? null,
-      })
+      .insert(insertPayload)
       .select()
       .single();
 
     if (error) throw new Error(error.message);
     if (row) {
       const order = mapOrder(row as DbOrder);
-      set((s) => ({ orders: upsertOrderById(s.orders, order), currentOrderId: order.id }));
-      safeLocalStorage.setItem('fb_current_order_id', order.id);
+      set((s) => {
+        const orderIsArchived = order.isArchived || order.status === 'archived';
+        const nextCurrentOrderId = orderIsArchived ? s.currentOrderId : order.id;
+        if (nextCurrentOrderId && !orderIsArchived) {
+          safeLocalStorage.setItem('fb_current_order_id', nextCurrentOrderId);
+        }
+        return {
+          orders: upsertOrderById(s.orders, order),
+          currentOrderId: nextCurrentOrderId,
+        };
+      });
       return order;
     }
     return null;
@@ -1132,9 +1151,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
       people: get().people,
       strict: strictIntegrity,
     });
-    optimisticOrderSnapshots.set(id, optimisticOrder);
+    if (!optimisticOrderSnapshots.has(id)) {
+      optimisticOrderSnapshots.set(id, targetOrder);
+    }
     set((s) => ({
       orders: s.orders.map((order) => (order.id === id ? optimisticOrder : order)),
+      error: null,
     }));
 
     const dbData: Record<string, unknown> = {};
@@ -1164,6 +1186,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
         const { error } = await supabase.from('orders').update(dbData).eq('id', id);
         if (error) throw new Error(error.message);
       })
+      .catch((err) => {
+        const rollbackOrder = optimisticOrderSnapshots.get(id);
+        if (rollbackOrder) {
+          set((s) => ({
+            orders: s.orders.map((order) => (order.id === id ? rollbackOrder : order)),
+            error: getErrorMessage(err),
+          }));
+        } else {
+          set({ error: getErrorMessage(err) });
+        }
+        throw err;
+      })
       .finally(() => {
         if (orderWriteChains.get(id) === nextChain) {
           orderWriteChains.delete(id);
@@ -1175,8 +1209,28 @@ export const useAppStore = create<AppStore>((set, get) => ({
     await nextChain;
   },
 
+  patchOrder: async (id, data) => {
+    await get().updateOrder(id, data);
+  },
+
   updateOrderStatus: async (id, status) => {
-    await get().updateOrder(id, { status, isArchived: status === 'archived' });
+    try {
+      set({ error: null });
+      await get().updateOrder(id, { status, isArchived: status === 'archived' });
+    } catch (err) {
+      set({ error: getErrorMessage(err) });
+      throw err;
+    }
+  },
+
+  archiveOrder: async (id) => {
+    try {
+      set({ error: null });
+      await get().updateOrderStatus(id, 'archived');
+    } catch (err) {
+      set({ error: getErrorMessage(err) });
+      throw err;
+    }
   },
 
   joinOrder: async (orderId) => {
@@ -1192,27 +1246,33 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   deleteOrder: async (id) => {
-    const { error } = await supabase.from('orders').delete().eq('id', id);
-    if (error) throw new Error(error.message);
-    orderWriteChains.delete(id);
-    optimisticOrderSnapshots.delete(id);
-    set((s) => {
-      const orders = s.orders.filter((o) => o.id !== id);
-      const currentOrderId = s.currentOrderId === id
-        ? getNextActiveOrderId(orders)
-        : s.currentOrderId;
-      if (currentOrderId) safeLocalStorage.setItem('fb_current_order_id', currentOrderId);
-      else safeLocalStorage.removeItem('fb_current_order_id');
-      const { [id]: _removedStep, ...orderWizardSteps } = s.sessionUi.orderWizardSteps;
-      return {
-        orders,
-        currentOrderId,
-        sessionUi: {
-          ...s.sessionUi,
-          orderWizardSteps,
-        },
-      };
-    });
+    try {
+      set({ error: null });
+      const { error } = await supabase.from('orders').delete().eq('id', id);
+      if (error) throw new Error(error.message);
+      orderWriteChains.delete(id);
+      optimisticOrderSnapshots.delete(id);
+      set((s) => {
+        const orders = s.orders.filter((o) => o.id !== id);
+        const currentOrderId = s.currentOrderId === id
+          ? getNextActiveOrderId(orders)
+          : s.currentOrderId;
+        if (currentOrderId) safeLocalStorage.setItem('fb_current_order_id', currentOrderId);
+        else safeLocalStorage.removeItem('fb_current_order_id');
+        const { [id]: _removedStep, ...orderWizardSteps } = s.sessionUi.orderWizardSteps;
+        return {
+          orders,
+          currentOrderId,
+          sessionUi: {
+            ...s.sessionUi,
+            orderWizardSteps,
+          },
+        };
+      });
+    } catch (err) {
+      set({ error: getErrorMessage(err) });
+      throw err;
+    }
   },
 
   setCurrentOrderId: (id) => {
@@ -1363,6 +1423,21 @@ export const useAppStore = create<AppStore>((set, get) => ({
       throw new Error('Unsupported export format. Expected version 1 or 2.');
     }
 
+    const previousCurrentOrderId = get().currentOrderId;
+
+    if (parsed.settings && typeof parsed.settings === 'object') {
+      try {
+        if (parsed.settings.theme) {
+          await get().setTheme(parsed.settings.theme);
+        }
+        if (parsed.settings.themeMode) {
+          await get().setThemeMode(parsed.settings.themeMode);
+        }
+      } catch (err) {
+        console.error('importJSON: skipping settings restore due to error', err);
+      }
+    }
+
     const importedPersonIdMap = new Map<string, string>();
     if (parsed.people && Array.isArray(parsed.people)) {
       // Import people — insert any that don't exist by name
@@ -1398,6 +1473,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           const existing = get().roasters.find((roaster) => normalizeRoasterName(roaster.name) === normalizeRoasterName(String(r.name)));
           const roaster = existing ?? await get().createRoaster({
             name: String(r.name),
+            logoUrl: typeof r.logoUrl === 'string' ? r.logoUrl : null,
           });
           if (typeof r.id === 'string') {
             importedRoasterIdMap.set(r.id, roaster);
@@ -1412,54 +1488,89 @@ export const useAppStore = create<AppStore>((set, get) => ({
       for (const o of parsed.orders) {
         if (!o || typeof o.id !== 'string') continue;
         try {
-          if (!get().orders.find((ex) => ex.id === o.id)) {
-            const importedRoaster = typeof o.roasterId === 'string' ? importedRoasterIdMap.get(o.roasterId) : undefined;
-            const importedSnapshotName = o.roasterSnapshot && typeof o.roasterSnapshot === 'object'
-              ? String(o.roasterSnapshot.name ?? importedRoaster?.name ?? '').trim()
-              : importedRoaster?.name ?? '';
-            const roasterSnapshot = importedSnapshotName
-              ? {
-                id: o.roasterSnapshot && typeof o.roasterSnapshot === 'object' && typeof o.roasterSnapshot.id === 'string'
-                  ? o.roasterSnapshot.id
-                  : importedRoaster?.id ?? null,
-                name: importedSnapshotName,
-                logoUrl: o.roasterSnapshot && typeof o.roasterSnapshot === 'object' && typeof o.roasterSnapshot.logoUrl === 'string'
-                  ? o.roasterSnapshot.logoUrl
-                  : importedRoaster?.logoUrl,
-              }
-              : null;
-
-            const mappedLots = (Array.isArray(o.lots) ? o.lots : []).map((lot: any) => ({
-              ...lot,
-              shares: Array.isArray(lot.shares) ? lot.shares.map((s: any) => ({
-                ...s,
-                personId: mapPersonId(s.personId) ?? s.personId,
-              })) : [],
-              bags: Array.isArray(lot.bags) ? lot.bags.map((b: any) => ({
-                ...b,
-                buyers: Array.isArray(b.buyers) ? b.buyers.map((buyer: any) => ({
-                  ...buyer,
-                  personId: mapPersonId(buyer.personId) ?? buyer.personId,
-                })) : [],
-              })) : [],
-            }));
-
-            const mappedFees = (Array.isArray(o.fees) ? o.fees : []).map((fee: any) => ({
-              ...fee,
-              personId: mapPersonId(fee.personId),
-            }));
-
-            const mappedPayments: Record<string, any> = {};
-            if (o.payments && typeof o.payments === 'object' && !Array.isArray(o.payments)) {
-              for (const [oldPid, payment] of Object.entries(o.payments)) {
-                const newPid = mapPersonId(oldPid) ?? oldPid;
-                mappedPayments[newPid] = payment;
-              }
+          const importedRoaster = typeof o.roasterId === 'string' ? importedRoasterIdMap.get(o.roasterId) : undefined;
+          const importedSnapshotName = o.roasterSnapshot && typeof o.roasterSnapshot === 'object'
+            ? String(o.roasterSnapshot.name ?? importedRoaster?.name ?? '').trim()
+            : importedRoaster?.name ?? '';
+          const roasterSnapshot = importedSnapshotName
+            ? {
+              id: o.roasterSnapshot && typeof o.roasterSnapshot === 'object' && typeof o.roasterSnapshot.id === 'string'
+                ? o.roasterSnapshot.id
+                : importedRoaster?.id ?? null,
+              name: importedSnapshotName,
+              logoUrl: o.roasterSnapshot && typeof o.roasterSnapshot === 'object' && typeof o.roasterSnapshot.logoUrl === 'string'
+                ? o.roasterSnapshot.logoUrl
+                : importedRoaster?.logoUrl,
             }
+            : null;
 
+          const mappedLots = (Array.isArray(o.lots) ? o.lots : []).map((lot: any) => ({
+            ...lot,
+            shares: Array.isArray(lot.shares) ? lot.shares.map((s: any) => ({
+              ...s,
+              personId: mapPersonId(s.personId) ?? s.personId,
+            })) : [],
+            bags: Array.isArray(lot.bags) ? lot.bags.map((b: any) => ({
+              ...b,
+              buyers: Array.isArray(b.buyers) ? b.buyers.map((buyer: any) => ({
+                ...buyer,
+                personId: mapPersonId(buyer.personId) ?? buyer.personId,
+              })) : [],
+            })) : [],
+            bagAllocations: Array.isArray(lot.bagAllocations) ? lot.bagAllocations.map((alloc: any) => ({
+              ...alloc,
+              participants: Array.isArray(alloc.participants) ? alloc.participants.map((p: any) => ({
+                ...p,
+                personId: mapPersonId(p.personId) ?? p.personId,
+              })) : [],
+            })) : lot.bagAllocations,
+          }));
+
+          const mappedFees = (Array.isArray(o.fees) ? o.fees : []).map((fee: any) => ({
+            ...fee,
+            personId: mapPersonId(fee.personId),
+          }));
+
+          const mappedPayments: Record<string, any> = {};
+          if (o.payments && typeof o.payments === 'object' && !Array.isArray(o.payments)) {
+            for (const [oldPid, payment] of Object.entries(o.payments)) {
+              const newPid = mapPersonId(oldPid) ?? oldPid;
+              mappedPayments[newPid] = payment;
+            }
+          }
+
+          const resolvedStatus = o.status
+            ? normalizeOrderStatus(o.status, o.isArchived)
+            : (o.isArchived ? 'archived' : 'planning');
+          const resolvedIsArchived = o.isArchived !== undefined
+            ? Boolean(o.isArchived)
+            : resolvedStatus === 'archived';
+
+          const existing = get().orders.find((ex) => ex.id === o.id || (ex.name === o.name && ex.orderDate === o.orderDate));
+          if (existing) {
+            await get().updateOrder(existing.id, {
+              name: String(o.name ?? existing.name),
+              orderDate: String(o.orderDate ?? existing.orderDate),
+              status: resolvedStatus,
+              isArchived: resolvedIsArchived,
+              roasterId: importedRoaster?.id ?? existing.roasterId,
+              roasterSnapshot: roasterSnapshot ?? existing.roasterSnapshot,
+              payerId: mapPersonId(o.payerId) ?? existing.payerId,
+              payerBank: o.payerBank && typeof o.payerBank === 'object' ? o.payerBank : existing.payerBank,
+              referenceTemplate: String(o.referenceTemplate ?? existing.referenceTemplate),
+              payerNote: o.payerNote !== undefined ? String(o.payerNote) : existing.payerNote,
+              goodsTotalZar: o.goodsTotalZar !== undefined ? Number(o.goodsTotalZar) : existing.goodsTotalZar,
+              lots: mappedLots,
+              fees: mappedFees,
+              payments: mappedPayments,
+            });
+          } else {
             await get().createOrder({
+              id: typeof o.id === 'string' ? o.id : undefined,
               name: String(o.name ?? 'Imported Order'),
               orderDate: String(o.orderDate ?? new Date().toISOString().split('T')[0]),
+              status: resolvedStatus,
+              isArchived: resolvedIsArchived,
               roasterId: importedRoaster?.id ?? null,
               roasterSnapshot,
               payerId: mapPersonId(o.payerId),
@@ -1477,6 +1588,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
         }
       }
     }
+
+    const currentOrders = get().orders;
+    const preferredId = getPreferredActiveOrderId(currentOrders, previousCurrentOrderId);
+    set({ currentOrderId: preferredId });
+    if (preferredId) safeLocalStorage.setItem('fb_current_order_id', preferredId);
+    else safeLocalStorage.removeItem('fb_current_order_id');
   },
 
   // ── Realtime ──────────────────────────────────────────────
@@ -1518,14 +1635,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
               if (eventType === 'INSERT') {
                 const existing = get().orders.find((o) => o.id === (newRow as DbOrder).id);
                 const order = mapOrder(newRow as DbOrder, existing);
-                const nextOrder = optimisticOrderSnapshots.get(order.id) ?? order;
+                const snapshot = optimisticOrderSnapshots.get(order.id);
+                const nextOrder = snapshot
+                  ? mergeConcurrentOrderUpdate(order, existing, snapshot)
+                  : order;
                 set((s) => ({
                   orders: upsertOrderById(s.orders, nextOrder),
                 }));
               } else if (eventType === 'UPDATE') {
                 const existing = get().orders.find((o) => o.id === (newRow as DbOrder).id);
                 const order = mapOrder(newRow as DbOrder, existing);
-                const nextOrder = optimisticOrderSnapshots.get(order.id) ?? order;
+                const snapshot = optimisticOrderSnapshots.get(order.id);
+                const nextOrder = snapshot
+                  ? mergeConcurrentOrderUpdate(order, existing, snapshot)
+                  : order;
                 set((s) => ({ orders: upsertOrderById(s.orders, nextOrder) }));
               } else if (eventType === 'DELETE') {
                 const deletedOrderId = (oldRow as DbOrder).id;

@@ -5,6 +5,7 @@ import { todayISO } from '../../lib/formatters';
 import { dedupePeopleById } from '../../lib/storeState';
 import { createRoasterSnapshot } from '../../lib/roasters';
 import { normalizeFeeAllocationType } from '../../lib/invoiceFormatter';
+import { isOrderLocked } from '../../lib/orderLifecycle';
 import { RoasterPicker } from '../roaster/RoasterPicker';
 
 
@@ -78,8 +79,14 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
     roasterFeatureMessage,
     updateOrder,
     createRoaster,
+    user,
+    memberRole,
   } = useAppStore();
   const patchOrder = onOrderChange ?? ((patch: Partial<Order>) => updateOrder(order.id, patch));
+
+  const isLocked = !onOrderChange && isOrderLocked(order);
+  const isOwner = onOrderChange ? true : (!order.ownerId || order.ownerId === user?.id || memberRole === 'owner' || memberRole === 'admin');
+  const isReadOnly = isLocked || !isOwner;
 
   const [name, setName] = useState(order.name);
   const [orderDate, setOrderDate] = useState(order.orderDate || todayISO());
@@ -92,6 +99,13 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
     order.payerBank?.beneficiary ||
     order.payerBank?.branch
   ));
+
+  const [isNameDirty, setIsNameDirty] = useState(false);
+  const [isDateDirty, setIsDateDirty] = useState(false);
+  const [isRoasterDirty, setIsRoasterDirty] = useState(false);
+  const [isPayerDirty, setIsPayerDirty] = useState(false);
+  const [isBankDirty, setIsBankDirty] = useState(false);
+
   const hydrationRef = useRef(true);
   const bankHydrationRef = useRef(true);
 
@@ -112,86 +126,143 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
       order.payerBank?.beneficiary ||
       order.payerBank?.branch
     ));
+    setIsNameDirty(false);
+    setIsDateDirty(false);
+    setIsRoasterDirty(false);
+    setIsPayerDirty(false);
+    setIsBankDirty(false);
   }, [order.id]);
+
+  useEffect(() => {
+    if (!isNameDirty) {
+      setName(order.name);
+    }
+  }, [order.name, isNameDirty]);
+
+  useEffect(() => {
+    if (!isDateDirty) {
+      setOrderDate(order.orderDate || todayISO());
+    }
+  }, [order.orderDate, isDateDirty]);
+
+  useEffect(() => {
+    if (!isRoasterDirty) {
+      setSelectedRoasterId(order.roasterId || '');
+    }
+  }, [order.roasterId, isRoasterDirty]);
+
+  useEffect(() => {
+    if (!isPayerDirty) {
+      setPayerId(order.payerId || '');
+    }
+  }, [order.payerId, isPayerDirty]);
+
+  useEffect(() => {
+    if (!isBankDirty) {
+      setBank(normalizeBank(order.payerBank));
+      setBankOpen(Boolean(
+        order.payerBank?.bankName ||
+        order.payerBank?.accountNumber ||
+        order.payerBank?.beneficiary ||
+        order.payerBank?.branch
+      ));
+    }
+  }, [order.payerBank, isBankDirty]);
 
   useEffect(() => {
     if (hydrationRef.current) {
       hydrationRef.current = false;
       return;
     }
+    if (!isNameDirty || isReadOnly) return;
 
     const trimmedName = name.trim();
     if (trimmedName === order.name) {
+      setIsNameDirty(false);
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
       void patchOrder({ name: trimmedName });
+      setIsNameDirty(false);
     }, 450);
 
     return () => window.clearTimeout(timeoutId);
-  }, [name, order.id, order.name, updateOrder]);
+  }, [name, order.id, order.name, isNameDirty, isReadOnly, patchOrder]);
 
   useEffect(() => {
     if (bankHydrationRef.current) {
       bankHydrationRef.current = false;
       return;
     }
+    if (!isBankDirty || isReadOnly) return;
 
     const normalizedOrderBank = normalizeBank(order.payerBank);
     if (banksEqual(bank, normalizedOrderBank)) {
+      setIsBankDirty(false);
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
       void patchOrder({ payerBank: bank });
+      setIsBankDirty(false);
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [bank, order.id, order.payerBank, updateOrder]);
+  }, [bank, order.id, order.payerBank, isBankDirty, isReadOnly, patchOrder]);
 
   function flushNameSave() {
+    if (isReadOnly) return;
     const trimmedName = name.trim();
     setName(trimmedName);
-    if (trimmedName !== order.name) {
+    if (isNameDirty && trimmedName !== order.name) {
       void patchOrder({ name: trimmedName });
     }
+    setIsNameDirty(false);
   }
 
   function flushBankSave() {
+    if (isReadOnly) return;
     const normalizedBank = normalizeBank(bank);
     setBank(normalizedBank);
-    if (!banksEqual(normalizedBank, normalizeBank(order.payerBank))) {
+    if (isBankDirty && !banksEqual(normalizedBank, normalizeBank(order.payerBank))) {
       void patchOrder({ payerBank: normalizedBank });
     }
+    setIsBankDirty(false);
   }
 
   async function flushPendingSetupChanges() {
+    if (isReadOnly) return;
     const updates: Partial<Order> = {};
     const trimmedName = name.trim();
     const normalizedBank = normalizeBank(bank);
     const selectedRoaster = roasters.find((roaster) => roaster.id === selectedRoasterId) ?? null;
     const nextRoasterSnapshot = selectedRoaster ? createRoasterSnapshot(selectedRoaster) : null;
 
-    if (trimmedName !== order.name) {
+    if (isNameDirty && trimmedName !== order.name) {
       updates.name = trimmedName;
     }
-    if (orderDate !== order.orderDate) {
+    if (isDateDirty && orderDate !== order.orderDate) {
       updates.orderDate = orderDate;
     }
-    if ((selectedRoasterId || null) !== order.roasterId) {
+    if (isRoasterDirty && (selectedRoasterId || null) !== order.roasterId) {
       updates.roasterId = selectedRoasterId || null;
       updates.roasterSnapshot = nextRoasterSnapshot;
     }
-    if ((payerId || null) !== order.payerId) {
+    if (isPayerDirty && (payerId || null) !== order.payerId) {
       updates.payerId = payerId || null;
     }
-    if (!banksEqual(normalizedBank, normalizeBank(order.payerBank))) {
+    if (isBankDirty && !banksEqual(normalizedBank, normalizeBank(order.payerBank))) {
       updates.payerBank = normalizedBank;
     }
 
     setName(trimmedName);
     setBank(normalizedBank);
+    setIsNameDirty(false);
+    setIsDateDirty(false);
+    setIsRoasterDirty(false);
+    setIsPayerDirty(false);
+    setIsBankDirty(false);
 
     if (Object.keys(updates).length > 0) {
       await patchOrder(updates);
@@ -204,23 +275,32 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
   }, [registerCommit, flushPendingSetupChanges]);
 
   function handleBankChange(field: keyof PayerBank, value: string) {
+    if (isReadOnly) return;
+    setIsBankDirty(true);
     setBank((current) => ({ ...current, [field]: value }));
   }
 
   function handlePayerChange(nextPayerId: string) {
+    if (isReadOnly) return;
+    setIsPayerDirty(true);
     setPayerId(nextPayerId);
     void patchOrder({ payerId: nextPayerId || null });
+    setIsPayerDirty(false);
   }
 
   function handleRoasterSelect(roaster: Roaster | null) {
+    if (isReadOnly) return;
+    setIsRoasterDirty(true);
     setSelectedRoasterId(roaster?.id ?? '');
     void patchOrder({
       roasterId: roaster?.id ?? null,
       roasterSnapshot: createRoasterSnapshot(roaster),
     });
+    setIsRoasterDirty(false);
   }
 
   async function handleCreateRoaster(data: { name: string; logoFile?: File | null }) {
+    if (isReadOnly) return Promise.reject(new Error('Cannot create roaster for locked order'));
     const roaster = await createRoaster(data);
     await patchOrder({
       roasterId: roaster.id,
@@ -248,9 +328,15 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
               className="input"
               type="text"
               value={name}
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) => {
+                if (!isReadOnly) {
+                  setIsNameDirty(true);
+                  setName(event.target.value);
+                }
+              }}
               onBlur={flushNameSave}
               placeholder="e.g. March Import 2026"
+              disabled={isReadOnly}
             />
           </div>
 
@@ -262,9 +348,14 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
               type="date"
               value={orderDate}
               onChange={(event) => {
-                setOrderDate(event.target.value);
-                void patchOrder({ orderDate: event.target.value });
+                if (!isReadOnly) {
+                  setIsDateDirty(true);
+                  setOrderDate(event.target.value);
+                  void patchOrder({ orderDate: event.target.value });
+                  setIsDateDirty(false);
+                }
               }}
+              disabled={isReadOnly}
             />
           </div>
         </div>
@@ -276,7 +367,7 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
           selectedRoasterSnapshot={order.roasterSnapshot}
           featureStatus={roasterFeatureStatus}
           featureMessage={roasterFeatureMessage}
-          canManageRoasters={accessStatus === 'member'}
+          canManageRoasters={!isReadOnly && accessStatus === 'member'}
           onSelectRoaster={handleRoasterSelect}
           onCreateRoaster={handleCreateRoaster}
         />
@@ -288,6 +379,7 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
             className="select"
             value={payerId}
             onChange={(event) => handlePayerChange(event.target.value)}
+            disabled={isReadOnly}
           >
             <option value="">Select payer</option>
             {canonicalPeople.map((person) => (
@@ -318,6 +410,7 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
               onChange={(event) => handleBankChange('bankName', event.target.value)}
               onBlur={flushBankSave}
               placeholder="e.g. FNB"
+              disabled={isReadOnly}
             />
           </div>
           <div className="field">
@@ -329,6 +422,7 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
               onChange={(event) => handleBankChange('accountNumber', event.target.value)}
               onBlur={flushBankSave}
               placeholder="e.g. 62xxxxxxxxx"
+              disabled={isReadOnly}
             />
           </div>
         </div>
@@ -342,6 +436,7 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
               onChange={(event) => handleBankChange('beneficiary', event.target.value)}
               onBlur={flushBankSave}
               placeholder="Account holder name"
+              disabled={isReadOnly}
             />
           </div>
           <div className="field">
@@ -353,6 +448,7 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
               onChange={(event) => handleBankChange('branch', event.target.value)}
               onBlur={flushBankSave}
               placeholder="Optional"
+              disabled={isReadOnly}
             />
           </div>
         </div>

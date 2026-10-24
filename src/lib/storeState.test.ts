@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Order, Person, Roaster } from '../types';
 import { calculate } from './calculations';
-import { applyOrderPatches, upsertPersonById, upsertRoasterById } from './storeState';
+import { applyOrderPatches, mergeConcurrentOrderUpdate, upsertPersonById, upsertRoasterById } from './storeState';
 
 function makePerson(id: string, name: string): Person {
   return {
@@ -120,5 +120,118 @@ describe('store state helpers', () => {
     expect(firstSummaryRead.personIds).toEqual(['person-1', 'person-2']);
     expect(secondSummaryRead.totalOrderZar).toBe(firstSummaryRead.totalOrderZar);
     expect(secondSummaryRead.personCalcs['person-1'].lotBreakdowns).toHaveLength(2);
+  });
+
+  describe('mergeConcurrentOrderUpdate', () => {
+    it('returns remote order when neither localOrder nor baseSnapshot is provided', () => {
+      const remote = { ...baseOrder, name: 'Remote Order', goodsTotalZar: 999 };
+      expect(mergeConcurrentOrderUpdate(remote)).toEqual(remote);
+    });
+
+    it('merges remote fees while preserving local in-flight name edit', () => {
+      const base = { ...baseOrder, name: 'Original Name', fees: [] };
+      const local = { ...baseOrder, name: 'In-Flight Local Name', fees: [] };
+      const remote = {
+        ...baseOrder,
+        name: 'Original Name',
+        fees: [{ id: 'remote-fee-1', label: 'Customs', amountZar: 200, allocationType: 'equal_per_person' as const, personId: null }],
+      };
+
+      const result = mergeConcurrentOrderUpdate(remote, local, base);
+      expect(result.name).toBe('In-Flight Local Name');
+      expect(result.fees).toHaveLength(1);
+      expect(result.fees[0].id).toBe('remote-fee-1');
+    });
+
+    it('merges remote goods total update while preserving local lot edits', () => {
+      const base = { ...baseOrder, goodsTotalZar: 500, lots: [] };
+      const local = {
+        ...baseOrder,
+        goodsTotalZar: 500,
+        lots: [{
+          id: 'local-lot-1',
+          name: 'Geisha',
+          foreignPricePerBag: 30,
+          gramsPerBag: 250,
+          quantity: 1,
+          shares: [{ id: 's1', personId: 'person-1', shareGrams: 250 }],
+        }],
+      };
+      const remote = { ...baseOrder, goodsTotalZar: 750, lots: [] };
+
+      const result = mergeConcurrentOrderUpdate(remote, local, base);
+      expect(result.goodsTotalZar).toBe(750);
+      expect(result.lots).toHaveLength(1);
+      expect(result.lots[0].name).toBe('Geisha');
+    });
+
+    it('preserves local optimistic snapshot modifications against concurrent remote updates', () => {
+      const optimisticSnapshot = { ...baseOrder, name: 'Optimistic Edit' };
+      const remote = {
+        ...baseOrder,
+        name: 'Original Name',
+        fees: [{ id: 'fee-remote', label: 'Shipping', amountZar: 150, allocationType: 'equal_per_person' as const, personId: null }],
+      };
+
+      const result = mergeConcurrentOrderUpdate(remote, optimisticSnapshot, baseOrder);
+      expect(result.name).toBe('Optimistic Edit');
+      expect(result.fees).toHaveLength(1);
+      expect(result.fees[0].id).toBe('fee-remote');
+
+      const resultSingle = mergeConcurrentOrderUpdate(remote, null, optimisticSnapshot);
+      expect(resultSingle.name).toBe('Optimistic Edit');
+      expect(resultSingle.fees).toHaveLength(1);
+    });
+
+    it('keeps remote populated array when in-flight snapshot has empty array (new order setup scenario)', () => {
+      // Scenario protected: A user opens a newly created order where lots/fees are still empty in their local store,
+      // while another collaborator added the first lot or fee remotely and Realtime broadcasts the update.
+      // The in-flight snapshot should not overwrite the collaborator's populated list with an empty array.
+      const inFlightEmpty = { ...baseOrder, lots: [], fees: [] };
+      const remotePopulated = {
+        ...baseOrder,
+        lots: [{
+          id: 'remote-lot-1',
+          name: 'Sidra',
+          foreignPricePerBag: 25,
+          gramsPerBag: 250,
+          quantity: 1,
+          shares: [{ id: 's1', personId: 'person-1', shareGrams: 250 }],
+        }],
+        fees: [{ id: 'fee-1', label: 'Shipping', amountZar: 100, allocationType: 'equal_per_person' as const, personId: null }],
+      };
+
+      const result = mergeConcurrentOrderUpdate(remotePopulated, null, inFlightEmpty);
+      expect(result.lots).toHaveLength(1);
+      expect(result.lots[0].name).toBe('Sidra');
+      expect(result.fees).toHaveLength(1);
+    });
+
+    it('correctly compares deep nested object/array equality using JSON serialization without false conflicts', () => {
+      // JSON.stringify equality is safe for POJO order entities (lots, fees, payments, roasterSnapshot) because
+      // they are strictly serializable JSON structures without circular references or function values.
+      const base = {
+        ...baseOrder,
+        fees: [{ id: 'fee-1', label: 'Shipping', amountZar: 100, allocationType: 'equal_per_person' as const, personId: null }],
+      };
+      // Local clone with identical content (different object references)
+      const local = {
+        ...baseOrder,
+        name: 'Changed Title',
+        fees: [{ id: 'fee-1', label: 'Shipping', amountZar: 100, allocationType: 'equal_per_person' as const, personId: null }],
+      };
+      // Remote changed only fees amount
+      const remote = {
+        ...baseOrder,
+        name: 'Original Name',
+        fees: [{ id: 'fee-1', label: 'Shipping', amountZar: 120, allocationType: 'equal_per_person' as const, personId: null }],
+      };
+
+      const result = mergeConcurrentOrderUpdate(remote, local, base);
+      // Local name changed -> keep local
+      expect(result.name).toBe('Changed Title');
+      // Local fees identical to base (by JSON value) -> take remote updated fee
+      expect(result.fees[0].amountZar).toBe(120);
+    });
   });
 });

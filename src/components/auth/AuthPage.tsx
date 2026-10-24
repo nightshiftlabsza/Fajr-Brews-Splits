@@ -1,14 +1,34 @@
 import { useEffect, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
+import { HOME_PATH } from '../../lib/appConfig';
 
 type Mode = 'login' | 'signup' | 'success' | 'forgot' | 'recovery';
+
+function updatePath(path: string, options: { replace?: boolean } = {}): void {
+  if (typeof window === 'undefined') return;
+  if (options.replace) {
+    window.history.replaceState({}, document.title, path);
+  } else {
+    window.history.pushState({}, document.title, path);
+  }
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
 
 interface AuthPageProps {
   initialMode?: Extract<Mode, 'login' | 'recovery'>;
   onRecoveryComplete?: () => void;
+  onNavigateToSignIn?: () => void;
+  initialError?: string;
+  initialNotice?: string;
 }
 
-export function AuthPage({ initialMode = 'login', onRecoveryComplete }: AuthPageProps) {
+export function AuthPage({
+  initialMode = 'login',
+  onRecoveryComplete,
+  onNavigateToSignIn,
+  initialError = '',
+  initialNotice = '',
+}: AuthPageProps) {
   const { signIn, signUp, requestPasswordReset, updatePassword } = useAppStore();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
@@ -16,17 +36,17 @@ export function AuthPage({ initialMode = 'login', onRecoveryComplete }: AuthPage
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [error, setError] = useState(initialError);
+  const [notice, setNotice] = useState(initialNotice);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setMode(initialMode);
-    setError('');
-    setNotice('');
+    setError(initialError);
+    setNotice(initialNotice);
     setPassword('');
     setConfirmPassword('');
-  }, [initialMode]);
+  }, [initialMode, initialError, initialNotice]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -278,9 +298,9 @@ export function AuthPage({ initialMode = 'login', onRecoveryComplete }: AuthPage
           ) : mode === 'signup' ? (
             <>Already have an account? <button className="auth-link" type="button" onClick={() => { setMode('login'); setError(''); setNotice(''); }}>Sign in</button></>
           ) : mode === 'forgot' ? (
-            <>Remembered it? <button className="auth-link" type="button" onClick={() => { setMode('login'); setError(''); setNotice(''); }}>Back to sign in</button></>
+            <>Remembered it? <button className="auth-link" type="button" onClick={() => { setMode('login'); setError(''); setNotice(''); updatePath(HOME_PATH); onNavigateToSignIn?.(); }}>Back to sign in</button></>
           ) : (
-            <>Need the sign-in form? <button className="auth-link" type="button" onClick={() => { setMode('login'); setError(''); setNotice(''); }}>Back to sign in</button></>
+            <>Need the sign-in form? <button className="auth-link" type="button" onClick={() => { setMode('login'); setError(''); setNotice(''); updatePath(HOME_PATH); onNavigateToSignIn?.(); }}>Back to sign in</button></>
           )}
         </p>
       </div>

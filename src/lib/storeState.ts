@@ -29,6 +29,67 @@ export function sortRoasters(roasters: Roaster[]): Roaster[] {
   });
 }
 
+export function mergeConcurrentOrderUpdate(
+  remoteOrder: Order,
+  localOrder?: Order | null,
+  baseSnapshot?: Order | null,
+): Order {
+  const inFlight = localOrder ?? baseSnapshot;
+  if (!inFlight) {
+    return remoteOrder;
+  }
+
+  const areValuesEqual = (a: unknown, b: unknown): boolean => {
+    if (a === b) return true;
+    if (typeof a === 'object' && a !== null && typeof b === 'object' && b !== null) {
+      return JSON.stringify(a) === JSON.stringify(b);
+    }
+    return false;
+  };
+
+  const pickField = <K extends keyof Order>(field: K): Order[K] => {
+    if (localOrder && baseSnapshot) {
+      const localChanged = !areValuesEqual(localOrder[field], baseSnapshot[field]);
+      return localChanged ? localOrder[field] : remoteOrder[field];
+    }
+    if (inFlight) {
+      const inFlightVal = inFlight[field];
+      const remoteVal = remoteOrder[field];
+      if (!areValuesEqual(inFlightVal, remoteVal)) {
+        if (
+          Array.isArray(inFlightVal) &&
+          inFlightVal.length === 0 &&
+          Array.isArray(remoteVal) &&
+          remoteVal.length > 0
+        ) {
+          return remoteVal;
+        }
+        return inFlightVal;
+      }
+    }
+    return remoteOrder[field];
+  };
+
+  return {
+    ...remoteOrder,
+    name: pickField('name'),
+    orderDate: pickField('orderDate'),
+    status: pickField('status'),
+    isArchived: pickField('isArchived'),
+    roasterId: pickField('roasterId'),
+    roasterSnapshot: pickField('roasterSnapshot'),
+    payerId: pickField('payerId'),
+    payerBank: pickField('payerBank'),
+    referenceTemplate: pickField('referenceTemplate'),
+    payerNote: pickField('payerNote'),
+    goodsTotalZar: pickField('goodsTotalZar'),
+    lots: pickField('lots'),
+    fees: pickField('fees'),
+    payments: pickField('payments'),
+    ownerId: pickField('ownerId'),
+  };
+}
+
 export function upsertRoasterById(roasters: Roaster[], roaster: Roaster): Roaster[] {
   return sortRoasters([
     ...roasters.filter((candidate) => candidate.id !== roaster.id),
