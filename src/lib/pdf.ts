@@ -16,7 +16,7 @@ const WHITE = [255, 255, 255] as const;
 const BORDER = [229, 221, 212] as const;
 
 type RGB = readonly [number, number, number];
-type PdfDoc = InstanceType<Awaited<ReturnType<typeof getJsPDF>>>;
+export type PdfDoc = InstanceType<Awaited<ReturnType<typeof getJsPDF>>>;
 
 function setFill(doc: PdfDoc, rgb: RGB) {
   doc.setFillColor(rgb[0], rgb[1], rgb[2]);
@@ -45,12 +45,12 @@ function sectionHeader(
   y: number
 ): number {
   setFill(doc, LIGHT);
-  doc.roundedRect(20, y, 170, 7, 1, 1, 'F');
+  doc.roundedRect(20, y, 170, 6.5, 1, 1, 'F');
   setTextColor(doc, MID);
   doc.setFontSize(7);
   doc.setFont('helvetica', 'bold');
-  doc.text(label.toUpperCase(), 24, y + 4.8);
-  return y + 11;
+  doc.text(label.toUpperCase(), 24, y + 4.5);
+  return y + 10;
 }
 
 function row(
@@ -58,145 +58,168 @@ function row(
   label: string,
   value: string,
   y: number,
-  bold = false
+  bold = false,
+  xRight = 186
 ): number {
   setTextColor(doc, bold ? DARK : MID);
   doc.setFont('helvetica', bold ? 'bold' : 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(8.8);
   doc.text(label, 24, y);
-  doc.setFont('helvetica', bold ? 'bold' : 'normal');
-  doc.text(value, 186, y, { align: 'right' });
-  return y + 5.5;
+  doc.text(value, xRight, y, { align: 'right' });
+  return y + 5.2;
 }
 
-function ensurePageSpace(doc: PdfDoc, y: number, needed = 24): number {
-  if (y + needed <= 280) {
+function ensurePageSpace(doc: PdfDoc, y: number, needed = 20, topMargin = 22): number {
+  if (y + needed <= 276) {
     return y;
   }
   doc.addPage();
-  return 20;
+  return topMargin;
 }
 
-export async function generateInvoicePDF(
+export async function createInvoicePDFDocument(
   order: Order,
   person: Person,
   payer: Person | undefined,
   calc: PersonCalculation
-): Promise<void> {
+): Promise<{ doc: PdfDoc; filename: string }> {
   const JsPDF = await getJsPDF();
   const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-  let y = 20;
   const pageW = 210;
   const roundingAdjustment = calc.totalFinal - calc.totalPreRound;
   const invoice = buildInvoiceModel({ order, person, payer, calc });
 
-  // ── Header ────────────────────────────────────────────────
+  // ── Header Banner ──────────────────────────────────────────
   setFill(doc, ACCENT);
-  doc.rect(0, 0, pageW, 28, 'F');
+  doc.rect(0, 0, pageW, 26, 'F');
 
   setTextColor(doc, WHITE);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text('FAJR BREWS', 20, 12);
-  doc.setFontSize(8);
+  doc.setFontSize(15);
+  doc.text('FAJR BREWS', 20, 11);
+  doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
-  doc.text('COFFEE SPLITTER  ·  INVOICE', 20, 18);
+  doc.text('COFFEE SPLITTER  ·  INVOICE', 20, 17);
 
   // Amount due — top right
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text(invoice.amountDue, 190, 12, { align: 'right' });
+  doc.text(invoice.amountDue, 190, 11, { align: 'right' });
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
-  doc.text('AMOUNT DUE', 190, 17, { align: 'right' });
+  doc.text('AMOUNT DUE', 190, 16, { align: 'right' });
 
-  y = 36;
+  let y = 33;
 
-  // ── Order / Person Info ───────────────────────────────────
+  // ── Person & Order Info ────────────────────────────────────
   setTextColor(doc, DARK);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text(invoice.personName, 20, y);
-  y += 6;
+  doc.setFontSize(12.5);
+  const personNameLines = doc.splitTextToSize(invoice.personName, 105);
+  doc.text(personNameLines, 20, y);
 
+  // Right-aligned order metadata
   setTextColor(doc, MID);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text(`${invoice.orderName}  ·  ${invoice.orderDate}`, 20, y);
-  y += 4;
+  doc.setFontSize(8.5);
+  const orderMetaLines = doc.splitTextToSize(`${invoice.orderName}  ·  ${invoice.orderDate}`, 65);
+  doc.text(orderMetaLines, 190, y, { align: 'right' });
+
+  const leftInfoHeight = personNameLines.length * 5;
+  const rightInfoHeight = orderMetaLines.length * 4.2;
+  y += Math.max(leftInfoHeight, rightInfoHeight) + 1;
+
+  setTextColor(doc, DARK);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
   doc.text(`Ref: ${invoice.reference}`, 20, y);
-  y += 10;
+  y += 7;
 
   hLine(doc, y);
-  y += 6;
+  y += 5;
 
   // ── Coffee Lots ───────────────────────────────────────────
-  y = sectionHeader(doc, 'Coffee Shares', y);
+  if (invoice.coffeeLines.length > 0) {
+    y = sectionHeader(doc, 'Coffee Shares', y);
 
-  for (const line of invoice.coffeeLines) {
-    // Primary line: Coffee Name · Grams on left, Total amount on right
-    setTextColor(doc, DARK);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.text(`${line.name} · ${formatGrams(line.shareGrams)}`, 24, y);
-    doc.text(line.totalAmount, 186, y, { align: 'right' });
-    y += 4.5;
+    for (const line of invoice.coffeeLines) {
+      const estimatedHeight = line.splitWith.length > 0 ? 21 : 16;
+      y = ensurePageSpace(doc, y, estimatedHeight);
 
-    // Subordinate breakdown line: (R345.23 coffee + R42.10 fees)
-    setTextColor(doc, MID);
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(7.5);
-    doc.text(`(${line.breakdownSummary})`, 24, y);
+      setTextColor(doc, DARK);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      const nameWithGrams = `${line.name} · ${formatGrams(line.shareGrams)}`;
+      const titleLines = doc.splitTextToSize(nameWithGrams, 125);
+      doc.text(titleLines, 24, y);
+      doc.text(line.totalAmount, 186, y, { align: 'right' });
+      y += titleLines.length * 4.2;
 
-    y += 5;
+      setTextColor(doc, MID);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(7.5);
+      const breakdownLines = doc.splitTextToSize(`(${line.breakdownSummary})`, 160);
+      doc.text(breakdownLines, 24, y);
+      y += breakdownLines.length * 3.8;
 
-    hLine(doc, y, 24, 186);
-    y += 5;
+      if (line.splitWith.length > 0) {
+        setTextColor(doc, MID);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        const splitLines = doc.splitTextToSize(`Split with: ${line.splitWith.join(', ')}`, 160);
+        doc.text(splitLines, 24, y);
+        y += splitLines.length * 3.8;
+      }
+
+      y += 1.5;
+      hLine(doc, y, 24, 186);
+      y += 4.5;
+    }
   }
 
   // If person has only standalone fees without coffee
   if (invoice.coffeeLines.length === 0 && calc.feeBreakdowns.length > 0) {
     y = sectionHeader(doc, 'Additional Charges', y);
     for (const fee of invoice.feeLines) {
+      y = ensurePageSpace(doc, y, 10);
       setTextColor(doc, MID);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
-      doc.text(`${fee.label} (${fee.methodLabel})`, 24, y);
+      const feeLabelLines = doc.splitTextToSize(`${fee.label} (${fee.methodLabel})`, 125);
+      doc.text(feeLabelLines, 24, y);
       setTextColor(doc, DARK);
       doc.text(fee.amount, 186, y, { align: 'right' });
-      y += 5.5;
+      y += Math.max(feeLabelLines.length * 4.5, 5.5);
     }
-    y += 4;
+    y += 2;
   }
 
-  // ── Totals ────────────────────────────────────────────────
+  // ── Totals & Summary ──────────────────────────────────────
+  y = ensurePageSpace(doc, y, 32);
   hLine(doc, y);
-  y += 6;
+  y += 5;
 
   y = sectionHeader(doc, 'Summary', y);
-
   y = row(doc, 'Coffee + allocated fees', formatZAR(calc.totalPreRound), y);
   if (Math.abs(roundingAdjustment) > 0.001) {
     y = row(doc, 'Rounding adjustment', formatZAR(roundingAdjustment), y);
   }
 
-  y += 2;
+  y += 1;
   hLine(doc, y);
-  y += 6;
+  y += 5;
 
   setFill(doc, ACCENT);
-  doc.rect(20, y - 2, 170, 9, 'F');
+  doc.rect(20, y - 2, 170, 8.5, 'F');
   setTextColor(doc, WHITE);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('TOTAL DUE', 24, y + 4);
-  doc.text(invoice.amountDue, 186, y + 4, { align: 'right' });
-  y += 14;
+  doc.setFontSize(9.5);
+  doc.text('TOTAL DUE', 24, y + 3.8);
+  doc.text(invoice.amountDue, 186, y + 3.8, { align: 'right' });
+  y += 13;
 
   // ── Payment Instructions ──────────────────────────────────
-  y = sectionHeader(doc, 'Payment Instructions', y);
-
   const bankRows: [string, string][] = [
     ['Beneficiary', order.payerBank.beneficiary || payer?.name || '—'],
     ['Bank', order.payerBank.bankName],
@@ -207,39 +230,61 @@ export async function generateInvoicePDF(
   }
   bankRows.push(['Reference', invoice.reference]);
 
+  let noteLines: string[] = [];
+  if (order.payerNote && typeof order.payerNote === 'string') {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(7.8);
+    noteLines = doc.splitTextToSize(order.payerNote, 160);
+  }
+
+  const paymentSectionHeight = 12 + bankRows.length * 5.2 + (noteLines.length > 0 ? noteLines.length * 4 + 4 : 0);
+  y = ensurePageSpace(doc, y, paymentSectionHeight);
+
+  y = sectionHeader(doc, 'Payment Instructions', y);
   for (const [label, value] of bankRows) {
     y = row(doc, label, value, y);
   }
 
-  if (order.payerNote && typeof order.payerNote === 'string') {
-    y += 4;
+  if (noteLines.length > 0) {
+    y += 2;
     setTextColor(doc, MID);
     doc.setFont('helvetica', 'italic');
-    doc.setFontSize(8);
-    const noteLines = doc.splitTextToSize(order.payerNote, 160);
+    doc.setFontSize(7.8);
     doc.text(noteLines, 24, y);
-    y += noteLines.length * 4.5;
+    y += noteLines.length * 4;
   }
 
-  // ── Footer ────────────────────────────────────────────────
-  setTextColor(doc, BORDER);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.text(
-    `Generated by Fajr Brews — Coffee Splitter`,
-    pageW / 2,
-    287,
-    { align: 'center' }
-  );
+  // ── Footer on all pages ───────────────────────────────────
+  const totalPages = doc.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    setTextColor(doc, BORDER);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    const footerText = totalPages > 1
+      ? `Generated by Fajr Brews — Coffee Splitter  ·  Page ${p} of ${totalPages}`
+      : 'Generated by Fajr Brews — Coffee Splitter';
+    doc.text(footerText, pageW / 2, 287, { align: 'center' });
+  }
 
-  doc.save(pdfFilename(order.name, person.name));
+  return { doc, filename: pdfFilename(order.name, person.name) };
 }
 
-export async function generateOrderInvoicePDF(
+export async function generateInvoicePDF(
+  order: Order,
+  person: Person,
+  payer: Person | undefined,
+  calc: PersonCalculation
+): Promise<void> {
+  const { doc, filename } = await createInvoicePDFDocument(order, person, payer, calc);
+  doc.save(filename);
+}
+
+export async function createOrderInvoicePDFDocument(
   order: Order,
   people: Person[],
   result: CalculationResult
-): Promise<void> {
+): Promise<{ doc: PdfDoc; filename: string }> {
   const JsPDF = await getJsPDF();
   const doc = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = 210;
@@ -276,133 +321,150 @@ export async function generateOrderInvoicePDF(
     return { lotCalc, allocations };
   });
 
-  let y = 20;
-
+  // ── Header Banner ──────────────────────────────────────────
   setFill(doc, ACCENT);
-  doc.rect(0, 0, pageW, 28, 'F');
+  doc.rect(0, 0, pageW, 26, 'F');
 
   setTextColor(doc, WHITE);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text('FAJR BREWS', 20, 12);
-  doc.setFontSize(8);
+  doc.setFontSize(15);
+  doc.text('FAJR BREWS', 20, 11);
+  doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
-  doc.text('COFFEE SPLITTER  ·  FULL ORDER INVOICE', 20, 18);
+  doc.text('COFFEE SPLITTER  ·  FULL ORDER INVOICE', 20, 17);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text(formatZAR(result.totalOrderZar), 190, 12, { align: 'right' });
+  doc.text(formatZAR(result.totalOrderZar), 190, 11, { align: 'right' });
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
-  doc.text('ORDER TOTAL', 190, 17, { align: 'right' });
+  doc.text('ORDER TOTAL', 190, 16, { align: 'right' });
 
-  y = 36;
+  let y = 33;
 
   setTextColor(doc, DARK);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text(order.name, 20, y);
-  y += 6;
+  doc.setFontSize(12.5);
+  const orderTitleLines = doc.splitTextToSize(order.name, 170);
+  doc.text(orderTitleLines, 20, y);
+  y += orderTitleLines.length * 5 + 1;
 
   setTextColor(doc, MID);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.text(`${formatDate(order.orderDate)} · ${result.personIds.length} people · ${result.lotCalcs.length} coffee lots`, 20, y);
-  y += 4.5;
-  doc.text(`Generated for the whole order summary`, 20, y);
-  y += 10;
+  y += 4.2;
+  doc.text('Generated for the whole order summary', 20, y);
+  y += 7;
 
   hLine(doc, y);
-  y += 6;
+  y += 5;
 
   for (const { lotCalc, allocations } of lotAllocations) {
-    y = ensurePageSpace(doc, y, 42 + allocations.length * 10);
+    y = ensurePageSpace(doc, y, 35);
     y = sectionHeader(doc, lotCalc.lotName, y);
 
     y = row(doc, 'Bean cost', formatZAR(lotCalc.goodsZar), y);
     y = row(doc, 'Allocated fees', formatZAR(lotCalc.feesZar), y);
     y = row(doc, 'Lot total', formatZAR(lotCalc.totalZar), y, true);
     y = row(doc, 'Per bag final cost', formatZAR(lotCalc.finalZarPerBag), y);
-    y += 2;
+    y += 1;
 
     setTextColor(doc, MID);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
+    doc.setFontSize(7.5);
     doc.text('ALLOCATIONS', 24, y);
-    y += 5;
+    y += 4.5;
 
     if (allocations.length === 0) {
       setTextColor(doc, MID);
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
+      doc.setFontSize(8);
       doc.text('No participant allocations were recorded for this coffee.', 24, y);
-      y += 7;
+      y += 6;
     } else {
       for (const allocation of allocations) {
-        y = ensurePageSpace(doc, y, 12);
+        y = ensurePageSpace(doc, y, 11);
         setTextColor(doc, DARK);
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8.8);
-        doc.text(allocation.label, 24, y);
+        doc.setFontSize(8.5);
+        const labelLines = doc.splitTextToSize(allocation.label, 125);
+        doc.text(labelLines, 24, y);
         doc.text(formatZAR(allocation.total), 186, y, { align: 'right' });
-        y += 4.2;
+        y += labelLines.length * 3.8 + 0.5;
 
         setTextColor(doc, MID);
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(7.8);
+        doc.setFontSize(7.5);
         const detailLines = doc.splitTextToSize(allocation.detail, 150);
         doc.text(detailLines, 28, y);
-        y += detailLines.length * 4.1 + 2;
+        y += detailLines.length * 3.6 + 2;
       }
     }
 
     hLine(doc, y, 24, 186);
-    y += 7;
+    y += 6;
   }
 
   if (order.fees.length > 0) {
-    y = ensurePageSpace(doc, y, 18 + order.fees.length * 6);
+    y = ensurePageSpace(doc, y, 16 + order.fees.length * 5.5);
     y = sectionHeader(doc, 'Additional fees', y);
     for (const fee of order.fees) {
-      y = row(
-        doc,
-        formatFeeForOwner(fee, peopleById),
-        formatZAR(fee.amountZar),
-        y,
-      );
+      y = ensurePageSpace(doc, y, 8);
+      const feeLabel = formatFeeForOwner(fee, peopleById);
+      const feeLines = doc.splitTextToSize(feeLabel, 125);
+      setTextColor(doc, MID);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.text(feeLines, 24, y);
+      setTextColor(doc, DARK);
+      doc.text(formatZAR(fee.amountZar), 186, y, { align: 'right' });
+      y += Math.max(feeLines.length * 4.5, 5.2);
     }
-    y += 4;
+    y += 2;
   }
 
   y = ensurePageSpace(doc, y, 28);
   hLine(doc, y);
-  y += 6;
+  y += 5;
   y = sectionHeader(doc, 'Summary', y);
   y = row(doc, 'Goods total', formatZAR(result.totalGoodsZar), y);
   y = row(doc, 'Extra fees', formatZAR(result.totalFeesZar), y);
 
-  y += 2;
+  y += 1;
   hLine(doc, y);
-  y += 6;
+  y += 5;
 
   setFill(doc, ACCENT);
-  doc.rect(20, y - 2, 170, 9, 'F');
+  doc.rect(20, y - 2, 170, 8.5, 'F');
   setTextColor(doc, WHITE);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('ORDER TOTAL', 24, y + 4);
-  doc.text(formatZAR(result.totalOrderZar), 186, y + 4, { align: 'right' });
-  y += 14;
+  doc.setFontSize(9.5);
+  doc.text('ORDER TOTAL', 24, y + 3.8);
+  doc.text(formatZAR(result.totalOrderZar), 186, y + 3.8, { align: 'right' });
+  y += 12;
 
-  setTextColor(doc, BORDER);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.text(
-    'Generated by Fajr Brews — Coffee Splitter',
-    pageW / 2,
-    287,
-    { align: 'center' }
-  );
+  // ── Footer on all pages ───────────────────────────────────
+  const totalPages = doc.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    setTextColor(doc, BORDER);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    const footerText = totalPages > 1
+      ? `Generated by Fajr Brews — Coffee Splitter  ·  Page ${p} of ${totalPages}`
+      : 'Generated by Fajr Brews — Coffee Splitter';
+    doc.text(footerText, pageW / 2, 287, { align: 'center' });
+  }
 
-  doc.save(orderPdfFilename(order.name));
+  return { doc, filename: orderPdfFilename(order.name) };
+}
+
+export async function generateOrderInvoicePDF(
+  order: Order,
+  people: Person[],
+  result: CalculationResult
+): Promise<void> {
+  const { doc, filename } = await createOrderInvoicePDFDocument(order, people, result);
+  doc.save(filename);
 }
