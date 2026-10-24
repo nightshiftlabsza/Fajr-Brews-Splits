@@ -20,30 +20,18 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
     <div className="invoice-paper" id={`invoice-${person.id}`}>
       {/* Header */}
       <div className="invoice-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+        <div className="invoice-header-row">
           <div>
-            <h2 style={{ marginBottom: 4 }}>Fajr Brews</h2>
-            <div style={{
-              fontSize: '0.6875rem',
-              fontWeight: 700,
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              opacity: 0.75,
-            }}>
+            <h2>Fajr Brews</h2>
+            <div className="invoice-subtitle">
               Coffee Splitter · Invoice
             </div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{
-              fontSize: '1.75rem',
-              fontWeight: 800,
-              fontVariantNumeric: 'tabular-nums',
-              lineHeight: 1,
-              marginBottom: 4,
-            }}>
+          <div className="text-right">
+            <div className="invoice-amount-hero">
               {invoice.amountDue}
             </div>
-            <div style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.75 }}>
+            <div className="invoice-status-label">
               {payment?.status === 'paid' ? 'Paid' : payment?.status === 'partial' ? 'Partial' : 'Amount Due'}
             </div>
           </div>
@@ -54,18 +42,18 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
       <div className="invoice-body">
         {/* Person + order info */}
         <div className="invoice-section">
-          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+          <div className="invoice-meta-row">
             <div>
-              <div style={{ fontWeight: 700, fontSize: '1.125rem', color: 'var(--color-text-primary)', marginBottom: 4 }}>
+              <div className="invoice-client-name">
                 {person.name}
               </div>
-              {person.phone && <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{person.phone}</div>}
-              {person.email && <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{person.email}</div>}
+              {person.phone && <div className="text-xs text-muted">{person.phone}</div>}
+              {person.email && <div className="text-xs text-muted">{person.email}</div>}
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{invoice.orderName}</div>
-              <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{invoice.orderDate}</div>
-              <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--color-text-secondary)', marginTop: 4 }}>
+            <div className="text-right">
+              <div className="text-xs text-muted">{invoice.orderName}</div>
+              <div className="text-xs text-muted">{invoice.orderDate}</div>
+              <div className="invoice-ref-text">
                 Ref: {invoice.reference}
               </div>
             </div>
@@ -79,24 +67,22 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
           {invoice.coffeeLines.map((line) => {
             return (
               <div className="invoice-lot" key={line.id}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <div className="invoice-lot-row">
                   <div>
-                    <div className="invoice-lot-name" style={{ fontWeight: 700 }}>
+                    <div className="invoice-lot-name">
                       {line.name} · {formatGrams(line.shareGrams)}
                     </div>
-                    <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 2, fontStyle: 'italic' }}>
+                    <div className="invoice-lot-meta" style={{ fontStyle: 'italic', marginBottom: 0 }}>
                       ({line.breakdownSummary})
                     </div>
                     {line.splitWith.length > 0 && (
-                      <div className="invoice-lot-split" style={{ marginTop: 2 }}>
+                      <div className="invoice-lot-split">
                         Split with: {line.splitWith.join(', ')}
                       </div>
                     )}
                   </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--color-text-primary)' }}>
-                      {line.totalAmount}
-                    </div>
+                  <div className="invoice-lot-price">
+                    {line.totalAmount}
                   </div>
                 </div>
               </div>
@@ -106,11 +92,10 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
 
         {/* Audit Details Toggle */}
         {(calc.feeBreakdowns.length > 0 || Math.abs(roundingAdjustment) > 0.001) && (
-          <div style={{ marginTop: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
+          <div className="mt-2 mb-2">
             <button
               type="button"
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: '0.75rem', padding: '2px 8px', color: 'var(--color-text-muted)' }}
+              className="btn btn-ghost btn-sm text-xs text-muted"
               onClick={() => setShowAudit((prev) => !prev)}
             >
               {showAudit ? 'Hide calculation details' : 'Show calculation details'}
@@ -124,9 +109,9 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
             <div className="invoice-section-label">Fee Calculation Details</div>
             {invoice.feeLines.map((fee) => (
               <div className="invoice-total-row" key={fee.id}>
-                <div style={{ color: 'var(--color-text-secondary)' }}>
+                <div className="text-secondary">
                   {fee.label}
-                  <span style={{ marginLeft: 6, fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                  <span className="text-xs text-muted" style={{ marginLeft: 6 }}>
                     {fee.methodLabel}
                   </span>
                 </div>
@@ -135,7 +120,7 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
             ))}
             {Math.abs(roundingAdjustment) > 0.001 && (
               <div className="invoice-total-row">
-                <span style={{ color: 'var(--color-text-secondary)' }}>Rounding adjustment</span>
+                <span className="text-secondary">Rounding adjustment</span>
                 <span className="amount-small">{formatZAR(roundingAdjustment)}</span>
               </div>
             )}
@@ -145,7 +130,7 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
         {/* Totals */}
         <div className="invoice-section">
           <div className="invoice-grand-total">
-            <span style={{ fontSize: '0.8125rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            <span className="invoice-grand-total-label">
               Total due
             </span>
             <span>{formatZAR(calc.totalFinal)}</span>
@@ -170,15 +155,7 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
             ))}
           </div>
           {order.payerNote && (
-            <div style={{
-              marginTop: 'var(--space-4)',
-              padding: 'var(--space-3)',
-              background: 'var(--color-surface-raised)',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: '0.8125rem',
-              color: 'var(--color-text-secondary)',
-              fontStyle: 'italic',
-            }}>
+            <div className="invoice-payer-note">
               {order.payerNote}
             </div>
           )}
@@ -186,7 +163,7 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
 
         {/* Payment status if recorded */}
         {payment && payment.status !== 'unpaid' && (
-          <div className={`alert alert-${payment.status === 'paid' ? 'success' : 'warning'}`} style={{ fontSize: '0.8125rem' }}>
+          <div className={`alert alert-${payment.status === 'paid' ? 'success' : 'warning'} text-xs`}>
             {payment.status === 'paid' ? (
               <>✓ Paid {payment.amountPaid ? formatZAR(payment.amountPaid) : ''}{payment.datePaid ? ` on ${formatDate(payment.datePaid)}` : ''}</>
             ) : (

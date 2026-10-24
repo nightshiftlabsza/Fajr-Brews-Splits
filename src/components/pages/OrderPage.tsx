@@ -665,7 +665,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
           position: absolute;
           top: calc(100% + 6px);
           right: 0;
-          z-index: 50;
+          z-index: var(--z-header);
           min-width: 220px;
           background: var(--color-surface);
           border: 1px solid var(--color-border);
@@ -707,7 +707,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
         }
 
         .dropdown-item-danger {
-          color: var(--color-unpaid, #dc2626);
+          color: var(--color-unpaid);
         }
 
         .dropdown-divider {

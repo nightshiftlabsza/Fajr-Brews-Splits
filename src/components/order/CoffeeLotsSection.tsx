@@ -709,7 +709,7 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
         }
 
         .btn-danger-text {
-          color: var(--color-unpaid, #dc2626);
+          color: var(--color-unpaid);
         }
 
         /* Allocation Row */
@@ -755,13 +755,13 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
         }
 
         .allocation-status-chip.is-complete {
-          background: #d1fae5;
-          color: #065f46;
+          background: var(--color-paid-bg);
+          color: var(--color-paid);
         }
 
         .allocation-status-chip.is-pending {
-          background: #fef3c7;
-          color: #92400e;
+          background: var(--color-partial-bg);
+          color: var(--color-partial);
         }
 
         /* Quick Assign Chips Row */
@@ -1362,7 +1362,7 @@ function CustomSplitModal({ isOpen, lot, bag, people, onSave, onCancel }: Custom
 
   return (
     <div className="fb-modal-backdrop" onClick={onCancel}>
-      <div className="fb-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+      <div className="fb-modal-card" onClick={(e) => e.stopPropagation()}>
         <h3 className="fb-modal-title">Custom Gram Split</h3>
         <p className="fb-modal-description" style={{ marginBottom: 'var(--space-4)' }}>
           Specify exact grams for each person sharing this {formatGrams(targetGrams)} bag of "{lot.name}".
@@ -1436,11 +1436,11 @@ function CustomSplitModal({ isOpen, lot, bag, people, onSave, onCancel }: Custom
         <div style={{
           padding: '8px 12px',
           borderRadius: 'var(--radius-sm)',
-          background: isValid ? '#ecfdf5' : '#fffbeb',
-          border: `1px solid ${isValid ? '#a7f3d0' : '#fde68a'}`,
+          background: isValid ? 'var(--color-paid-bg)' : 'var(--color-partial-bg)',
+          border: `1px solid ${isValid ? 'var(--color-paid)' : 'var(--color-partial)'}`,
           fontSize: '0.8125rem',
           fontWeight: 600,
-          color: isValid ? '#065f46' : '#92400e',
+          color: isValid ? 'var(--color-paid)' : 'var(--color-partial)',
           marginBottom: 'var(--space-4)',
         }}>
           {isValid
