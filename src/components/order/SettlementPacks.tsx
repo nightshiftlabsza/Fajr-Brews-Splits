@@ -31,7 +31,6 @@ export function SettlementPacks({
 
   const isWorkspaceManager = memberRole === 'owner' || memberRole === 'admin';
   const isOwner = !order.ownerId || order.ownerId === user?.id || isWorkspaceManager;
-  const canEditPayments = paymentEditingEnabled && isOwner;
 
   const personMap = useMemo(
     () => new Map(people.map((person) => [person.id, person])),
@@ -51,6 +50,10 @@ export function SettlementPacks({
     }
     return null;
   }, [linkedPersonId, user?.email, people]);
+
+  // The payer receives the money, so they may record payments too.
+  const isPayer = Boolean(currentPersonId && currentPersonId === order.payerId);
+  const canEditPayments = paymentEditingEnabled && (isOwner || isPayer);
 
   const myPerson = currentPersonId ? personMap.get(currentPersonId) : null;
   const myCalc = currentPersonId ? result.personCalcs[currentPersonId] : null;
