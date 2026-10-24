@@ -163,32 +163,46 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
           </div>
         </div>
 
-        <div className="field">
-          <label className="field-label" htmlFor="order-goods-total-zar">Total Coffee Goods (ZAR) *</label>
-          <div style={{ position: 'relative', maxWidth: 300 }}>
-            <span style={{
-              position: 'absolute',
-              left: 14,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: 'var(--color-text-muted)',
-              fontWeight: 700,
-              pointerEvents: 'none',
-            }}>
+        <div className="field" style={{ maxWidth: 420 }}>
+          <label className="field-label" htmlFor="order-goods-total-zar">
+            Total Coffee Goods (ZAR) *
+          </label>
+          <div style={{ position: 'relative' }}>
+            <span
+              style={{
+                position: 'absolute',
+                left: 14,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--color-accent)',
+                fontWeight: 700,
+                fontSize: '1.125rem',
+                pointerEvents: 'none',
+              }}
+            >
               R
             </span>
             <input
               id="order-goods-total-zar"
-              className="input"
+              className="input goods-total-prominent-input"
               type="text"
               inputMode="decimal"
-              style={{ paddingLeft: 34, fontSize: '1.125rem', fontWeight: 600 }}
+              style={{
+                paddingLeft: 36,
+                fontSize: '1.25rem',
+                fontWeight: 700,
+                fontVariantNumeric: 'tabular-nums',
+                height: 48,
+              }}
               value={goodsInput}
               onChange={(e) => setGoodsInput(e.target.value)}
               onBlur={saveGoods}
               placeholder="e.g. 1850.00"
               disabled={isLocked}
             />
+          </div>
+          <div className="field-hint" style={{ marginTop: 'var(--space-2)', fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
+            ℹ This is the final converted total paid to the foreign roaster in ZAR. Each coffee lot and member share is proportionally calculated from this amount.
           </div>
         </div>
       </section>
@@ -333,86 +347,100 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
             No additional fees added yet. If there are customs, shipping, or courier costs, click "+ Add Fee".
           </p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-            {order.fees.map((fee) => {
-              const allocationLabel = getFeeAllocationLabel(fee.allocationType);
-              const targetPerson = fee.personId ? people.find((p) => p.id === fee.personId) : null;
-              return (
-                <div
-                  key={fee.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: 'var(--space-3) var(--space-4)',
-                    background: 'var(--color-surface-raised)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius-sm)',
-                    gap: 'var(--space-3)',
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.9375rem', color: 'var(--color-text-primary)' }}>
-                      {fee.label}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
-                      {allocationLabel}
-                      {targetPerson ? ` (${targetPerson.name})` : ''}
-                    </div>
-                  </div>
+          <div className="table-responsive" style={{ overflowX: 'auto' }}>
+            <table className="fees-table">
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left' }}>Fee Description</th>
+                  <th style={{ textAlign: 'left', width: '220px' }}>Allocation Method</th>
+                  <th style={{ textAlign: 'right', width: '140px' }}>Amount (ZAR)</th>
+                  {!isLocked && <th style={{ textAlign: 'right', width: '130px' }}>Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {order.fees.map((fee) => {
+                  const canonicalType = normalizeFeeAllocationType(fee.allocationType);
+                  const targetPerson = fee.personId ? people.find((p) => p.id === fee.personId) : null;
+                  let badgeLabel = 'Split equally';
+                  let badgeClass = 'badge-equal';
+                  if (canonicalType === 'proportional_by_value') {
+                    badgeLabel = 'Split by coffee value';
+                    badgeClass = 'badge-proportional';
+                  } else if (canonicalType === 'specific_person') {
+                    badgeLabel = targetPerson ? `Assigned to ${targetPerson.name}` : 'Assigned to person';
+                    badgeClass = 'badge-person';
+                  }
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                    <strong style={{ fontSize: '1rem', color: 'var(--color-text-primary)' }}>
-                      {formatZAR(fee.amountZar)}
-                    </strong>
-                    {!isLocked && (
-                      <>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => openEditFee(fee)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          style={{ color: 'var(--color-unpaid)' }}
-                          onClick={() => setDeleteFeeTarget(fee)}
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                  return (
+                    <tr key={fee.id}>
+                      <td>
+                        <strong className="fee-name">{fee.label}</strong>
+                      </td>
+                      <td>
+                        <span className={`fee-allocation-badge ${badgeClass}`}>
+                          {badgeLabel}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+                        {formatZAR(fee.amountZar)}
+                      </td>
+                      {!isLocked && (
+                        <td style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', gap: 'var(--space-1)', justifyContent: 'flex-end' }}>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-xs"
+                              onClick={() => openEditFee(fee)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-xs btn-danger-text"
+                              onClick={() => setDeleteFeeTarget(fee)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </section>
 
-      {/* Summary Totals Footer Card */}
-      <section className="wizard-panel" style={{ background: 'var(--color-surface-raised)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-          <div>
-            <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>Estimated Combined Total</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-text-primary)' }}>
-              {formatZAR(grandTotal)}
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 'var(--space-6)', fontSize: '0.875rem' }}>
-            <div>
-              <span style={{ color: 'var(--color-text-muted)' }}>Goods: </span>
-              <strong>{formatZAR(order.goodsTotalZar || 0)}</strong>
-            </div>
-            <div>
-              <span style={{ color: 'var(--color-text-muted)' }}>Fees: </span>
-              <strong>{formatZAR(totalFees)}</strong>
-            </div>
-          </div>
+      {/* Running Totals Ledger Card */}
+      <section className="wizard-panel goods-ledger-card">
+        <div className="section-label" style={{ marginBottom: 'var(--space-3)' }}>Order Financial Ledger</div>
+        <div className="ledger-table-wrap">
+          <table className="ledger-table">
+            <tbody>
+              <tr>
+                <td className="ledger-label">Goods Subtotal (Foreign Coffee Converted)</td>
+                <td className="ledger-value" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                  {formatZAR(order.goodsTotalZar || 0)}
+                </td>
+              </tr>
+              <tr>
+                <td className="ledger-label">
+                  Additional Fees Subtotal ({order.fees.length} {order.fees.length === 1 ? 'fee' : 'fees'})
+                </td>
+                <td className="ledger-value" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                  {formatZAR(totalFees)}
+                </td>
+              </tr>
+              <tr className="ledger-grand-total-row">
+                <td className="ledger-label-total">Grand Total (ZAR)</td>
+                <td className="ledger-value-total" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                  {formatZAR(grandTotal)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -451,6 +479,111 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
         .fee-option-card.is-selected {
           border-color: var(--color-accent);
           background: var(--color-accent-light);
+        }
+
+        /* Fees table styles */
+        .fees-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 0.875rem;
+        }
+
+        .fees-table th {
+          padding: 8px 12px;
+          border-bottom: 2px solid var(--color-border);
+          color: var(--color-text-muted);
+          font-size: 0.75rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+
+        .fees-table td {
+          padding: 10px 12px;
+          border-bottom: 1px solid var(--color-border);
+          color: var(--color-text-primary);
+        }
+
+        .fees-table tbody tr:hover {
+          background: var(--color-surface-raised);
+        }
+
+        .fee-allocation-badge {
+          display: inline-flex;
+          align-items: center;
+          padding: 2px 8px;
+          border-radius: 999px;
+          font-size: 0.75rem;
+          font-weight: 600;
+        }
+
+        .fee-allocation-badge.badge-equal {
+          background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
+          color: var(--color-accent);
+          border: 1px solid color-mix(in srgb, var(--color-accent) 25%, transparent);
+        }
+
+        .fee-allocation-badge.badge-proportional {
+          background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+          color: var(--color-primary);
+          border: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+        }
+
+        .fee-allocation-badge.badge-person {
+          background: color-mix(in srgb, var(--color-warning) 15%, var(--color-surface));
+          color: var(--color-warning);
+          border: 1px solid color-mix(in srgb, var(--color-warning) 30%, transparent);
+        }
+
+        /* Ledger card */
+        .goods-ledger-card {
+          background: var(--color-surface-raised);
+          border: 1px solid var(--color-border);
+        }
+
+        .ledger-table-wrap {
+          overflow-x: auto;
+        }
+
+        .ledger-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 0.875rem;
+        }
+
+        .ledger-table td {
+          padding: 8px 12px;
+          border-bottom: 1px solid var(--color-border);
+        }
+
+        .ledger-label {
+          color: var(--color-text-secondary);
+        }
+
+        .ledger-value {
+          text-align: right;
+          font-weight: 600;
+          color: var(--color-text-primary);
+        }
+
+        .ledger-grand-total-row td {
+          border-bottom: none;
+          padding-top: 12px;
+          padding-bottom: 12px;
+        }
+
+        .ledger-label-total {
+          font-size: 1rem;
+          font-weight: 800;
+          color: var(--color-text-primary);
+        }
+
+        .ledger-value-total {
+          text-align: right;
+          font-size: 1.25rem;
+          font-weight: 800;
+          color: var(--color-accent);
+          font-family: var(--font-display);
         }
       `}</style>
     </div>

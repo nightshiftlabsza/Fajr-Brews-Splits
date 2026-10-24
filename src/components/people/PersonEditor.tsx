@@ -51,13 +51,31 @@ export function PersonEditor({
     });
   }, [initialValues]);
 
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !saving) {
+        e.preventDefault();
+        onCancel();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [saving, onCancel]);
+
   function setField(key: keyof PersonFormValues) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm((current) => ({ ...current, [key]: e.target.value }));
   }
 
+  function handleFormSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!saving) {
+      void onSave(form);
+    }
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+    <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       {title && (
         <div>
           <div className="wizard-card-title">{title}</div>
@@ -71,18 +89,21 @@ export function PersonEditor({
 
       <div className="grid-2">
         <div className="field">
-          <label className="field-label">Name *</label>
+          <label className="field-label" htmlFor="person-form-name">Name *</label>
           <input
+            id="person-form-name"
             className="input"
             value={form.name}
             onChange={setField('name')}
             placeholder="Full name"
             autoFocus={autoFocus}
+            required
           />
         </div>
         <div className="field">
-          <label className="field-label">Phone</label>
+          <label className="field-label" htmlFor="person-form-phone">Phone</label>
           <input
+            id="person-form-phone"
             className="input"
             type="tel"
             value={form.phone}
@@ -93,8 +114,9 @@ export function PersonEditor({
       </div>
 
       <div className="field">
-        <label className="field-label">Email</label>
+        <label className="field-label" htmlFor="person-form-email">Email</label>
         <input
+          id="person-form-email"
           className="input"
           type="email"
           value={form.email}
@@ -104,8 +126,9 @@ export function PersonEditor({
       </div>
 
       <div className="field">
-        <label className="field-label">Note</label>
+        <label className="field-label" htmlFor="person-form-note">Note</label>
         <textarea
+          id="person-form-note"
           className="textarea"
           value={form.note}
           onChange={setField('note')}
@@ -116,14 +139,14 @@ export function PersonEditor({
 
       {error && <div className="alert alert-error">{error}</div>}
 
-      <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-        <button className="btn btn-primary" onClick={() => onSave(form)} disabled={saving}>
-          {saving ? <span className="spinner" style={{ width: 16, height: 16 }} /> : submitLabel}
-        </button>
-        <button className="btn btn-ghost" onClick={onCancel} disabled={saving}>
+      <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', justifyContent: 'flex-end', marginTop: 'var(--space-2)' }}>
+        <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={saving}>
           {cancelLabel}
         </button>
+        <button type="submit" className="btn btn-primary" disabled={saving}>
+          {saving ? <span className="spinner" style={{ width: 16, height: 16 }} /> : submitLabel}
+        </button>
       </div>
-    </div>
+    </form>
   );
 }

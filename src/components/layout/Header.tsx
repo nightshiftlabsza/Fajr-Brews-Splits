@@ -124,8 +124,8 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
           z-index: var(--z-header);
           background: var(--color-surface);
           border-bottom: 1px solid var(--color-border);
-          box-shadow: var(--shadow-xs);
-          height: 64px;
+          box-shadow: none;
+          height: var(--nav-top-height, 64px);
         }
 
         @media (min-width: 768px) {
@@ -135,32 +135,32 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
           }
         }
 
-        @media (min-width: 768px) and (max-width: 960px) {
-          .nav-top-inner {
-            padding: 0 var(--space-3) !important;
-            gap: var(--space-2) !important;
-          }
-          .nav-desktop-tab {
-            padding: 6px 10px !important;
-            font-size: 0.8125rem !important;
-          }
-          .nav-brand-name {
-            font-size: 1rem !important;
-          }
-          .nav-user-email {
-            max-width: 110px !important;
-          }
-        }
-
         .nav-top-inner {
           display: flex;
           align-items: center;
           justify-content: space-between;
           width: 100%;
-          max-width: 1100px;
+          max-width: var(--content-max-width, 1200px);
           margin: 0 auto;
           padding: 0 var(--space-6);
-          gap: var(--space-6);
+          gap: var(--space-4);
+        }
+
+        @media (min-width: 768px) and (max-width: 1023px) {
+          .nav-top-inner {
+            padding: 0 var(--space-4);
+            gap: var(--space-3);
+          }
+          .nav-desktop-tab {
+            padding: 6px 10px;
+            font-size: 0.8125rem;
+          }
+          .nav-brand-name {
+            font-size: 1rem;
+          }
+          .nav-user-email {
+            max-width: 110px;
+          }
         }
 
         .nav-brand {
@@ -171,7 +171,7 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
         }
 
         .nav-brand-icon {
-          font-size: 1.5rem;
+          font-size: 1.375rem;
           line-height: 1;
         }
 
@@ -194,7 +194,8 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
 
         .nav-desktop-tabs {
           display: flex;
-          gap: 2px;
+          align-items: center;
+          gap: var(--space-1);
         }
 
         .nav-desktop-tab {
@@ -202,8 +203,10 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
           background: transparent;
           cursor: pointer;
           font-size: 0.875rem;
-          font-weight: 600;
-          color: var(--color-text-muted);
+          font-weight: 500;
+          color: var(--color-text-secondary);
+          padding: 6px 14px;
+          border-radius: var(--radius-sm);
           transition: background-color var(--transition-fast), color var(--transition-fast);
         }
 
@@ -215,12 +218,13 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
         .nav-desktop-tab.active {
           background: var(--color-accent-light);
           color: var(--color-accent);
+          font-weight: 600;
         }
 
         .nav-user {
           display: flex;
           align-items: center;
-          gap: var(--space-2);
+          gap: var(--space-3);
           flex-shrink: 0;
           position: relative;
         }
@@ -229,39 +233,40 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
           display: inline-flex;
           align-items: center;
           gap: var(--space-2);
-          min-height: 40px;
-          padding: 6px 10px 6px 8px;
-          border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
-          border-radius: 999px;
-          background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+          min-height: 38px;
+          padding: 4px 12px 4px 6px;
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-full);
+          background: var(--color-surface);
           cursor: pointer;
-          transition: border-color var(--transition-fast), background-color var(--transition-fast), box-shadow var(--transition-fast);
+          transition: border-color var(--transition-fast), background-color var(--transition-fast);
         }
 
         .nav-user-trigger:hover,
         .nav-user-trigger.is-open {
-          border-color: color-mix(in srgb, var(--color-accent) 24%, var(--color-border));
+          border-color: var(--color-border-strong);
           background: var(--color-surface-raised);
-          box-shadow: var(--shadow-xs);
         }
 
         .nav-user-avatar {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          width: 24px;
-          height: 24px;
-          border-radius: 999px;
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
           background: var(--color-accent-light);
           color: var(--color-accent);
           font-size: 0.6875rem;
-          font-weight: 800;
-          letter-spacing: 0.08em;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          flex-shrink: 0;
         }
 
         .nav-user-email {
           font-size: 0.8125rem;
-          color: var(--color-text-muted);
+          font-weight: 500;
+          color: var(--color-text-secondary);
           max-width: 180px;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -271,55 +276,57 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
         .nav-user-caret {
           color: var(--color-text-muted);
           font-size: 0.75rem;
+          flex-shrink: 0;
         }
 
         .nav-user-menu {
           position: absolute;
-          top: calc(100% + 10px);
+          top: calc(100% + 8px);
           right: 0;
           min-width: 220px;
-          padding: 10px;
+          padding: var(--space-3);
           border: 1px solid var(--color-border);
           border-radius: var(--radius-md);
           background: var(--color-surface);
-          box-shadow: var(--shadow-lg);
+          box-shadow: var(--shadow-md);
+          z-index: var(--z-header);
         }
 
         .nav-user-menu-label {
           font-size: 0.6875rem;
           font-weight: 700;
-          letter-spacing: 0.12em;
+          letter-spacing: 0.08em;
           text-transform: uppercase;
           color: var(--color-text-muted);
         }
 
         .nav-user-menu-email {
-          margin-top: 6px;
-          margin-bottom: 10px;
+          margin-top: 4px;
+          margin-bottom: 12px;
           font-size: 0.875rem;
           font-weight: 600;
           color: var(--color-text-primary);
-          word-break: break-word;
+          word-break: break-all;
         }
 
         .nav-user-menu-action {
           width: 100%;
-          min-height: 40px;
-          padding: 10px 12px;
-          border: none;
+          min-height: 36px;
+          padding: 8px 12px;
+          border: 1px solid var(--color-border);
           border-radius: var(--radius-sm);
-          background: color-mix(in srgb, var(--color-surface-raised) 92%, transparent);
+          background: var(--color-surface-raised);
           color: var(--color-text-primary);
           font-size: 0.875rem;
-          font-weight: 600;
+          font-weight: 500;
           text-align: left;
           cursor: pointer;
-          transition: background-color var(--transition-fast), color var(--transition-fast);
+          transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
         }
 
         .nav-user-menu-action:hover {
-          background: color-mix(in srgb, var(--color-accent-light) 88%, white);
-          color: var(--color-accent);
+          background: var(--color-surface-hover);
+          border-color: var(--color-border-strong);
         }
 
         .nav-bottom {

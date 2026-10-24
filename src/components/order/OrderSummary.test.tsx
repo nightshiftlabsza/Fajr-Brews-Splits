@@ -136,7 +136,7 @@ describe('OrderSummary', () => {
     expect(container.textContent).toContain('Order overview');
 
 
-    expect(container.textContent).toContain('People settlement');
+    expect(container.textContent).toContain('Participants & Invoices');
     expect(container.textContent).toContain('Finalize order');
     expect(container.textContent).toContain('Save to Past Orders');
     expect(container.textContent).toContain('Delete order');
@@ -324,4 +324,42 @@ describe('OrderSummary', () => {
     expect(mockStoreState.setCurrentOrderId).not.toHaveBeenCalled();
     expect(onFinalize).toHaveBeenCalledTimes(1);
   });
+
+  it('renders the desktop 2-column cockpit grid with main column and sticky sidebar column', () => {
+    act(() => {
+      root.render(
+        <OrderSummary
+          order={makeOrder({
+            goodsTotalZar: 200,
+            fees: [{ id: 'fee-1', label: 'Shipping', amountZar: 50, allocationType: 'equal_per_person' }],
+          })}
+          onJumpToStep={() => undefined}
+          onFinalize={() => undefined}
+        />,
+      );
+    });
+
+    const cockpitGrid = container.querySelector('.order-cockpit-grid');
+    expect(cockpitGrid).toBeTruthy();
+
+    const mainCol = cockpitGrid?.querySelector('.cockpit-main-column');
+    expect(mainCol).toBeTruthy();
+    expect(mainCol?.querySelector('.order-summary-overview')).toBeTruthy();
+
+    const sidebarCol = cockpitGrid?.querySelector('.cockpit-sidebar-column');
+    expect(sidebarCol).toBeTruthy();
+
+    const heroLabel = sidebarCol?.querySelector('.cockpit-hero-total-label');
+    expect(heroLabel?.textContent).toBe('Grand Total');
+
+    const heroAmount = sidebarCol?.querySelector('.cockpit-hero-total-amount');
+    expect(heroAmount?.textContent).toBe('R250.00');
+
+    const lineItems = sidebarCol?.querySelectorAll('.cockpit-line-item');
+    expect(lineItems?.length).toBeGreaterThanOrEqual(3); // Goods, Fees, People charged
+
+    // Mobile summary card is also present in DOM for small screen collapse
+    expect(container.querySelector('.cockpit-mobile-summary-card')).toBeTruthy();
+  });
 });
+

@@ -26,6 +26,7 @@ export function PendingAccess() {
   const { user, signOut, linkResolution, confirmPersonLink } = useAppStore();
   const [submittingPersonId, setSubmittingPersonId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
 
   async function handleConfirm(personId: string) {
     setSubmittingPersonId(personId);
@@ -35,6 +36,14 @@ export function PendingAccess() {
       setError(nextError);
     }
     setSubmittingPersonId(null);
+  }
+
+  function copyEmail() {
+    if (user?.email) {
+      void navigator.clipboard.writeText(user.email);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    }
   }
 
   const hasCandidates = linkResolution.status === 'needs-confirmation' || linkResolution.status === 'ambiguous';
@@ -47,8 +56,20 @@ export function PendingAccess() {
           {hasCandidates ? 'Confirm your match' : 'Access pending'}
         </h2>
         <p style={{ marginBottom: 'var(--space-2)', color: 'var(--color-text-secondary)' }}>
-          Signed in as <strong>{user?.email}</strong>.
+          Signed in as:
         </p>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-5)', background: 'var(--color-surface-raised)', padding: '6px 14px', borderRadius: 'var(--radius-full)', border: '1px solid var(--color-border)' }}>
+          <strong style={{ fontSize: '0.875rem', color: 'var(--color-text-primary)' }}>{user?.email}</strong>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={copyEmail}
+            style={{ padding: '2px 8px', fontSize: '0.75rem', height: 'auto', minHeight: 24 }}
+            title="Copy email address"
+          >
+            {copied ? '✓ Copied' : 'Copy email'}
+          </button>
+        </div>
 
         {linkResolution.status === 'needs-confirmation' && linkResolution.candidates[0] && (
           <div className="card card-padded" style={{ marginBottom: 'var(--space-4)', textAlign: 'left' }}>

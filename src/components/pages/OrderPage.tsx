@@ -234,6 +234,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
           {activeOrders.map((order) => {
             const isActive = order.id === currentOrder.id;
             const roaster = resolveOrderRoaster(order, roasters);
+            const orderStatus = normalizeOrderStatus(order.status, order.isArchived);
             return (
               <button
                 key={order.id}
@@ -242,8 +243,24 @@ export function OrderPage({ onNavigateToHistory }: Props) {
                 className={`order-tab-chip ${isActive ? 'is-active' : ''}`}
                 onClick={() => void handleSelectOrder(order.id)}
               >
-                {roaster && <span className="order-tab-dot">☕</span>}
+                {roaster ? (
+                  <span className="order-tab-roaster" title={`Roaster: ${roaster.name}`}>
+                    {roaster.logoUrl ? (
+                      <img src={roaster.logoUrl} alt="" className="order-tab-roaster-logo" />
+                    ) : (
+                      <span className="order-tab-roaster-initials">
+                        {roaster.name.slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="order-tab-dot" aria-hidden="true">☕</span>
+                )}
+                {isActive && <span className="order-tab-active-dot" aria-hidden="true" />}
                 <span className="order-tab-title">{order.name || 'Untitled Order'}</span>
+                <span className={`order-tab-status status-${orderStatus}`}>
+                  {orderStatus === 'planning' ? 'Planning' : orderStatus === 'locked' ? 'Locked' : 'Completed'}
+                </span>
               </button>
             );
           })}
@@ -522,8 +539,8 @@ export function OrderPage({ onNavigateToHistory }: Props) {
         .order-tab-chip {
           display: inline-flex;
           align-items: center;
-          gap: 6px;
-          padding: 7px 14px;
+          gap: 8px;
+          padding: 6px 12px;
           border-radius: 999px;
           border: 1px solid var(--color-border);
           background: var(--color-surface);
@@ -544,9 +561,74 @@ export function OrderPage({ onNavigateToHistory }: Props) {
         .order-tab-chip.is-active {
           background: var(--color-accent-light);
           color: var(--color-accent);
-          border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+          border-color: var(--color-accent);
           font-weight: 700;
           box-shadow: var(--shadow-xs);
+        }
+
+        .order-tab-active-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 999px;
+          background: var(--color-accent);
+          flex-shrink: 0;
+        }
+
+        .order-tab-roaster {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .order-tab-roaster-logo {
+          width: 18px;
+          height: 18px;
+          border-radius: 999px;
+          object-fit: cover;
+          border: 1px solid var(--color-border);
+        }
+
+        .order-tab-roaster-initials {
+          width: 18px;
+          height: 18px;
+          border-radius: 999px;
+          background: var(--color-surface-raised);
+          border: 1px solid var(--color-border);
+          font-size: 0.5625rem;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--color-text-secondary);
+          line-height: 1;
+        }
+
+        .order-tab-status {
+          font-size: 0.625rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          padding: 1px 6px;
+          border-radius: 999px;
+        }
+
+        .order-tab-status.status-planning {
+          background: var(--color-surface-raised);
+          color: var(--color-text-secondary);
+          border: 1px solid var(--color-border);
+        }
+
+        .order-tab-status.status-locked {
+          background: var(--color-warning-bg);
+          color: var(--color-warning);
+          border: 1px solid color-mix(in srgb, var(--color-warning) 30%, transparent);
+        }
+
+        .order-tab-status.status-completed {
+          background: var(--color-paid-bg);
+          color: var(--color-paid);
+          border: 1px solid color-mix(in srgb, var(--color-paid) 30%, transparent);
         }
 
         .order-tab-new {

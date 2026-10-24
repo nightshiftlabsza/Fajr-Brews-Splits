@@ -143,4 +143,87 @@ describe('MyStatsPage', () => {
     expect(container.textContent).toContain('250g');
     expect(container.textContent).toContain('Father Coffee');
   });
+
+  it('renders balanced 5-metric cards dashboard and favorite roaster metrics', () => {
+    mockStoreState.linkedPersonId = 'person-1';
+    mockStoreState.linkResolution = {
+      status: 'linked',
+      linkedPersonId: 'person-1',
+      matchedBy: 'manual',
+      person: {
+        personId: 'person-1',
+        name: 'Amina',
+        matchReason: 'email',
+      },
+      candidates: [],
+    };
+    mockStoreState.orders = [
+      makeOrder({ id: 'order-1', goodsTotalZar: 400 }),
+      makeOrder({ id: 'order-2', goodsTotalZar: 200, roasterId: 'roaster-1' }),
+    ];
+
+    act(() => {
+      root.render(<MyStatsPage />);
+    });
+
+    const statsGrid = container.querySelector('.stats-grid');
+    expect(statsGrid).toBeTruthy();
+
+    const metricCards = statsGrid?.querySelectorAll('.stats-metric-card');
+    expect(metricCards?.length).toBe(5);
+
+    const labels = Array.from(metricCards ?? []).map((card) =>
+      card.querySelector('.wizard-metric-label')?.textContent?.trim(),
+    );
+    expect(labels).toContain('Total Spent');
+    expect(labels).toContain('Orders Participated');
+    expect(labels).toContain('Total Bags (250g eq)');
+    expect(labels).toContain('Total Coffee Grams');
+    expect(labels).toContain('Average Cost per Bag');
+
+    // Favorite roaster card
+    const favPanel = container.querySelector('.stats-favorite-panel');
+    expect(favPanel).toBeTruthy();
+    expect(favPanel?.textContent).toContain('Father Coffee');
+    expect(favPanel?.textContent).toContain('100% of finalized orders in range');
+  });
+
+  it('renders order breakdown table with num-cell tabular numbers and supports time range presets', async () => {
+    mockStoreState.linkedPersonId = 'person-1';
+    mockStoreState.linkResolution = {
+      status: 'linked',
+      linkedPersonId: 'person-1',
+      matchedBy: 'manual',
+      person: {
+        personId: 'person-1',
+        name: 'Amina',
+        matchReason: 'email',
+      },
+      candidates: [],
+    };
+    mockStoreState.orders = [
+      makeOrder({ id: 'order-1', name: 'March Coffee Drop' }),
+    ];
+
+    act(() => {
+      root.render(<MyStatsPage />);
+    });
+
+    // Check time range preset buttons
+    const pills = container.querySelectorAll('.stats-filter-pill');
+    expect(pills.length).toBe(5);
+    const pillLabels = Array.from(pills).map((p) => p.textContent?.trim());
+    expect(pillLabels).toEqual(['All time', 'Last 3 months', 'Last 6 months', 'Last 12 months', 'Custom range']);
+
+    // Check breakdown table
+    const table = container.querySelector('.data-table');
+    expect(table).toBeTruthy();
+    expect(table?.textContent).toContain('March Coffee Drop');
+
+    // Tabular numbers cells
+    const numCells = table?.querySelectorAll('.num-cell');
+    expect(numCells?.length).toBeGreaterThanOrEqual(2);
+    expect(numCells?.[0].textContent).toContain('250g');
+  });
 });
+

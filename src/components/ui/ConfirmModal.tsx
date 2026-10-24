@@ -24,6 +24,7 @@ export function ConfirmModal({
   onCancel,
 }: ConfirmModalProps) {
   const cancelBtnRef = useRef<HTMLButtonElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -37,6 +38,29 @@ export function ConfirmModal({
       if (e.key === 'Escape' && !isLoading) {
         e.preventDefault();
         onCancel();
+        return;
+      }
+
+      if (e.key === 'Tab' && cardRef.current) {
+        const focusable = cardRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusable.length === 0) return;
+
+        const firstElement = focusable[0];
+        const lastElement = focusable[focusable.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstElement) {
+            e.preventDefault();
+            lastElement.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            e.preventDefault();
+            firstElement.focus();
+          }
+        }
       }
     }
 
@@ -65,18 +89,20 @@ export function ConfirmModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="fb-modal-title"
+      aria-describedby="fb-modal-description"
     >
       <div
+        ref={cardRef}
         className="fb-modal-card"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="fb-modal-header">
-          <div className="fb-modal-icon">
+          <div className="fb-modal-icon" aria-hidden="true">
             {variant === 'danger' ? '⚠️' : '☕'}
           </div>
           <div>
             <h3 id="fb-modal-title" className="fb-modal-title">{title}</h3>
-            <p className="fb-modal-description">{description}</p>
+            <p id="fb-modal-description" className="fb-modal-description">{description}</p>
           </div>
         </div>
 

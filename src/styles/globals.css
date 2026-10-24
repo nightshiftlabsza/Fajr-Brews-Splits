@@ -34,7 +34,7 @@ body {
 /* ── Accessibility & Focus ───────────────────────────────── */
 
 :focus-visible {
-  outline: 2px solid var(--color-border-focus);
+  outline: 2px solid var(--color-primary, var(--color-border-focus));
   outline-offset: 2px;
 }
 
@@ -42,8 +42,10 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid var(--color-border-focus);
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-primary, var(--color-border-focus));
   outline-offset: 2px;
 }
 
@@ -118,7 +120,7 @@ code {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  max-width: 1400px; /* R1: cap content width on ultrawides */
+  max-width: var(--content-max-width, 1200px);
   margin-inline: auto;
   width: 100%;
 }
@@ -140,17 +142,24 @@ code {
 @media (min-width: 768px) {
   .app-main {
     padding-bottom: 0;
-    padding-top: 64px; /* space for top nav on desktop */
+    padding-top: var(--nav-top-height, 64px); /* space for top nav on desktop */
   }
 }
 
 .page-container {
-  max-width: 720px;
+  width: 100%;
+  max-width: var(--content-max-width, 1200px);
   margin: 0 auto;
   padding: var(--space-6) var(--space-4);
 }
 
-@media (min-width: 768px) {
+@media (min-width: 768px) and (max-width: 1023px) {
+  .page-container {
+    padding: var(--space-6) var(--space-4);
+  }
+}
+
+@media (min-width: 1024px) {
   .page-container {
     padding: var(--space-8) var(--space-6);
   }
@@ -167,7 +176,12 @@ code {
 
 .pending-access-card {
   width: 100%;
-  max-width: 480px;
+  max-width: 420px;
+  margin: 40px auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
   text-align: center;
 }
 
@@ -291,7 +305,7 @@ code {
 }
 
 .stats-page {
-  max-width: 1100px;
+  max-width: var(--content-max-width, 1200px);
 }
 
 .stats-grid {
@@ -623,9 +637,9 @@ tr:hover td {
 }
 
 .alert-warning {
-  background: var(--color-partial-bg);
-  color: var(--color-partial);
-  border-color: var(--color-partial);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border-color: var(--color-warning);
 }
 
 .alert-success {
@@ -909,7 +923,7 @@ tr:hover td {
 /* R8: laptop mid-breakpoint */
 @media (min-width: 1024px) {
   .page-container {
-    padding: var(--space-10) var(--space-8);
+    padding: var(--space-8) var(--space-6);
   }
 }
 
@@ -1409,7 +1423,7 @@ tr:hover td {
     flex-direction: column;
     gap: var(--space-4);
     position: sticky;
-    top: 80px;
+    top: calc(var(--nav-top-height, 64px) + var(--space-4));
   }
 
   .cockpit-mobile-summary-card {
@@ -1821,7 +1835,8 @@ input[type=number]::-webkit-outer-spin-button {
 }
 
 .fb-modal-card {
-  width: min(100%, 460px);
+  width: min(100%, 480px);
+  margin: auto;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -1885,5 +1900,158 @@ input[type=number]::-webkit-outer-spin-button {
     width: 100%;
     justify-content: center;
   }
+}
+
+/* ── Reduced Motion Compliance ───────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .fb-modal-backdrop,
+  .fb-modal-card {
+    animation: none !important;
+  }
+}
+
+/* ── People Directory Grid ───────────────────────────────── */
+
+.people-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-4);
+}
+
+@media (max-width: 1023px) and (min-width: 768px) {
+  .people-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .people-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+}
+
+.person-directory-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  transition: border-color var(--transition-fast);
+}
+
+.person-directory-card:hover {
+  border-color: color-mix(in srgb, var(--color-accent) 30%, var(--color-border));
+}
+
+.person-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-accent-light) 65%, var(--color-surface-raised));
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.875rem;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
+
+/* ── Secondary View Data Tables ──────────────────────────── */
+
+.data-table-container {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  -webkit-overflow-scrolling: touch;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  text-align: left;
+}
+
+.data-table th {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  vertical-align: middle;
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tr:hover td {
+  background: color-mix(in srgb, var(--color-surface-raised) 50%, var(--color-surface));
+}
+
+.data-table .num-cell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── Settings Sub-Tabs ───────────────────────────────────── */
+
+.settings-tab-bar {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--space-3);
+}
+
+.settings-tab-btn {
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+  transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.settings-tab-btn:hover {
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+}
+
+.settings-tab-btn.is-active {
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 24%, var(--color-border));
+}
+
+.settings-theme-option:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 

@@ -58,6 +58,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
   const [orderInvoiceError, setOrderInvoiceError] = useState<string | null>(null);
   const [deleteTargetOrder, setDeleteTargetOrder] = useState<Order | null>(null);
   const [importStatus, setImportStatus] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
+  const [search, setSearch] = useState('');
 
   const personNames = useMemo(
     () => Object.fromEntries(people.map((person) => [person.id, person.name])),
@@ -86,6 +87,18 @@ export function HistoryPage({ participantOnly = false }: Props) {
     .map(syncOrderStatusFlags)
     .filter((order) => order.status === 'archived' || order.status === 'completed')
     .sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
+  const filteredPastOrders = pastOrders.filter((order) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    const roaster = resolveOrderRoaster(order, roasters);
+    const payerName = order.payerId ? (personNames[order.payerId]?.toLowerCase() ?? '') : '';
+    return (
+      order.name.toLowerCase().includes(q) ||
+      (roaster?.name && roaster.name.toLowerCase().includes(q)) ||
+      payerName.includes(q) ||
+      formatDateShort(order.orderDate).toLowerCase().includes(q)
+    );
+  });
   const selectedOrder = selectedOrderId ? pastOrders.find((order) => order.id === selectedOrderId) ?? null : null;
   const editingOrder = editingOrderId ? pastOrders.find((order) => order.id === editingOrderId) ?? null : null;
   const selectedOrderSummary = selectedOrder ? getPastOrderSummary(selectedOrder, personNames) : null;
@@ -399,6 +412,20 @@ export function HistoryPage({ participantOnly = false }: Props) {
         </div>
       )}
 
+      {/* Search Bar */}
+      {pastOrders.length > 0 && (
+        <div style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-4)', maxWidth: 440 }}>
+          <input
+            className="input"
+            type="search"
+            placeholder="Search past orders…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ flex: 1 }}
+          />
+        </div>
+      )}
+
       {participantArchiveState === 'ready' && pastOrders.length === 0 && (
         <div className="empty-state">
           <div className="empty-state-icon">📂</div>
@@ -407,10 +434,19 @@ export function HistoryPage({ participantOnly = false }: Props) {
         </div>
       )}
 
+      {pastOrders.length > 0 && filteredPastOrders.length === 0 && (
+        <div className="empty-state">
+          <div className="empty-state-icon">🔍</div>
+          <h3>No past orders found</h3>
+          <p>No past orders match your search &quot;{search}&quot;.</p>
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-        {pastOrders.map((order) => {
+        {filteredPastOrders.map((order) => {
           const summary = getPastOrderSummary(order, personNames);
           const orderRoaster = resolveOrderRoaster(order, roasters);
+          const payerName = order.payerId ? (personNames[order.payerId] || 'Unassigned') : 'Unassigned';
           const isSelected = selectedOrderId === order.id;
           const isEditing = editingOrderId === order.id;
 
@@ -451,7 +487,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
                       </div>
 
                       <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
-                        {formatDateShort(order.orderDate)} · {summary.participantCount} participant{summary.participantCount !== 1 ? 's' : ''} · {summary.lotCount} lot{summary.lotCount !== 1 ? 's' : ''}
+                        {formatDateShort(order.orderDate)} · Payer: {payerName} · {summary.participantCount} participant{summary.participantCount !== 1 ? 's' : ''} · {summary.lotCount} lot{summary.lotCount !== 1 ? 's' : ''}
                       </div>
                       {orderRoaster && (
                         <div className="field-hint" style={{ marginTop: 4 }}>
@@ -460,7 +496,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
                       )}
 
                       <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap', marginTop: 'var(--space-3)', fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
-                        <span><strong>{formatZAR(summary.totalZar)}</strong> total</span>
+                        <span><strong style={{ fontVariantNumeric: 'tabular-nums' }}>{formatZAR(summary.totalZar)}</strong> total</span>
                         <span>{summary.paidCount}/{summary.participantCount} paid</span>
                         {summary.partialCount > 0 && <span>{summary.partialCount} partial</span>}
                         {!summary.isValid && <span style={{ color: 'var(--color-warning)' }}>Needs review</span>}

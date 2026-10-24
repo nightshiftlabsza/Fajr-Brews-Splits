@@ -18,7 +18,7 @@ interface Props {
 }
 
 export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
-  const { people, roasters, orders, updateOrder, deleteOrder, setCurrentOrderId, flushOrderWrites } = useAppStore();
+  const { people, roasters, orders, updateOrder, deleteOrder, setCurrentOrderId, flushOrderWrites, user, memberRole } = useAppStore();
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -102,6 +102,8 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
   const orderRoaster = resolveOrderRoaster(order, roasters);
   const orderStatus = getOrderStatus(order, result);
   const savingPastOrder = order.isArchived;
+  const isWorkspaceManager = memberRole === 'owner' || memberRole === 'admin';
+  const isOwner = !order.ownerId || order.ownerId === user?.id || isWorkspaceManager;
 
   return (
     <div className="order-cockpit">
@@ -159,9 +161,12 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
               </div>
             </div>
             {Math.abs(result.roundingAbsorbed) > 0.001 && (
-              <div className="wizard-inline-note order-summary-note">
-                Rounding absorbed by {payer?.name || 'payer'}: {formatZAR(Math.abs(result.roundingAbsorbed))}
-                {result.roundingAbsorbed > 0 ? ' (payer pays more)' : ' (payer pays less)'}
+              <div className="rounding-absorption-badge">
+                <span className="rounding-badge-icon" aria-hidden="true">ℹ</span>
+                <span>
+                  Rounding absorbed by <strong>{payer?.name || 'payer'}</strong>: <strong>{formatZAR(Math.abs(result.roundingAbsorbed))}</strong>
+                  {result.roundingAbsorbed > 0 ? ' (payer pays more)' : ' (payer pays less)'}
+                </span>
               </div>
             )}
           </section>
@@ -172,8 +177,9 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
             order={order}
             people={people}
             result={result}
+            title="Participants & Invoices"
             onPaymentChange={updatePayment}
-            paymentEditingEnabled
+            paymentEditingEnabled={isOwner}
           />
         </div>
 
@@ -201,8 +207,11 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
             </div>
 
             {Math.abs(result.roundingAbsorbed) > 0.001 && (
-              <div className="wizard-inline-note order-summary-note" style={{ marginBottom: 'var(--space-4)' }}>
-                Rounding absorbed by {payer?.name || 'payer'}: {formatZAR(Math.abs(result.roundingAbsorbed))}
+              <div className="rounding-absorption-badge" style={{ marginBottom: 'var(--space-4)' }}>
+                <span className="rounding-badge-icon" aria-hidden="true">ℹ</span>
+                <span>
+                  Rounding absorbed by <strong>{payer?.name || 'payer'}</strong>: <strong>{formatZAR(Math.abs(result.roundingAbsorbed))}</strong>
+                </span>
               </div>
             )}
 
@@ -302,6 +311,44 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
           onCancel={() => setConfirmDeleteOpen(false)}
         />
       )}
+
+      <style>{`
+        .rounding-absorption-badge {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 12px;
+          border-radius: var(--radius-sm);
+          background: var(--color-surface-raised);
+          border: 1px solid var(--color-border);
+          font-size: 0.8125rem;
+          color: var(--color-text-secondary);
+          font-variant-numeric: tabular-nums;
+        }
+
+        .rounding-badge-icon {
+          font-weight: 700;
+          color: var(--color-accent);
+          flex-shrink: 0;
+        }
+
+        @media (min-width: 1024px) {
+          .order-cockpit-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.4fr) minmax(320px, 380px);
+            gap: var(--space-6);
+            align-items: start;
+          }
+
+          .cockpit-sidebar-column {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-4);
+            position: sticky;
+            top: calc(var(--nav-top-height, 64px) + var(--space-4));
+          }
+        }
+      `}</style>
     </div>
   );
 }
