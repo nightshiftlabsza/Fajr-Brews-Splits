@@ -35,14 +35,7 @@
   /* Z-index scale */
   --z-sticky:  40;
   --z-header:  100;
-  --z-overlay: 500;
   --z-modal:   1000;
-
-  /* Standard responsive breakpoints */
-  --breakpoint-sm: 640px;
-  --breakpoint-md: 768px;
-  --breakpoint-lg: 1024px;
-  --breakpoint-xl: 1280px;
 }
 
 /* ── Theme 1: Emerald Ledger ─────────────────────────────── */
