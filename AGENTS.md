@@ -59,6 +59,9 @@ The app needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` (in `.env.
 - Fix root causes. Never skip, delete, loosen, or `.skip` a test to get green; if a test is wrong, say so in the report and explain.
 - If the prompt is ambiguous or contradicts the code, stop and say so in the report rather than guessing.
 
+## Reuse first (before writing code)
+Read the code your change touches, then stop at the first answer that holds: does it need to be written at all; is it already in the repo (existing helper, component, token, test util); does the platform or an installed dependency already do it; can it be a few lines; only then write the smallest version that runs, with a test if it has logic. Smaller is never a reason to cut input validation, error handling, security, accessibility or tests for money and risky logic. After any rename or signature change, search for every caller, including files outside your diff, and fix or report them.
+
 ## Definition of done
 
 Run all of these, from a clean tree state, after your final edit:
