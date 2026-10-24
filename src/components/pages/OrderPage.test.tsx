@@ -286,4 +286,62 @@ describe('OrderPage component tests', () => {
     expect(container.textContent).toContain('Locked (Finalizing)');
     expect(container.textContent).toContain('Archive Order');
   });
+
+  it('renders active orders switcher strip with tablist semantics, badges, and quick new order button', async () => {
+    const order1 = makeOrder('order-1', 'Order 1', {
+      status: 'planning',
+      roasterSnapshot: { id: 'roaster-1', name: 'Father Coffee' },
+    });
+    const order2 = makeOrder('order-2', 'Order 2', {
+      status: 'locked',
+      roasterSnapshot: null,
+    });
+    mockStoreState.orders = [order1, order2];
+    mockStoreState.currentOrderId = 'order-1';
+    mockStoreState.createOrder = vi.fn().mockResolvedValue(makeOrder('order-3', 'Order 3'));
+
+    await act(async () => {
+      root.render(<OrderPage onNavigateToHistory={vi.fn()} />);
+    });
+
+    const tablist = container.querySelector('.active-orders-strip');
+    expect(tablist).toBeTruthy();
+    expect(tablist?.getAttribute('role')).toBe('tablist');
+    expect(tablist?.getAttribute('aria-label')).toBe('Active Coffee Orders');
+
+    const tabs = Array.from(container.querySelectorAll('.order-tab-chip')) as HTMLButtonElement[];
+    expect(tabs.length).toBe(3); // 2 orders + 1 "+ New Order" chip
+
+    // First tab (active)
+    const tab1 = tabs[0];
+    expect(tab1.getAttribute('role')).toBe('tab');
+    expect(tab1.getAttribute('aria-selected')).toBe('true');
+    expect(tab1.classList.contains('is-active')).toBe(true);
+    expect(tab1.querySelector('.order-tab-active-dot')).toBeTruthy();
+    expect(tab1.querySelector('.order-tab-roaster')?.getAttribute('title')).toBe('Roaster: Father Coffee');
+    expect(tab1.textContent).toContain('Order 1');
+    expect(tab1.textContent).toContain('Planning');
+
+    // Second tab (inactive)
+    const tab2 = tabs[1];
+    expect(tab2.getAttribute('role')).toBe('tab');
+    expect(tab2.getAttribute('aria-selected')).toBe('false');
+    expect(tab2.classList.contains('is-active')).toBe(false);
+    expect(tab2.querySelector('.order-tab-active-dot')).toBeNull();
+    expect(tab2.textContent).toContain('Order 2');
+    expect(tab2.textContent).toContain('Locked');
+
+    // Third chip is "+ New Order"
+    const newOrderChip = tabs[2];
+    expect(newOrderChip.classList.contains('order-tab-new')).toBe(true);
+    expect(newOrderChip.textContent).toContain('+ New Order');
+
+    await act(async () => {
+      newOrderChip.click();
+      await Promise.resolve();
+    });
+
+    expect(mockStoreState.createOrder).toHaveBeenCalledTimes(1);
+  });
 });
+

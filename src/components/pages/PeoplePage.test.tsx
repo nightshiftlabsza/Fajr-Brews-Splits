@@ -8,6 +8,7 @@ import type { CoffeeLot, Order, Person } from '../../types';
 const mockStoreState = {
   people: [] as Person[],
   orders: [] as Order[],
+  linkedPersonId: null as string | null,
   addPerson: vi.fn().mockResolvedValue(undefined),
   updatePerson: vi.fn().mockResolvedValue(undefined),
   deletePerson: vi.fn().mockResolvedValue(undefined),
@@ -75,6 +76,7 @@ describe('PeoplePage deletion guards (BUG-ORD-09 / BUG-EDGE-05)', () => {
     root = createRoot(container);
     mockStoreState.people = [];
     mockStoreState.orders = [];
+    mockStoreState.linkedPersonId = null;
     mockStoreState.addPerson = vi.fn().mockResolvedValue(undefined);
     mockStoreState.updatePerson = vi.fn().mockResolvedValue(undefined);
     mockStoreState.deletePerson = vi.fn().mockResolvedValue(undefined);
@@ -309,4 +311,113 @@ describe('PeoplePage deletion guards (BUG-ORD-09 / BUG-EDGE-05)', () => {
     expect(container.querySelector('.fb-modal-card')).toBeTruthy();
     expect(container.querySelector('.fb-modal-title')?.textContent).toContain('Remove "Evan"?');
   });
+
+  it('renders people in responsive people-grid with initials avatar, You badge, and title tooltips', async () => {
+    const person1: Person = {
+      id: 'p-1',
+      workspaceId: 'ws-1',
+      name: 'Farooq Omar',
+      email: 'farooq@example.com',
+      phone: '0821234567',
+      note: 'Prefers filter roasts',
+      createdAt: '2026-03-18T00:00:00.000Z',
+      updatedAt: '2026-03-18T00:00:00.000Z',
+    };
+    const person2: Person = {
+      id: 'p-2',
+      workspaceId: 'ws-1',
+      name: 'Zahra Patel',
+      email: 'zahra@example.com',
+      createdAt: '2026-03-18T00:00:00.000Z',
+      updatedAt: '2026-03-18T00:00:00.000Z',
+    };
+    mockStoreState.people = [person1, person2];
+    mockStoreState.linkedPersonId = 'p-1';
+
+    await act(async () => {
+      root.render(<PeoplePage />);
+    });
+
+    const grid = container.querySelector('.people-grid');
+    expect(grid).toBeTruthy();
+
+    const cards = container.querySelectorAll('.person-directory-card');
+    expect(cards.length).toBe(2);
+
+    // Card 1 (Farooq - Linked Person "You")
+    const card1 = cards[0];
+    const avatar1 = card1.querySelector('.person-avatar');
+    expect(avatar1?.textContent?.trim()).toBe('FO'); // Initials Farooq Omar
+    expect(card1.textContent).toContain('Farooq Omar');
+    expect(card1.textContent).toContain('You');
+    expect(card1.textContent).toContain('0821234567 · farooq@example.com');
+    expect(card1.textContent).toContain('Prefers filter roasts');
+
+    // Title attributes for overflow tooltips
+    const nameEl1 = card1.querySelector('[title="Farooq Omar"]');
+    expect(nameEl1).toBeTruthy();
+    const contactEl1 = card1.querySelector('[title="0821234567 · farooq@example.com"]');
+    expect(contactEl1).toBeTruthy();
+
+    // Card 2 (Zahra - Not linked)
+    const card2 = cards[1];
+    const avatar2 = card2.querySelector('.person-avatar');
+    expect(avatar2?.textContent?.trim()).toBe('ZP'); // Initials Zahra Patel
+    expect(card2.textContent).toContain('Zahra Patel');
+    expect(card2.textContent).not.toContain('You');
+  });
+
+  it('filters people directory by search input query', async () => {
+    mockStoreState.people = [
+      makePerson('p-1', 'Alice Walker'),
+      makePerson('p-2', 'Bob Smith'),
+    ];
+
+    await act(async () => {
+      root.render(<PeoplePage />);
+    });
+
+    expect(container.textContent).toContain('Alice Walker');
+    expect(container.textContent).toContain('Bob Smith');
+
+    const searchInput = container.querySelector('input[type="search"]') as HTMLInputElement;
+    expect(searchInput).toBeTruthy();
+
+    await act(async () => {
+      const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      valueSetter?.call(searchInput, 'Walker');
+      searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+      searchInput.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('Alice Walker');
+    expect(container.textContent).not.toContain('Bob Smith');
+  });
+
+  it('opens add person modal dialog with accessible modal semantics when Add Person is clicked', async () => {
+    mockStoreState.people = [];
+
+    await act(async () => {
+      root.render(<PeoplePage />);
+    });
+
+    const addBtn = Array.from(container.querySelectorAll('button')).find(
+      (btn) => btn.textContent?.includes('Add person'),
+    );
+    expect(addBtn).toBeTruthy();
+
+    await act(async () => {
+      addBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    // Modal dialog is opened
+    const modalBackdrop = container.querySelector('.fb-modal-backdrop');
+    expect(modalBackdrop).toBeTruthy();
+    expect(modalBackdrop?.getAttribute('role')).toBe('dialog');
+    expect(modalBackdrop?.getAttribute('aria-modal')).toBe('true');
+    expect(container.querySelector('.fb-modal-card')).toBeTruthy();
+    expect(container.textContent).toContain('New person');
+  });
 });
+

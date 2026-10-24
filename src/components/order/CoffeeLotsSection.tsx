@@ -23,6 +23,9 @@ import {
 } from '../../lib/allocationInference';
 import { PersonEditor, type PersonFormValues } from '../people/PersonEditor';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import { LotEditorForm, type LotFormState } from './LotEditorForm';
+import { BagAdjusterRow } from './BagAdjusterRow';
+import { CustomSplitModal } from './CustomSplitModal';
 
 function genId() {
   return typeof crypto !== 'undefined' && crypto.randomUUID
@@ -35,15 +38,6 @@ interface Props {
   onOrderChange?: (patch: Partial<Order>) => void | Promise<void>;
   onContinue?: () => void;
   registerCommit?: (commit: (() => Promise<void>) | null) => void;
-}
-
-interface LotFormState {
-  name: string;
-  foreignPricePerBag: string;
-  gramsPerBag: string;
-  initialBagCount: string;
-  selectedBuyerIds: string[];
-  bags: Bag[];
 }
 
 const emptyLotForm: LotFormState = {
@@ -411,7 +405,7 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
               <div className="lot-card-top-row">
                 <div className="lot-name-group">
                   <h3 className="lot-name">{lot.name}</h3>
-                  <div className="lot-spec-tags">
+                  <div className="lot-spec-tags" style={{ fontVariantNumeric: 'tabular-nums' }}>
                     <span className="spec-tag">{bags.length} × {formatGrams(lot.gramsPerBag)}</span>
                     <span className="spec-dot">·</span>
                     <span className="spec-tag">{lot.foreignPricePerBag} / bag</span>
@@ -448,7 +442,9 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
                     {lotSummary.isComplete ? (
                       <span className="allocation-status-chip is-complete">✓ Allocated</span>
                     ) : (
-                      <span className="allocation-status-chip is-pending">{lotSummary.unassignedCount} needed</span>
+                      <span className="allocation-status-chip is-pending" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        <span aria-hidden="true">⚠</span> {lotSummary.unassignedCount} needed
+                      </span>
                     )}
                   </div>
                 </div>
@@ -547,13 +543,18 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
       {/* ── Bottom Next-Step Action ── */}
       {order.lots.length > 0 && onContinue && (
         <div className="lot-section-footer">
-          {!isAllocationComplete && (
-            <div className="lot-section-footer-hint">
-              {allocationStats.unassignedBags > 0
-                ? `${allocationStats.unassignedBags} ${allocationStats.unassignedBags === 1 ? 'bag needs' : 'bags need'} a buyer`
-                : 'Complete bag allocations to continue'}
-            </div>
-          )}
+          <div className="lot-section-footer-summary">
+            <span className="lot-section-total-count" style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {allocationStats.totalBags} {allocationStats.totalBags === 1 ? 'total bag' : 'total bags'}
+            </span>
+            {!isAllocationComplete && (
+              <span className="lot-section-footer-hint">
+                · {allocationStats.unassignedBags > 0
+                  ? `${allocationStats.unassignedBags} ${allocationStats.unassignedBags === 1 ? 'bag needs' : 'bags need'} a buyer`
+                  : 'Complete bag allocations to continue'}
+              </span>
+            )}
+          </div>
           <button
             type="button"
             className="btn btn-primary lot-section-next-btn"
@@ -749,19 +750,25 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
         .allocation-status-chip {
           font-size: 0.6875rem;
           font-weight: 700;
-          padding: 2px 7px;
+          padding: 2px 8px;
           border-radius: 999px;
           text-transform: uppercase;
+          letter-spacing: 0.04em;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
         }
 
         .allocation-status-chip.is-complete {
           background: var(--color-paid-bg);
           color: var(--color-paid);
+          border: 1px solid color-mix(in srgb, var(--color-paid) 30%, transparent);
         }
 
         .allocation-status-chip.is-pending {
-          background: var(--color-partial-bg);
-          color: var(--color-partial);
+          background: var(--color-warning-bg);
+          color: var(--color-warning);
+          border: 1px solid color-mix(in srgb, var(--color-warning) 30%, transparent);
         }
 
         /* Quick Assign Chips Row */
@@ -913,16 +920,33 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
         .lot-section-footer {
           display: flex;
           align-items: center;
-          justify-content: flex-end;
+          justify-content: space-between;
           gap: var(--space-4);
-          padding-top: var(--space-2);
+          padding: var(--space-4) var(--space-5);
+          background: var(--color-surface);
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-md);
+          box-shadow: var(--shadow-xs);
           margin-top: var(--space-2);
+        }
+
+        .lot-section-footer-summary {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+          font-size: 0.875rem;
+          flex-wrap: wrap;
+        }
+
+        .lot-section-total-count {
+          font-weight: 700;
+          color: var(--color-text-primary);
         }
 
         .lot-section-footer-hint {
           font-size: 0.8125rem;
-          color: var(--color-text-muted);
-          font-weight: 500;
+          color: var(--color-warning);
+          font-weight: 600;
         }
 
         .lot-section-next-btn {
@@ -968,499 +992,4 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
   );
 }
 
-// ─── Lot Editor Form Component ───
-interface LotEditorFormProps {
-  form: LotFormState;
-  error: string;
-  isNew: boolean;
-  people: Person[];
-  personNameMap: Record<string, string>;
-  onChange: (form: LotFormState) => void;
-  onSave: () => void;
-  onCancel: () => void;
-  onAddNewPerson: () => void;
-}
 
-function LotEditorForm({
-  form,
-  error,
-  isNew,
-  people,
-  personNameMap,
-  onChange,
-  onSave,
-  onCancel,
-  onAddNewPerson,
-}: LotEditorFormProps) {
-  function setField(key: keyof LotFormState) {
-    return (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value;
-      const nextForm = { ...form, [key]: val };
-
-      // Live inference sync when bag count or grams change
-      if (key === 'initialBagCount' || key === 'gramsPerBag') {
-        const rawCount = (key === 'initialBagCount' ? val : form.initialBagCount).trim();
-        const parsedCount = parseInt(rawCount, 10);
-        const grams = parseInt(key === 'gramsPerBag' ? val : form.gramsPerBag, 10) || 250;
-        if (!isNaN(parsedCount) && parsedCount > 0) {
-          const resizedBags = form.bags.length < parsedCount
-            ? [...form.bags, ...createEmptyBags(parsedCount - form.bags.length)]
-            : form.bags.slice(0, parsedCount);
-          nextForm.bags = syncLotWithSelectedBuyers(resizedBags, form.selectedBuyerIds, grams);
-        }
-      }
-
-      onChange(nextForm);
-    };
-  }
-
-  function handleToggleBuyer(personId: string) {
-    const isSelected = form.selectedBuyerIds.includes(personId);
-    const nextBuyers = isSelected
-      ? form.selectedBuyerIds.filter((id) => id !== personId)
-      : [...form.selectedBuyerIds, personId];
-
-    const bagCount = parseInt(form.initialBagCount, 10) || 1;
-    const grams = parseInt(form.gramsPerBag, 10) || 250;
-    const resizedBags = form.bags.length < bagCount
-      ? [...form.bags, ...createEmptyBags(bagCount - form.bags.length)]
-      : form.bags.slice(0, bagCount);
-
-    const nextBags = syncLotWithSelectedBuyers(resizedBags, nextBuyers, grams);
-    onChange({
-      ...form,
-      selectedBuyerIds: nextBuyers,
-      bags: nextBags,
-    });
-  }
-
-  const bagCount = parseInt(form.initialBagCount, 10) || 1;
-  const grams = parseInt(form.gramsPerBag, 10) || 250;
-  const compactSummary = formatCompactAllocationSummary(form.bags, grams, personNameMap);
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-      <div className="field">
-        <label className="field-label">Coffee Name *</label>
-        <input
-          className="input"
-          value={form.name}
-          onChange={setField('name')}
-          placeholder="e.g. Pastel Hour, Gesha Spirits, Caballero"
-          autoFocus
-        />
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 'var(--space-3)' }}>
-        <div className="field">
-          <label className="field-label">List Price *</label>
-          <input
-            className="input"
-            type="number"
-            value={form.foreignPricePerBag}
-            onChange={setField('foreignPricePerBag')}
-            min="0.01"
-            step="0.01"
-            placeholder="18.50"
-          />
-        </div>
-
-        <div className="field">
-          <label className="field-label">Grams / Bag *</label>
-          <input
-            className="input"
-            type="number"
-            value={form.gramsPerBag}
-            onChange={setField('gramsPerBag')}
-            min="1"
-            step="1"
-            placeholder="250"
-          />
-        </div>
-
-        <div className="field">
-          <label className="field-label">Bags *</label>
-          <input
-            className="input"
-            type="number"
-            value={form.initialBagCount}
-            onChange={setField('initialBagCount')}
-            min="1"
-            step="1"
-            placeholder="1"
-          />
-        </div>
-      </div>
-
-      {/* Buyers Selector */}
-      <div className="field" style={{ margin: 0 }}>
-        <label className="field-label" style={{ marginBottom: '6px' }}>Buyers</label>
-        <div className="buyer-chips-wrap">
-          {people.map((p) => {
-            const isSelected = form.selectedBuyerIds.includes(p.id);
-            return (
-              <button
-                key={p.id}
-                type="button"
-                className={`buyer-chip ${isSelected ? 'is-selected' : ''}`}
-                onClick={() => handleToggleBuyer(p.id)}
-              >
-                {isSelected ? '✓ ' : '+ '}
-                {p.name}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            className="buyer-chip buyer-chip-add"
-            onClick={onAddNewPerson}
-          >
-            + Add Person
-          </button>
-        </div>
-
-        {/* Live Inferred Allocation Preview */}
-        <div style={{
-          marginTop: 'var(--space-2)',
-          padding: '6px 10px',
-          background: 'var(--color-surface-raised)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-sm)',
-          fontSize: '0.8125rem',
-          color: 'var(--color-text-secondary)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-        }}>
-          <span style={{ fontWeight: 700, color: 'var(--color-accent)' }}>Allocation:</span>
-          <span>{bagCount} × {formatGrams(grams)} · {compactSummary}</span>
-        </div>
-      </div>
-
-      {error && <div className="alert alert-error">{error}</div>}
-
-      <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', marginTop: 'var(--space-1)' }}>
-        <button type="button" className="btn btn-primary" onClick={onSave}>
-          {isNew ? 'Create Coffee' : 'Save Changes'}
-        </button>
-        <button type="button" className="btn btn-ghost" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Bag Adjuster Row Component ───
-interface BagAdjusterRowProps {
-  bag: Bag;
-  bagIndex: number;
-  totalBagsInLot: number;
-  gramsPerBag: number;
-  people: Person[];
-  personNameMap: Record<string, string>;
-  onAssignFull: (personId: string) => void;
-  onSplitEqual: (personIds: string[]) => void;
-  onOpenCustomSplit: () => void;
-  onRemoveBag: () => void;
-  onAddNewPerson: () => void;
-}
-
-function BagAdjusterRow({
-  bag,
-  bagIndex,
-  totalBagsInLot,
-  gramsPerBag,
-  people,
-  personNameMap,
-  onAssignFull,
-  onSplitEqual,
-  onOpenCustomSplit,
-  onRemoveBag,
-  onAddNewPerson,
-}: BagAdjusterRowProps) {
-  const currentBuyerIds = bag.buyers.map((b) => b.personId).filter(Boolean);
-
-  function handleModeChange(newMode: BagSplitMode) {
-    if (newMode === 'full') {
-      const firstBuyer = currentBuyerIds[0] || people[0]?.id || '';
-      onAssignFull(firstBuyer);
-    } else if (newMode === 'equal') {
-      const splitBuyers = currentBuyerIds.length >= 2 ? currentBuyerIds : people.slice(0, 2).map((p) => p.id);
-      onSplitEqual(splitBuyers);
-    } else if (newMode === 'custom') {
-      onOpenCustomSplit();
-    }
-  }
-
-  function handleTogglePerson(personId: string) {
-    if (bag.splitMode === 'full' || bag.splitMode === 'unassigned') {
-      if (currentBuyerIds.includes(personId)) {
-        onAssignFull('');
-      } else {
-        onAssignFull(personId);
-      }
-    } else {
-      // Split mode
-      let nextIds: string[];
-      if (currentBuyerIds.includes(personId)) {
-        nextIds = currentBuyerIds.filter((id) => id !== personId);
-      } else {
-        nextIds = [...currentBuyerIds, personId];
-      }
-      if (nextIds.length === 1) {
-        onAssignFull(nextIds[0]);
-      } else {
-        onSplitEqual(nextIds);
-      }
-    }
-  }
-
-  return (
-    <div className="bag-adjuster-card">
-      <div className="bag-adjuster-top">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span className="bag-index-badge">Bag {bagIndex + 1} ({formatGrams(gramsPerBag)})</span>
-          <div className="bag-mode-pills">
-            <button
-              type="button"
-              className={`bag-mode-pill ${bag.splitMode === 'full' || bag.splitMode === 'unassigned' ? 'is-active' : ''}`}
-              onClick={() => handleModeChange('full')}
-            >
-              Whole Bag
-            </button>
-            <button
-              type="button"
-              className={`bag-mode-pill ${bag.splitMode === 'equal' ? 'is-active' : ''}`}
-              onClick={() => handleModeChange('equal')}
-            >
-              Equal Split
-            </button>
-            <button
-              type="button"
-              className={`bag-mode-pill ${bag.splitMode === 'custom' ? 'is-active' : ''}`}
-              onClick={() => handleModeChange('custom')}
-            >
-              Custom Grams
-            </button>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {bag.splitMode === 'custom' && (
-            <button
-              type="button"
-              className="btn btn-ghost btn-xs"
-              onClick={onOpenCustomSplit}
-            >
-              Edit Grams
-            </button>
-          )}
-          {totalBagsInLot > 1 && (
-            <button
-              type="button"
-              className="btn btn-ghost btn-xs btn-danger-text"
-              onClick={onRemoveBag}
-              aria-label={`Remove Bag ${bagIndex + 1}`}
-              title="Remove this bag"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="bag-adjuster-buyers">
-        {people.map((p) => {
-          const isSelected = currentBuyerIds.includes(p.id);
-          return (
-            <button
-              key={p.id}
-              type="button"
-              className={`buyer-chip ${isSelected ? 'is-selected' : ''}`}
-              onClick={() => handleTogglePerson(p.id)}
-            >
-              {isSelected ? '✓ ' : '+ '}
-              {p.name}
-              {isSelected && bag.splitMode === 'custom' && (
-                <span style={{ fontSize: '0.6875rem', opacity: 0.8 }}>
-                  ({bag.buyers.find((b) => b.personId === p.id)?.grams}g)
-                </span>
-              )}
-            </button>
-          );
-        })}
-        <button
-          type="button"
-          className="buyer-chip buyer-chip-add"
-          onClick={onAddNewPerson}
-        >
-          + Add Person
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Custom Split Modal Component ───
-interface CustomSplitModalProps {
-  isOpen: boolean;
-  lot: CoffeeLot;
-  bag: Bag;
-  people: Person[];
-  onSave: (buyers: { personId: string; grams: number }[]) => void;
-  onCancel: () => void;
-}
-
-function CustomSplitModal({ isOpen, lot, bag, people, onSave, onCancel }: CustomSplitModalProps) {
-  const [gramMap, setGramMap] = useState<Record<string, string>>(() => {
-    const map: Record<string, string> = {};
-    for (const b of bag.buyers) {
-      if (b.personId) map[b.personId] = String(b.grams || '');
-    }
-    return map;
-  });
-  const [error, setError] = useState('');
-
-  if (!isOpen) return null;
-
-  const buyerIds = Object.keys(gramMap);
-  const totalGrams = buyerIds.reduce((sum, id) => sum + (parseInt(gramMap[id], 10) || 0), 0);
-  const targetGrams = lot.gramsPerBag;
-  const remaining = targetGrams - totalGrams;
-  const isValid = totalGrams === targetGrams && buyerIds.length > 0 && buyerIds.every((id) => (parseInt(gramMap[id], 10) || 0) > 0);
-
-  const availablePeople = people.filter((p) => !buyerIds.includes(p.id));
-
-  function handleAddPersonToSplit(personId: string) {
-    if (!personId) return;
-    const initialGrams = remaining > 0 ? String(remaining) : '';
-    setGramMap((prev) => ({ ...prev, [personId]: initialGrams }));
-    setError('');
-  }
-
-  function handleRemovePersonFromSplit(personId: string) {
-    setGramMap((prev) => {
-      const next = { ...prev };
-      delete next[personId];
-      return next;
-    });
-    setError('');
-  }
-
-  function handleSave() {
-    if (!isValid) {
-      setError(`Buyer grams must total exactly ${targetGrams}g (currently ${totalGrams}g).`);
-      return;
-    }
-    const buyers = buyerIds.map((personId) => ({
-      personId,
-      grams: parseInt(gramMap[personId], 10),
-    }));
-    onSave(buyers);
-  }
-
-  return (
-    <div className="fb-modal-backdrop" onClick={onCancel}>
-      <div className="fb-modal-card" onClick={(e) => e.stopPropagation()}>
-        <h3 className="fb-modal-title">Custom Gram Split</h3>
-        <p className="fb-modal-description" style={{ marginBottom: 'var(--space-4)' }}>
-          Specify exact grams for each person sharing this {formatGrams(targetGrams)} bag of "{lot.name}".
-        </p>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
-          {buyerIds.map((personId) => {
-            const person = people.find((p) => p.id === personId);
-            return (
-              <div key={personId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-                <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>{person?.name || 'Unknown'}</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input
-                    className="input"
-                    type="number"
-                    style={{ width: 90, textAlign: 'right' }}
-                    value={gramMap[personId]}
-                    onChange={(e) => {
-                      setGramMap({ ...gramMap, [personId]: e.target.value });
-                      setError('');
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && isValid) {
-                        e.preventDefault();
-                        handleSave();
-                      }
-                    }}
-                    min="1"
-                    step="1"
-                    autoFocus={buyerIds[0] === personId}
-                  />
-                  <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>g</span>
-                  {buyerIds.length > 1 && (
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-xs"
-                      style={{ color: 'var(--color-text-muted)' }}
-                      onClick={() => handleRemovePersonFromSplit(personId)}
-                      aria-label={`Remove ${person?.name || 'person'} from split`}
-                      title="Remove person"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Add another person to split */}
-        {availablePeople.length > 0 && (
-          <div style={{ marginBottom: 'var(--space-4)' }}>
-            <select
-              className="input"
-              value=""
-              onChange={(e) => handleAddPersonToSplit(e.target.value)}
-              style={{ fontSize: '0.8125rem' }}
-            >
-              <option value="">+ Add person to this split...</option>
-              {availablePeople.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Balance indicator */}
-        <div style={{
-          padding: '8px 12px',
-          borderRadius: 'var(--radius-sm)',
-          background: isValid ? 'var(--color-paid-bg)' : 'var(--color-partial-bg)',
-          border: `1px solid ${isValid ? 'var(--color-paid)' : 'var(--color-partial)'}`,
-          fontSize: '0.8125rem',
-          fontWeight: 600,
-          color: isValid ? 'var(--color-paid)' : 'var(--color-partial)',
-          marginBottom: 'var(--space-4)',
-        }}>
-          {isValid
-            ? `✓ Total: ${totalGrams}g of ${targetGrams}g (Valid split)`
-            : remaining > 0
-              ? `Total: ${totalGrams}g of ${targetGrams}g (${remaining}g unallocated)`
-              : `Total: ${totalGrams}g of ${targetGrams}g (${Math.abs(remaining)}g over limit)`}
-        </div>
-
-        {error && <div className="alert alert-error" style={{ marginBottom: 'var(--space-4)' }}>{error}</div>}
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
-          <button type="button" className="btn btn-secondary" onClick={onCancel}>
-            Cancel
-          </button>
-          <button type="button" className="btn btn-primary" onClick={handleSave} disabled={!isValid}>
-            Save Custom Split
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}

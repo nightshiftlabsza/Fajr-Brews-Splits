@@ -88,4 +88,78 @@ describe('Header navigation', () => {
 
     expect(mockStoreState.signOut).toHaveBeenCalledTimes(1);
   });
+
+  it('triggers onTabChange when desktop tab is clicked', () => {
+    const handleTabChange = vi.fn();
+    act(() => {
+      root.render(<Header currentTab="order" onTabChange={handleTabChange} />);
+    });
+
+    const settingsTab = container.querySelector('.nav-desktop-tabs button:last-child');
+    expect(settingsTab).toBeTruthy();
+
+    act(() => {
+      settingsTab!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(handleTabChange).toHaveBeenCalledWith('settings');
+  });
+
+  it('renders the realtime sync dot and brand typography', () => {
+    act(() => {
+      root.render(<Header currentTab="order" onTabChange={() => undefined} />);
+    });
+
+    const syncDot = container.querySelector('.realtime-dot');
+    expect(syncDot).toBeTruthy();
+    expect(syncDot?.getAttribute('title')).toBe('Realtime sync active');
+
+    const brandName = container.querySelector('.nav-brand-name');
+    expect(brandName?.textContent).toBe('Fajr Brews');
+
+    const brandSub = container.querySelector('.nav-brand-sub');
+    expect(brandSub?.textContent).toBe('Coffee Splitter');
+  });
+
+  it('maintains accessible aria-expanded and aria-haspopup on user profile trigger', () => {
+    act(() => {
+      root.render(<Header currentTab="order" onTabChange={() => undefined} />);
+    });
+
+    const trigger = container.querySelector('.nav-user-trigger');
+    expect(trigger?.getAttribute('aria-haspopup')).toBe('menu');
+    expect(trigger?.getAttribute('aria-expanded')).toBe('false');
+
+    act(() => {
+      trigger!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(trigger?.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('renders floating mobile bottom navigation with aria-current on active tab', () => {
+    act(() => {
+      root.render(<Header currentTab="my-stats" onTabChange={() => undefined} />);
+    });
+
+    const bottomNav = container.querySelector('.nav-bottom');
+    expect(bottomNav).toBeTruthy();
+    expect(bottomNav?.getAttribute('aria-label')).toBe('Primary navigation');
+
+    const activeBottomTab = bottomNav?.querySelector('.nav-bottom-tab.active');
+    expect(activeBottomTab?.getAttribute('aria-current')).toBe('page');
+    expect(activeBottomTab?.textContent).toContain('My Stats');
+  });
+
+  it('verifies required tokens.css definitions for M2 milestone', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const tokensContent = fs.readFileSync(path.resolve(__dirname, '../../styles/tokens.css'), 'utf-8');
+
+    expect(tokensContent).toContain('--content-max-width: 1200px;');
+    expect(tokensContent).toContain('--color-warning:        #d97706;');
+    expect(tokensContent).toContain('--color-warning-bg:     #fef3c7;');
+    expect(tokensContent).toContain('--color-warning:        #f59e0b;');
+    expect(tokensContent).toContain('--color-warning-bg:     #78350f;');
+  });
 });

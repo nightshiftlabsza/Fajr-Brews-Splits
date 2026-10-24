@@ -139,21 +139,26 @@ export function MyStatsPage() {
       ) : (
         <>
           <section className="stats-grid">
-            <MetricCard label="Total bags bought" value={`${formatNumber(summary.totalBags, 1)} bags`} />
-            <MetricCard label="Total grams bought" value={`${formatNumber(summary.totalGrams, 0)}g`} />
-            <MetricCard label="Total spent" value={formatCurrency(summary.totalSpent)} emphasize />
+            <MetricCard label="Total Spent" value={formatCurrency(summary.totalSpent)} emphasize />
             <MetricCard
-              label="Average cost per 250g"
-              value={summary.averageCostPer250g === null ? 'Not available' : formatCurrency(summary.averageCostPer250g)}
+              label="Orders Participated"
+              value={String(filteredOrders.length)}
+              detail={filteredOrders.length > 0 ? `Newest: ${formatDateShort(filteredOrders[0]?.order.orderDate ?? '')}` : undefined}
+            />
+            <MetricCard label="Total Bags (250g eq)" value={`${formatNumber(summary.totalBags, 1)} bags`} />
+            <MetricCard
+              label="Total Coffee Grams"
+              value={`${formatNumber(summary.totalGrams, 0)}g`}
+              detail="Total grams bought"
             />
             <MetricCard
-              label="Finalized orders"
-              value={String(filteredOrders.length)}
-              detail={`Newest: ${formatDateShort(filteredOrders[0]?.order.orderDate ?? '')}`}
+              label="Average Cost per Bag"
+              value={summary.averageCostPer250g === null ? 'Not available' : formatCurrency(summary.averageCostPer250g)}
+              detail="Per 250g equivalent"
             />
           </section>
 
-          <section className="wizard-panel stats-favorite-panel">
+          <section className="wizard-panel stats-favorite-panel" style={{ marginBottom: 'var(--space-6)' }}>
             <div className="wizard-card-header">
               <div>
                 <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Favorite roaster</div>
@@ -166,12 +171,12 @@ export function MyStatsPage() {
                 <RoasterAvatar
                   name={summary.favoriteRoaster.name}
                   logoUrl={summary.favoriteRoaster.logoUrl}
-                  size={60}
+                  size={56}
                 />
                 <div>
                   <div className="stats-favorite-name">{summary.favoriteRoaster.name}</div>
                   <div className="wizard-card-copy">
-                    {formatNumber(summary.favoriteRoaster.bagCount, 1)} bags across the selected range.
+                    {formatNumber(summary.favoriteRoaster.bagCount, 1)} bags · {filteredOrders.length > 0 ? Math.round((filteredOrders.filter((o) => o.roaster?.name === summary.favoriteRoaster?.name || o.order.roasterId === summary.favoriteRoaster?.id).length / filteredOrders.length) * 100) : 0}% of finalized orders in range.
                   </div>
                 </div>
               </div>
@@ -183,6 +188,55 @@ export function MyStatsPage() {
                 </span>
               </div>
             )}
+          </section>
+
+          <section className="wizard-panel">
+            <div className="wizard-card-header">
+              <div>
+                <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Order Breakdown</div>
+                <div className="wizard-card-title">Finalized orders in this period</div>
+              </div>
+            </div>
+
+            <div className="data-table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Order</th>
+                    <th>Date</th>
+                    <th>Roaster</th>
+                    <th style={{ textAlign: 'right' }}>Coffee Grams</th>
+                    <th style={{ textAlign: 'right' }}>Total Share (ZAR)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrders.map(({ order, personCalc, roaster }) => (
+                    <tr key={order.id}>
+                      <td style={{ fontWeight: 600 }}>{order.name}</td>
+                      <td style={{ color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                        {formatDateShort(order.orderDate)}
+                      </td>
+                      <td>
+                        {roaster ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                            <RoasterAvatar name={roaster.name} logoUrl={roaster.logoUrl} size={22} />
+                            <span>{roaster.name}</span>
+                          </div>
+                        ) : (
+                          <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+                        )}
+                      </td>
+                      <td className="num-cell">
+                        {formatNumber(personCalc.totalGrams ?? 0, 0)}g
+                      </td>
+                      <td className="num-cell" style={{ fontWeight: 600 }}>
+                        {formatCurrency(personCalc.totalFinal ?? 0)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </section>
         </>
       )}
