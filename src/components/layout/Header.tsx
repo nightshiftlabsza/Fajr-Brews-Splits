@@ -121,7 +121,7 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
           top: 0;
           left: 0;
           right: 0;
-          z-index: 100;
+          z-index: var(--z-header);
           background: var(--color-surface);
           border-bottom: 1px solid var(--color-border);
           box-shadow: var(--shadow-xs);
@@ -252,7 +252,7 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
           width: 24px;
           height: 24px;
           border-radius: 999px;
-          background: color-mix(in srgb, var(--color-accent) 16%, white);
+          background: var(--color-accent-light);
           color: var(--color-accent);
           font-size: 0.6875rem;
           font-weight: 800;
@@ -328,7 +328,7 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
           left: 50%;
           bottom: calc(12px + env(safe-area-inset-bottom, 0));
           transform: translateX(-50%);
-          z-index: 100;
+          z-index: var(--z-header);
           width: min(calc(100% - 24px), 560px);
           padding: 8px;
           gap: 4px;

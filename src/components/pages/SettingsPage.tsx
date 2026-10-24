@@ -83,7 +83,7 @@ export function SettingsPage() {
       </div>
 
       {/* Sub-tab navigation */}
-      <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-6)' }}>
+      <div className="settings-tab-bar">
         <button
           type="button"
           className={`btn btn-sm ${activeTab === 'general' ? 'btn-primary' : 'btn-secondary'}`}
@@ -106,32 +106,25 @@ export function SettingsPage() {
         <>
           {/* Account */}
           <Section title="Account">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-          <div>
-            <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{user?.email}</div>
-            <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 2, textTransform: 'capitalize' }}>
-              Workspace role: {roleLabel}
+            <div className="settings-account-row">
+              <div>
+                <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{user?.email}</div>
+                <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 2, textTransform: 'capitalize' }}>
+                  Workspace role: {roleLabel}
+                </div>
+              </div>
+              <button className="btn btn-secondary btn-sm" onClick={signOut}>Sign out</button>
             </div>
-          </div>
-          <button className="btn btn-secondary btn-sm" onClick={signOut}>Sign out</button>
-        </div>
-      </Section>
+          </Section>
 
       {/* Theme */}
       <Section title="Theme">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }}>
+        <div className="settings-theme-group">
           {THEMES.map((theme) => (
-            <label key={theme.id} style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--space-4)',
-              padding: 'var(--space-4)',
-              border: `1.5px solid ${settings.theme === theme.id ? 'var(--color-accent)' : 'var(--color-border)'}`,
-              borderRadius: 'var(--radius-sm)',
-              cursor: 'pointer',
-              background: settings.theme === theme.id ? 'var(--color-accent-light)' : 'transparent',
-              transition: 'border-color var(--transition-fast), background var(--transition-fast)',
-            }}>
+            <label
+              key={theme.id}
+              className={`settings-theme-option ${settings.theme === theme.id ? 'is-selected' : ''}`}
+            >
               <input
                 type="radio"
                 name="theme"
@@ -149,7 +142,7 @@ export function SettingsPage() {
         </div>
 
         {/* Mode */}
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+        <div className="settings-mode-group">
           {MODES.map((mode) => (
             <button
               key={mode.id}
@@ -177,7 +170,7 @@ export function SettingsPage() {
           ) : (
             <>
               {/* Invite */}
-              <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)', flexWrap: 'wrap' }}>
+              <div className="settings-invite-form">
                 <input
                   className="input"
                   type="email"
@@ -208,18 +201,9 @@ export function SettingsPage() {
               {workspaceMembers.length === 0 ? (
                 <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>No members found.</p>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                <div className="settings-member-list">
                   {workspaceMembers.map((member) => (
-                    <div key={member.id} style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: 'var(--space-3)',
-                      background: 'var(--color-surface-raised)',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid var(--color-border)',
-                      gap: 'var(--space-3)',
-                    }}>
+                    <div key={member.id} className="settings-member-card">
                       <div>
                         <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--color-text-primary)' }}>
                           {member.fullName || member.email || member.userId}

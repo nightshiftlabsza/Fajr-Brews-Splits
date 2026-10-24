@@ -1,0 +1,1074 @@
+[
+  {
+    "type": "Horizontal Overflow",
+    "tab": "Order (Step 1 Setup)",
+    "width": 360,
+    "scrollW": 360,
+    "clientW": 360,
+    "elements": [
+      {
+        "tag": "div",
+        "cls": ".active-orders-strip",
+        "id": "",
+        "right": 762,
+        "width": 746,
+        "text": "☕Friedhats Autumn Drop☕Sey Cof"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.is-active",
+        "id": "",
+        "right": 427,
+        "width": 202,
+        "text": "☕Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 412,
+        "width": 147,
+        "text": "Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip",
+        "id": "",
+        "right": 645,
+        "width": 210,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 630,
+        "width": 180,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.order-tab-new",
+        "id": "",
+        "right": 762,
+        "width": 109,
+        "text": "+ New Order"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 447,
+        "width": 162,
+        "text": "3. Goods & Fees2"
+      },
+      {
+        "tag": "span",
+        "cls": ".nav-counter",
+        "id": "",
+        "right": 433,
+        "width": 19,
+        "text": "2"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 565,
+        "width": 110,
+        "text": "4. Summary"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 657,
+        "width": 84,
+        "text": "Invoices"
+      }
+    ]
+  },
+  {
+    "type": "Horizontal Overflow",
+    "tab": "Order (Step 1 Setup)",
+    "width": 390,
+    "scrollW": 390,
+    "clientW": 390,
+    "elements": [
+      {
+        "tag": "div",
+        "cls": ".active-orders-strip",
+        "id": "",
+        "right": 762,
+        "width": 746,
+        "text": "☕Friedhats Autumn Drop☕Sey Cof"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.is-active",
+        "id": "",
+        "right": 427,
+        "width": 202,
+        "text": "☕Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 412,
+        "width": 147,
+        "text": "Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip",
+        "id": "",
+        "right": 645,
+        "width": 210,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 630,
+        "width": 180,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.order-tab-new",
+        "id": "",
+        "right": 762,
+        "width": 109,
+        "text": "+ New Order"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 447,
+        "width": 162,
+        "text": "3. Goods & Fees2"
+      },
+      {
+        "tag": "span",
+        "cls": ".nav-counter",
+        "id": "",
+        "right": 433,
+        "width": 19,
+        "text": "2"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 565,
+        "width": 110,
+        "text": "4. Summary"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 657,
+        "width": 84,
+        "text": "Invoices"
+      }
+    ]
+  },
+  {
+    "type": "Horizontal Overflow",
+    "tab": "Order (Step 1 Setup)",
+    "width": 768,
+    "scrollW": 768,
+    "clientW": 768,
+    "elements": [
+      {
+        "tag": "div",
+        "cls": ".active-orders-strip",
+        "id": "",
+        "right": 770,
+        "width": 746,
+        "text": "☕Friedhats Autumn Drop☕Sey Cof"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.order-tab-new",
+        "id": "",
+        "right": 770,
+        "width": 109,
+        "text": "+ New Order"
+      }
+    ]
+  },
+  {
+    "type": "Horizontal Overflow",
+    "tab": "Order (Step 2 Coffees)",
+    "width": 360,
+    "scrollW": 360,
+    "clientW": 360,
+    "elements": [
+      {
+        "tag": "div",
+        "cls": ".active-orders-strip",
+        "id": "",
+        "right": 762,
+        "width": 746,
+        "text": "☕Friedhats Autumn Drop☕Sey Cof"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.is-active",
+        "id": "",
+        "right": 427,
+        "width": 202,
+        "text": "☕Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 412,
+        "width": 147,
+        "text": "Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip",
+        "id": "",
+        "right": 645,
+        "width": 210,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 630,
+        "width": 180,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.order-tab-new",
+        "id": "",
+        "right": 762,
+        "width": 109,
+        "text": "+ New Order"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 447,
+        "width": 162,
+        "text": "3. Goods & Fees2"
+      },
+      {
+        "tag": "span",
+        "cls": ".nav-counter",
+        "id": "",
+        "right": 433,
+        "width": 19,
+        "text": "2"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 565,
+        "width": 110,
+        "text": "4. Summary"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 657,
+        "width": 84,
+        "text": "Invoices"
+      }
+    ]
+  },
+  {
+    "type": "Horizontal Overflow",
+    "tab": "Order (Step 2 Coffees)",
+    "width": 390,
+    "scrollW": 390,
+    "clientW": 390,
+    "elements": [
+      {
+        "tag": "div",
+        "cls": ".active-orders-strip",
+        "id": "",
+        "right": 762,
+        "width": 746,
+        "text": "☕Friedhats Autumn Drop☕Sey Cof"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.is-active",
+        "id": "",
+        "right": 427,
+        "width": 202,
+        "text": "☕Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 412,
+        "width": 147,
+        "text": "Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip",
+        "id": "",
+        "right": 645,
+        "width": 210,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 630,
+        "width": 180,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.order-tab-new",
+        "id": "",
+        "right": 762,
+        "width": 109,
+        "text": "+ New Order"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 447,
+        "width": 162,
+        "text": "3. Goods & Fees2"
+      },
+      {
+        "tag": "span",
+        "cls": ".nav-counter",
+        "id": "",
+        "right": 433,
+        "width": 19,
+        "text": "2"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 565,
+        "width": 110,
+        "text": "4. Summary"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 657,
+        "width": 84,
+        "text": "Invoices"
+      }
+    ]
+  },
+  {
+    "type": "Horizontal Overflow",
+    "tab": "Order (Step 2 Coffees)",
+    "width": 768,
+    "scrollW": 768,
+    "clientW": 768,
+    "elements": [
+      {
+        "tag": "div",
+        "cls": ".active-orders-strip",
+        "id": "",
+        "right": 770,
+        "width": 746,
+        "text": "☕Friedhats Autumn Drop☕Sey Cof"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.order-tab-new",
+        "id": "",
+        "right": 770,
+        "width": 109,
+        "text": "+ New Order"
+      }
+    ]
+  },
+  {
+    "type": "Horizontal Overflow",
+    "tab": "Order (Step 3 Goods)",
+    "width": 360,
+    "scrollW": 360,
+    "clientW": 360,
+    "elements": [
+      {
+        "tag": "div",
+        "cls": ".active-orders-strip",
+        "id": "",
+        "right": 762,
+        "width": 746,
+        "text": "☕Friedhats Autumn Drop☕Sey Cof"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.is-active",
+        "id": "",
+        "right": 427,
+        "width": 202,
+        "text": "☕Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 412,
+        "width": 147,
+        "text": "Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip",
+        "id": "",
+        "right": 645,
+        "width": 210,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 630,
+        "width": 180,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.order-tab-new",
+        "id": "",
+        "right": 762,
+        "width": 109,
+        "text": "+ New Order"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 447,
+        "width": 162,
+        "text": "3. Goods & Fees2"
+      },
+      {
+        "tag": "span",
+        "cls": ".nav-counter",
+        "id": "",
+        "right": 433,
+        "width": 19,
+        "text": "2"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 565,
+        "width": 110,
+        "text": "4. Summary"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 657,
+        "width": 84,
+        "text": "Invoices"
+      }
+    ]
+  },
+  {
+    "type": "Horizontal Overflow",
+    "tab": "Order (Step 3 Goods)",
+    "width": 390,
+    "scrollW": 390,
+    "clientW": 390,
+    "elements": [
+      {
+        "tag": "div",
+        "cls": ".active-orders-strip",
+        "id": "",
+        "right": 762,
+        "width": 746,
+        "text": "☕Friedhats Autumn Drop☕Sey Cof"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.is-active",
+        "id": "",
+        "right": 427,
+        "width": 202,
+        "text": "☕Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 412,
+        "width": 147,
+        "text": "Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip",
+        "id": "",
+        "right": 645,
+        "width": 210,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 630,
+        "width": 180,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.order-tab-new",
+        "id": "",
+        "right": 762,
+        "width": 109,
+        "text": "+ New Order"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 447,
+        "width": 162,
+        "text": "3. Goods & Fees2"
+      },
+      {
+        "tag": "span",
+        "cls": ".nav-counter",
+        "id": "",
+        "right": 433,
+        "width": 19,
+        "text": "2"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 565,
+        "width": 110,
+        "text": "4. Summary"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 657,
+        "width": 84,
+        "text": "Invoices"
+      }
+    ]
+  },
+  {
+    "type": "Horizontal Overflow",
+    "tab": "Order (Step 3 Goods)",
+    "width": 768,
+    "scrollW": 768,
+    "clientW": 768,
+    "elements": [
+      {
+        "tag": "div",
+        "cls": ".active-orders-strip",
+        "id": "",
+        "right": 770,
+        "width": 746,
+        "text": "☕Friedhats Autumn Drop☕Sey Cof"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.order-tab-new",
+        "id": "",
+        "right": 770,
+        "width": 109,
+        "text": "+ New Order"
+      }
+    ]
+  },
+  {
+    "type": "Horizontal Overflow",
+    "tab": "Order (Step 4 Summary)",
+    "width": 360,
+    "scrollW": 360,
+    "clientW": 360,
+    "elements": [
+      {
+        "tag": "div",
+        "cls": ".active-orders-strip",
+        "id": "",
+        "right": 762,
+        "width": 746,
+        "text": "☕Friedhats Autumn Drop☕Sey Cof"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.is-active",
+        "id": "",
+        "right": 427,
+        "width": 202,
+        "text": "☕Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 412,
+        "width": 147,
+        "text": "Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip",
+        "id": "",
+        "right": 645,
+        "width": 210,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 630,
+        "width": 180,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.order-tab-new",
+        "id": "",
+        "right": 762,
+        "width": 109,
+        "text": "+ New Order"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 447,
+        "width": 162,
+        "text": "3. Goods & Fees2"
+      },
+      {
+        "tag": "span",
+        "cls": ".nav-counter",
+        "id": "",
+        "right": 433,
+        "width": 19,
+        "text": "2"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 565,
+        "width": 110,
+        "text": "4. Summary"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 657,
+        "width": 84,
+        "text": "Invoices"
+      }
+    ]
+  },
+  {
+    "type": "Horizontal Overflow",
+    "tab": "Order (Step 4 Summary)",
+    "width": 390,
+    "scrollW": 390,
+    "clientW": 390,
+    "elements": [
+      {
+        "tag": "div",
+        "cls": ".active-orders-strip",
+        "id": "",
+        "right": 762,
+        "width": 746,
+        "text": "☕Friedhats Autumn Drop☕Sey Cof"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.is-active",
+        "id": "",
+        "right": 427,
+        "width": 202,
+        "text": "☕Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 412,
+        "width": 147,
+        "text": "Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip",
+        "id": "",
+        "right": 645,
+        "width": 210,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 630,
+        "width": 180,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.order-tab-new",
+        "id": "",
+        "right": 762,
+        "width": 109,
+        "text": "+ New Order"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 447,
+        "width": 162,
+        "text": "3. Goods & Fees2"
+      },
+      {
+        "tag": "span",
+        "cls": ".nav-counter",
+        "id": "",
+        "right": 433,
+        "width": 19,
+        "text": "2"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 565,
+        "width": 110,
+        "text": "4. Summary"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 657,
+        "width": 84,
+        "text": "Invoices"
+      }
+    ]
+  },
+  {
+    "type": "Horizontal Overflow",
+    "tab": "Order (Step 4 Summary)",
+    "width": 768,
+    "scrollW": 768,
+    "clientW": 768,
+    "elements": [
+      {
+        "tag": "div",
+        "cls": ".active-orders-strip",
+        "id": "",
+        "right": 770,
+        "width": 746,
+        "text": "☕Friedhats Autumn Drop☕Sey Cof"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.order-tab-new",
+        "id": "",
+        "right": 770,
+        "width": 109,
+        "text": "+ New Order"
+      }
+    ]
+  },
+  {
+    "type": "Horizontal Overflow",
+    "tab": "People",
+    "width": 360,
+    "scrollW": 360,
+    "clientW": 360,
+    "elements": [
+      {
+        "tag": "div",
+        "cls": ".active-orders-strip",
+        "id": "",
+        "right": 762,
+        "width": 746,
+        "text": "☕Friedhats Autumn Drop☕Sey Cof"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.is-active",
+        "id": "",
+        "right": 427,
+        "width": 202,
+        "text": "☕Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 412,
+        "width": 147,
+        "text": "Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip",
+        "id": "",
+        "right": 645,
+        "width": 210,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 630,
+        "width": 180,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.order-tab-new",
+        "id": "",
+        "right": 762,
+        "width": 109,
+        "text": "+ New Order"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 447,
+        "width": 162,
+        "text": "3. Goods & Fees2"
+      },
+      {
+        "tag": "span",
+        "cls": ".nav-counter",
+        "id": "",
+        "right": 433,
+        "width": 19,
+        "text": "2"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 565,
+        "width": 110,
+        "text": "4. Summary"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 657,
+        "width": 84,
+        "text": "Invoices"
+      }
+    ]
+  },
+  {
+    "type": "Horizontal Overflow",
+    "tab": "People",
+    "width": 390,
+    "scrollW": 390,
+    "clientW": 390,
+    "elements": [
+      {
+        "tag": "div",
+        "cls": ".active-orders-strip",
+        "id": "",
+        "right": 762,
+        "width": 746,
+        "text": "☕Friedhats Autumn Drop☕Sey Cof"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.is-active",
+        "id": "",
+        "right": 427,
+        "width": 202,
+        "text": "☕Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 412,
+        "width": 147,
+        "text": "Sey Coffee Spring Drop"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip",
+        "id": "",
+        "right": 645,
+        "width": 210,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "span",
+        "cls": ".order-tab-title",
+        "id": "",
+        "right": 630,
+        "width": 180,
+        "text": "Tim Wendelboe Nordic Selection"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.order-tab-new",
+        "id": "",
+        "right": 762,
+        "width": 109,
+        "text": "+ New Order"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 447,
+        "width": 162,
+        "text": "3. Goods & Fees2"
+      },
+      {
+        "tag": "span",
+        "cls": ".nav-counter",
+        "id": "",
+        "right": 433,
+        "width": 19,
+        "text": "2"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 565,
+        "width": 110,
+        "text": "4. Summary"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-section-tab",
+        "id": "",
+        "right": 657,
+        "width": 84,
+        "text": "Invoices"
+      }
+    ]
+  },
+  {
+    "type": "Horizontal Overflow",
+    "tab": "People",
+    "width": 768,
+    "scrollW": 768,
+    "clientW": 768,
+    "elements": [
+      {
+        "tag": "div",
+        "cls": ".active-orders-strip",
+        "id": "",
+        "right": 770,
+        "width": 746,
+        "text": "☕Friedhats Autumn Drop☕Sey Cof"
+      },
+      {
+        "tag": "button",
+        "cls": ".order-tab-chip.order-tab-new",
+        "id": "",
+        "right": 770,
+        "width": 109,
+        "text": "+ New Order"
+      }
+    ]
+  },
+  {
+    "type": "Contrast Issue (emerald-dark)",
+    "count": 4,
+    "sample": [
+      {
+        "tag": "button",
+        "cls": ".nav-user-trigger",
+        "text": "OWowner@fajrbrews.test▾",
+        "ratio": 4.13,
+        "required": 4.5,
+        "fg": "rgb(117, 128, 129)",
+        "bg": "rgb(20, 32, 24)"
+      },
+      {
+        "tag": "p",
+        "cls": "",
+        "text": "Personal preferences, people d",
+        "ratio": 1.23,
+        "required": 4.5,
+        "fg": "rgb(109, 160, 127)",
+        "bg": "rgb(129, 134, 135)"
+      },
+      {
+        "tag": "label",
+        "cls": ".settings-theme-option",
+        "text": "Emerald LedgerWarm mineral · D",
+        "ratio": 4.13,
+        "required": 4.5,
+        "fg": "rgb(117, 128, 129)",
+        "bg": "rgb(20, 32, 24)"
+      },
+      {
+        "tag": "label",
+        "cls": ".settings-theme-option.is-selected",
+        "text": "YInMn LedgerCool mineral · YIn",
+        "ratio": 2.88,
+        "required": 4.5,
+        "fg": "rgb(117, 128, 129)",
+        "bg": "rgb(29, 63, 40)"
+      }
+    ]
+  },
+  {
+    "type": "Contrast Issue (yinmn-dark)",
+    "count": 1,
+    "sample": [
+      {
+        "tag": "p",
+        "cls": "",
+        "text": "Personal preferences, people d",
+        "ratio": 2.88,
+        "required": 4.5,
+        "fg": "rgb(133, 152, 196)",
+        "bg": "rgb(73, 79, 84)"
+      }
+    ]
+  }
+]

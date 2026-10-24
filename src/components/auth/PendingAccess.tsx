@@ -40,20 +40,9 @@ export function PendingAccess() {
   const hasCandidates = linkResolution.status === 'needs-confirmation' || linkResolution.status === 'ambiguous';
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'var(--color-bg)',
-      padding: 'var(--space-4)',
-    }}>
-      <div style={{
-        width: '100%',
-        maxWidth: 480,
-        textAlign: 'center',
-      }}>
-        <div style={{ fontSize: '3rem', marginBottom: 'var(--space-4)' }}>🔒</div>
+    <div className="pending-access-shell">
+      <div className="pending-access-card">
+        <div className="pending-access-icon">🔒</div>
         <h2 style={{ marginBottom: 'var(--space-3)' }}>
           {hasCandidates ? 'Confirm your match' : 'Access pending'}
         </h2>

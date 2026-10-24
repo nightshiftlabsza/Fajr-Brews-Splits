@@ -187,7 +187,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
 
   return (
     <div className="page-container">
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+      <div className="history-header">
         <div>
           <h2 style={{ marginBottom: 4 }}>{participantOnly ? 'My Orders' : 'Past Orders'}</h2>
           <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
@@ -198,7 +198,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
         </div>
 
         {!participantOnly && (
-          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <div className="history-header-actions">
             <button className="btn btn-secondary btn-sm" onClick={handleExport}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
               Export JSON

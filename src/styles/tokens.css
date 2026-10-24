@@ -31,6 +31,11 @@
   --transition-fast:   120ms ease;
   --transition-normal: 200ms ease;
   --transition-slow:   350ms ease;
+
+  /* Z-index scale */
+  --z-sticky:  40;
+  --z-header:  100;
+  --z-modal:   1000;
 }
 
 /* ── Theme 1: Emerald Ledger ─────────────────────────────── */
@@ -44,7 +49,7 @@
 
   --color-text-primary:   #0D1A10;
   --color-text-secondary: #3A5240;
-  --color-text-muted:     #7A9080;
+  --color-text-muted:     #54735F;
   --color-text-inverse:   #FFFFFF;
 
   --color-border:         #C8DAC8;
@@ -62,6 +67,8 @@
   --color-partial-bg:     #FAF0D0;
   --color-unpaid:         #8B2020;
   --color-unpaid-bg:      #F8DADA;
+
+  --color-backdrop:       rgba(13, 26, 16, 0.45);
 
   --shadow-xs:  0 1px 2px rgba(13, 26, 16, 0.06);
   --shadow-sm:  0 2px 8px rgba(13, 26, 16, 0.08);
@@ -82,7 +89,7 @@
 
   --color-text-primary:   #E0EEE4;
   --color-text-secondary: #9AC0A4;
-  --color-text-muted:     #648E74;
+  --color-text-muted:     #6DA07F;
   --color-text-inverse:   #0D1510;
 
   --color-border:         #243828;
@@ -101,6 +108,8 @@
   --color-unpaid:         #F87171;
   --color-unpaid-bg:      #2A1010;
 
+  --color-backdrop:       rgba(0, 0, 0, 0.65);
+
   --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.30);
   --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.35);
   --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.40);
@@ -117,7 +126,7 @@
 
     --color-text-primary:   #E0EEE4;
     --color-text-secondary: #9AC0A4;
-    --color-text-muted:     #648E74;
+    --color-text-muted:     #6DA07F;
     --color-text-inverse:   #0D1510;
 
     --color-border:         #243828;
@@ -135,6 +144,8 @@
     --color-partial-bg:     #2A2010;
     --color-unpaid:         #F87171;
     --color-unpaid-bg:      #2A1010;
+
+    --color-backdrop:       rgba(0, 0, 0, 0.65);
 
     --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.30);
     --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.35);
@@ -154,7 +165,7 @@
 
   --color-text-primary:   #111827;
   --color-text-secondary: #374151;
-  --color-text-muted:     #6B7280;
+  --color-text-muted:     #545D6E;
   --color-text-inverse:   #FFFFFF;
 
   --color-border:         #C8D0E8;
@@ -172,6 +183,8 @@
   --color-partial-bg:     #F5EDD0;
   --color-unpaid:         #8B2020;
   --color-unpaid-bg:      #F8DADA;
+
+  --color-backdrop:       rgba(17, 24, 39, 0.45);
 
   --shadow-xs:  0 1px 2px rgba(17, 24, 39, 0.05);
   --shadow-sm:  0 2px 8px rgba(17, 24, 39, 0.07);
@@ -192,7 +205,7 @@
 
   --color-text-primary:   #E2E8F8;
   --color-text-secondary: #94A3C8;
-  --color-text-muted:     #5A6890;
+  --color-text-muted:     #8598C4;
   --color-text-inverse:   #0F1524;
 
   --color-border:         #1E2A48;
@@ -211,6 +224,8 @@
   --color-unpaid:         #F87171;
   --color-unpaid-bg:      #2A1010;
 
+  --color-backdrop:       rgba(0, 0, 0, 0.65);
+
   --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.30);
   --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.35);
   --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.40);
@@ -227,7 +242,7 @@
 
     --color-text-primary:   #E2E8F8;
     --color-text-secondary: #94A3C8;
-    --color-text-muted:     #5A6890;
+    --color-text-muted:     #8598C4;
     --color-text-inverse:   #0F1524;
 
     --color-border:         #1E2A48;
@@ -245,6 +260,8 @@
     --color-partial-bg:     #2A2010;
     --color-unpaid:         #F87171;
     --color-unpaid-bg:      #2A1010;
+
+    --color-backdrop:       rgba(0, 0, 0, 0.65);
 
     --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.30);
     --shadow-sm:  0 2px 8px rgba(0, 0, 0, 0.35);
