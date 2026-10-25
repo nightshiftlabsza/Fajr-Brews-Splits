@@ -249,7 +249,7 @@ export function SettlementPacks({
                           })}
                           min="0"
                           step="0.01"
-                          style={{ paddingLeft: 26, height: 36, fontSize: '0.875rem', fontVariantNumeric: 'tabular-nums' }}
+                          style={{ paddingLeft: 26, minHeight: 44, fontSize: '1rem', fontVariantNumeric: 'tabular-nums' }}
                         />
                       </div>
                       {payment?.amountPaid !== undefined && payment.amountPaid > 0 && (
@@ -270,7 +270,7 @@ export function SettlementPacks({
                           status: 'partial',
                           datePaid: e.target.value,
                         })}
-                        style={{ height: 36, fontSize: '0.875rem' }}
+                        style={{ minHeight: 44, fontSize: '1rem' }}
                       />
                     </div>
                   </div>

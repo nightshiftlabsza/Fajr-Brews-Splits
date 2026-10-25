@@ -343,5 +343,162 @@ describe('OrderPage component tests', () => {
 
     expect(mockStoreState.createOrder).toHaveBeenCalledTimes(1);
   });
+
+  it('F3 & F4: renders section navigation tabs with tablist semantics and >=44px touch targets', async () => {
+    const order = makeOrder('order-1', 'Order 1', {
+      lots: [makeValidLot('lot-1', 'Geisha')],
+      goodsTotalZar: 450,
+    });
+    mockStoreState.orders = [order];
+    mockStoreState.currentOrderId = 'order-1';
+
+    await act(async () => {
+      root.render(<OrderPage onNavigateToHistory={vi.fn()} />);
+    });
+
+    // Verify container nav accessibility semantics
+    const nav = container.querySelector('.order-section-nav');
+    expect(nav).toBeTruthy();
+    expect(nav?.getAttribute('role')).toBe('tablist');
+    expect(nav?.getAttribute('aria-label')).toBe('Order sections');
+
+    const tabs = Array.from(container.querySelectorAll('.order-section-tab')) as HTMLButtonElement[];
+    expect(tabs.length).toBe(5);
+
+    // Expected section labels in order
+    const tabNames = ['1. Setup', '2. Coffees & Bags', '3. Goods & Fees', '4. Summary', 'Invoices'];
+    tabs.forEach((tab, index) => {
+      expect(tab.textContent).toContain(tabNames[index]);
+      expect(tab.getAttribute('role')).toBe('tab');
+
+      // Touch target: computed min-height >= 44px
+      const style = window.getComputedStyle(tab);
+      const minHeight = parseInt(style.minHeight, 10);
+      expect(minHeight).toBeGreaterThanOrEqual(44);
+
+      // Baseline flush anchor margin
+      expect(style.marginBottom).toBe('-1px');
+    });
+  });
+
+  it('F3: selecting Invoices tab renders button with .is-active, aria-selected="true", and displays SettlementPacks section', async () => {
+    const order = makeOrder('order-1', 'Order 1', {
+      lots: [makeValidLot('lot-1', 'Geisha')],
+      goodsTotalZar: 450,
+    });
+    mockStoreState.orders = [order];
+    mockStoreState.currentOrderId = 'order-1';
+    mockStoreState.linkedPersonId = 'person-1';
+
+    await act(async () => {
+      root.render(<OrderPage onNavigateToHistory={vi.fn()} />);
+    });
+
+    const tabs = Array.from(container.querySelectorAll('.order-section-tab')) as HTMLButtonElement[];
+    const invoiceTab = tabs.find((t) => t.textContent?.includes('Invoices')) as HTMLButtonElement;
+    const coffeesTab = tabs.find((t) => t.textContent?.includes('Coffees & Bags')) as HTMLButtonElement;
+    expect(invoiceTab).toBeTruthy();
+    expect(coffeesTab).toBeTruthy();
+
+    // Initially on 'coffees' by default
+    expect(coffeesTab.classList.contains('is-active')).toBe(true);
+    expect(coffeesTab.getAttribute('aria-selected')).toBe('true');
+    expect(invoiceTab.classList.contains('is-active')).toBe(false);
+    expect(invoiceTab.getAttribute('aria-selected')).toBe('false');
+    expect(container.querySelector('.settlement-packs-section')).toBeNull();
+
+    // Switch to Invoices tab
+    await act(async () => {
+      invoiceTab.click();
+    });
+
+    // Active state transferred to Invoices
+    expect(invoiceTab.classList.contains('is-active')).toBe(true);
+    expect(invoiceTab.getAttribute('aria-selected')).toBe('true');
+
+    // Deactivated state on other tabs
+    expect(coffeesTab.classList.contains('is-active')).toBe(false);
+    expect(coffeesTab.getAttribute('aria-selected')).toBe('false');
+
+    // SettlementPacks rendered in stage
+    const settlementSection = container.querySelector('.settlement-packs-section');
+    expect(settlementSection).toBeTruthy();
+    expect(settlementSection?.textContent).toContain('Participant Invoices & Payments');
+    expect(settlementSection?.textContent).toContain('Viewing all participant invoices for this order.');
+    expect(settlementSection?.textContent).toContain('Total Amount Due');
+    expect(settlementSection?.textContent).toContain('R450.00');
+  });
+
+  it('F3: selecting Invoices tab on incomplete order displays calculation warning alert', async () => {
+    // Order with 0 lots and 0 goodsTotalZar cannot produce valid settlement calculation
+    const incompleteOrder = makeOrder('order-1', 'Incomplete Order', {
+      lots: [makeValidLot('lot-1', 'Lot 1')],
+      goodsTotalZar: 0, // Goods total 0 triggers invalid calculation
+    });
+    mockStoreState.orders = [incompleteOrder];
+    mockStoreState.currentOrderId = 'order-1';
+
+    await act(async () => {
+      root.render(<OrderPage onNavigateToHistory={vi.fn()} />);
+    });
+
+    const invoiceTab = Array.from(container.querySelectorAll('.order-section-tab')).find(
+      (t) => t.textContent?.includes('Invoices'),
+    ) as HTMLButtonElement;
+    expect(invoiceTab).toBeTruthy();
+
+    await act(async () => {
+      invoiceTab.click();
+    });
+
+    expect(invoiceTab.classList.contains('is-active')).toBe(true);
+    expect(invoiceTab.getAttribute('aria-selected')).toBe('true');
+
+    // Warning alert displayed instead of SettlementPacks
+    expect(container.querySelector('.settlement-packs-section')).toBeNull();
+    const alert = container.querySelector('.alert-warning');
+    expect(alert).toBeTruthy();
+    expect(alert?.textContent).toContain('Complete coffee bag allocation and goods total to view settlement invoices.');
+  });
+
+  it('F4: automatically scrolls active section tab into view on section change', async () => {
+    const originalScrollIntoView = window.HTMLElement.prototype.scrollIntoView;
+    const scrollIntoViewMock = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    try {
+      const order = makeOrder('order-1', 'Order 1', {
+        lots: [makeValidLot('lot-1', 'Geisha')],
+        goodsTotalZar: 450,
+      });
+      mockStoreState.orders = [order];
+      mockStoreState.currentOrderId = 'order-1';
+
+      await act(async () => {
+        root.render(<OrderPage onNavigateToHistory={vi.fn()} />);
+      });
+
+      const invoiceTab = Array.from(container.querySelectorAll('.order-section-tab')).find(
+        (t) => t.textContent?.includes('Invoices'),
+      ) as HTMLButtonElement;
+      expect(invoiceTab).toBeTruthy();
+
+      scrollIntoViewMock.mockClear();
+
+      await act(async () => {
+        invoiceTab.click();
+      });
+
+      expect(scrollIntoViewMock).toHaveBeenCalled();
+      expect(scrollIntoViewMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          block: 'nearest',
+          inline: 'center',
+        }),
+      );
+    } finally {
+      window.HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+    }
+  });
 });
 

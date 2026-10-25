@@ -1,5 +1,7 @@
 /** @vitest-environment jsdom */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -360,6 +362,93 @@ describe('OrderSummary', () => {
 
     // Mobile summary card is also present in DOM for small screen collapse
     expect(container.querySelector('.cockpit-mobile-summary-card')).toBeTruthy();
+  });
+
+  it('includes desktop defense-in-depth hiding rules for summary-sticky-bar and cockpit-mobile-summary-card in inline style', () => {
+    act(() => {
+      root.render(
+        <OrderSummary
+          order={makeOrder()}
+          onJumpToStep={() => undefined}
+          onFinalize={() => undefined}
+        />,
+      );
+    });
+
+    const styleTags = Array.from(container.querySelectorAll('style'));
+    const summaryStyle = styleTags.find((s) => s.textContent?.includes('.rounding-absorption-badge'));
+    expect(summaryStyle?.textContent).toContain('.summary-sticky-bar');
+    expect(summaryStyle?.textContent).toContain('display: none !important');
+    expect(summaryStyle?.textContent).toContain('.cockpit-mobile-summary-card');
+  });
+
+  it('renders finalize error in both desktop sidebar and mobile sticky bar when order finalization fails', async () => {
+    mockStoreState.flushOrderWrites = vi.fn().mockRejectedValue(new Error('Network error syncing final order'));
+
+    act(() => {
+      root.render(
+        <OrderSummary
+          order={makeOrder()}
+          onJumpToStep={() => undefined}
+          onFinalize={() => undefined}
+        />,
+      );
+    });
+
+    clickButtonByText(container, 'Save to Past Orders');
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const sidebarAlert = container.querySelector('.cockpit-sidebar-column .alert.alert-error');
+    const stickyAlert = container.querySelector('.summary-sticky-bar .alert.alert-error');
+    expect(sidebarAlert).toBeTruthy();
+    expect(stickyAlert).toBeTruthy();
+    expect(sidebarAlert?.textContent).toContain('Network error syncing final order');
+    expect(stickyAlert?.textContent).toContain('Network error syncing final order');
+  });
+
+  it('renders delete error in both desktop sidebar and mobile sticky bar when order deletion fails', async () => {
+    mockStoreState.deleteOrder = vi.fn().mockRejectedValue(new Error('Failed to delete order from database'));
+
+    act(() => {
+      root.render(
+        <OrderSummary
+          order={makeOrder()}
+          onJumpToStep={() => undefined}
+          onFinalize={() => undefined}
+        />,
+      );
+    });
+
+    clickButtonByText(container, 'Delete order');
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    clickButtonByText(container, 'Delete Order');
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const sidebarAlert = container.querySelector('.cockpit-sidebar-column .alert.alert-error');
+    const stickyAlert = container.querySelector('.summary-sticky-bar .alert.alert-error');
+    expect(sidebarAlert).toBeTruthy();
+    expect(stickyAlert).toBeTruthy();
+    expect(sidebarAlert?.textContent).toContain('Failed to delete order from database');
+    expect(stickyAlert?.textContent).toContain('Failed to delete order from database');
+  });
+
+  it('verifies globals.css defines .sr-only and hides summary-sticky-bar on desktop', () => {
+    const cssPath = path.resolve(__dirname, '../../styles/globals.css');
+    const css = fs.readFileSync(cssPath, 'utf8');
+    expect(css).toContain('.sr-only');
+    expect(css).toContain('clip: rect(0, 0, 0, 0)');
+    expect(css).toMatch(/@media\s*\(min-width:\s*1024px\)\s*\{[\s\S]*?\.summary-sticky-bar\s*\{[^}]*display:\s*none\s*!important/);
+    expect(css).toMatch(/@media\s*\(max-width:\s*767px\)\s*\{[\s\S]*?\.order-cockpit\s*\{[^}]*padding-bottom:\s*calc\(160px\s*\+\s*env\(safe-area-inset-bottom,\s*0px\)\);/);
+    expect(css).toMatch(/@media\s*\(max-width:\s*767px\)\s*\{[\s\S]*?\.summary-sticky-bar\s*\{[^}]*position:\s*fixed;/);
+    expect(css).toMatch(/@media\s*\(min-width:\s*768px\)\s*and\s*\(max-width:\s*1023px\)\s*\{[\s\S]*?\.summary-sticky-bar\s*\{[^}]*position:\s*sticky;/);
+    expect(css).toMatch(/@media\s*\(min-width:\s*768px\)\s*and\s*\(max-width:\s*1023px\)\s*\{[\s\S]*?\.summary-sticky-bar\s*\{[^}]*bottom:\s*calc\(var\(--space-4\)\s*\+\s*env\(safe-area-inset-bottom,\s*0px\)\);/);
   });
 });
 
