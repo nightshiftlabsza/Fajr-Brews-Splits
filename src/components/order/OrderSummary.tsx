@@ -357,6 +357,14 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
             position: sticky;
             top: calc(var(--nav-top-height, 64px) + var(--space-4));
           }
+
+          .cockpit-mobile-summary-card {
+            display: none !important;
+          }
+
+          .summary-sticky-bar {
+            display: none !important;
+          }
         }
       `}</style>
     </div>
