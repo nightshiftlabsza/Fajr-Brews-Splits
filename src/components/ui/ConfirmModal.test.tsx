@@ -156,4 +156,37 @@ describe('ConfirmModal accessibility and focus trapping', () => {
 
     vi.useRealTimers();
   });
+
+  it('applies variant styling classes to confirm button', () => {
+    act(() => {
+      root.render(
+        <ConfirmModal
+          isOpen={true}
+          title="Warning Test"
+          description="Testing warning variant"
+          variant="warning"
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+    });
+
+    const confirmBtn = container.querySelectorAll<HTMLButtonElement>('.fb-modal-actions button')[1];
+    expect(confirmBtn.className).toContain('btn btn-warning');
+
+    act(() => {
+      root.render(
+        <ConfirmModal
+          isOpen={true}
+          title="Danger Test"
+          description="Testing danger variant"
+          variant="danger"
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+    });
+    const dangerConfirmBtn = container.querySelectorAll<HTMLButtonElement>('.fb-modal-actions button')[1];
+    expect(dangerConfirmBtn.className).toContain('btn btn-danger');
+  });
 });

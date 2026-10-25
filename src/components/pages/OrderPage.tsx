@@ -54,6 +54,39 @@ export function OrderPage({ onNavigateToHistory }: Props) {
   const [createError, setCreateError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const commitStepRef = useRef<(() => Promise<void>) | null>(null);
+  const sectionNavRef = useRef<HTMLElement | null>(null);
+
+  // Auto-scroll active section tab into view within horizontal overflow container
+  useEffect(() => {
+    const nav = sectionNavRef.current;
+    if (!nav) return;
+    const activeTab = nav.querySelector<HTMLElement>(`[data-section="${activeSection}"]`);
+    if (!activeTab) return;
+
+    const scrollActiveTab = () => {
+      if (typeof activeTab.scrollIntoView === 'function') {
+        const prefersReducedMotion =
+          typeof window !== 'undefined' &&
+          window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        activeTab.scrollIntoView({
+          behavior: prefersReducedMotion ? 'auto' : 'smooth',
+          block: 'nearest',
+          inline: 'center',
+        });
+      }
+    };
+
+    scrollActiveTab();
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => {
+        scrollActiveTab();
+      });
+      ro.observe(nav);
+      ro.observe(activeTab);
+      return () => ro.disconnect();
+    }
+  }, [activeSection, currentOrderId]);
 
   // Sync active order if activeOrderId is invalid or currentOrderId changes from outside
   useEffect(() => {
@@ -397,9 +430,17 @@ export function OrderPage({ onNavigateToHistory }: Props) {
       </div>
 
       {/* ── 3. NON-RIGID SECTION NAVIGATION TABS ── */}
-      <nav className="order-section-nav" aria-label="Order sections">
+      <nav
+        ref={sectionNavRef}
+        className="order-section-nav"
+        role="tablist"
+        aria-label="Order sections"
+      >
         <button
           type="button"
+          role="tab"
+          data-section="setup"
+          aria-selected={activeSection === 'setup'}
           className={`order-section-tab ${activeSection === 'setup' ? 'is-active' : ''}`}
           onClick={() => void handleSectionChange('setup')}
         >
@@ -407,6 +448,9 @@ export function OrderPage({ onNavigateToHistory }: Props) {
         </button>
         <button
           type="button"
+          role="tab"
+          data-section="coffees"
+          aria-selected={activeSection === 'coffees'}
           className={`order-section-tab ${activeSection === 'coffees' ? 'is-active' : ''}`}
           onClick={() => void handleSectionChange('coffees')}
         >
@@ -415,6 +459,9 @@ export function OrderPage({ onNavigateToHistory }: Props) {
         </button>
         <button
           type="button"
+          role="tab"
+          data-section="goods"
+          aria-selected={activeSection === 'goods'}
           className={`order-section-tab ${activeSection === 'goods' ? 'is-active' : ''}`}
           onClick={() => void handleSectionChange('goods')}
         >
@@ -423,6 +470,9 @@ export function OrderPage({ onNavigateToHistory }: Props) {
         </button>
         <button
           type="button"
+          role="tab"
+          data-section="summary"
+          aria-selected={activeSection === 'summary'}
           className={`order-section-tab ${activeSection === 'summary' ? 'is-active' : ''}`}
           onClick={() => void handleSectionChange('summary')}
         >
@@ -430,6 +480,9 @@ export function OrderPage({ onNavigateToHistory }: Props) {
         </button>
         <button
           type="button"
+          role="tab"
+          data-section="invoices"
+          aria-selected={activeSection === 'invoices'}
           className={`order-section-tab ${activeSection === 'invoices' ? 'is-active' : ''}`}
           onClick={() => void handleSectionChange('invoices')}
         >
@@ -693,6 +746,9 @@ export function OrderPage({ onNavigateToHistory }: Props) {
           font-weight: 700;
           margin: 0;
           color: var(--color-text-primary);
+          overflow-wrap: anywhere;
+          word-break: break-word;
+          min-width: 0;
         }
 
         .order-header-meta {
@@ -801,28 +857,43 @@ export function OrderPage({ onNavigateToHistory }: Props) {
         /* Section Navigation Tabs */
         .order-section-nav {
           display: flex;
-          align-items: center;
+          align-items: flex-end;
           gap: var(--space-2);
           border-bottom: 1px solid var(--color-border);
           margin-bottom: var(--space-6);
           overflow-x: auto;
+          overflow-y: hidden;
           scrollbar-width: none;
+          -webkit-overflow-scrolling: touch;
+          scroll-padding: 0 var(--space-3);
+          padding: 0 var(--space-1);
+        }
+
+        .order-section-nav::-webkit-scrollbar {
+          display: none;
         }
 
         .order-section-tab {
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          padding: 10px 14px;
+          flex-shrink: 0;
+          min-height: 44px;
+          min-width: 44px;
+          padding: 12px 16px;
           background: transparent;
           border: none;
           border-bottom: 2px solid transparent;
+          margin-bottom: -1px;
           color: var(--color-text-muted);
           font-size: 0.875rem;
           font-weight: 600;
           cursor: pointer;
           transition: all var(--transition-fast);
           white-space: nowrap;
+          position: relative;
+          z-index: 1;
+          box-sizing: border-box;
         }
 
         .order-section-tab:hover {
@@ -831,6 +902,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
 
         .order-section-tab.is-active {
           color: var(--color-accent);
+          border-bottom: 2px solid var(--color-accent);
           border-bottom-color: var(--color-accent);
           font-weight: 700;
         }
@@ -849,6 +921,14 @@ export function OrderPage({ onNavigateToHistory }: Props) {
         .order-section-tab.is-active .nav-counter {
           background: var(--color-accent-light);
           color: var(--color-accent);
+        }
+
+        @media (max-width: 768px) {
+          .order-tab-chip {
+            min-height: 44px;
+            min-width: 44px;
+            box-sizing: border-box;
+          }
         }
 
         @media (max-width: 640px) {

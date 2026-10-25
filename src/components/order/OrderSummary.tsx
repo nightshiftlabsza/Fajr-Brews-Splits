@@ -246,13 +246,13 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
             </div>
 
             {finalizeError && (
-              <div className="alert alert-error" style={{ marginTop: 'var(--space-3)' }}>
+              <div className="alert alert-error" role="alert" style={{ marginTop: 'var(--space-3)' }}>
                 {finalizeError}
               </div>
             )}
 
             {deleteError && (
-              <div className="alert alert-error" style={{ marginTop: 'var(--space-3)' }}>
+              <div className="alert alert-error" role="alert" style={{ marginTop: 'var(--space-3)' }}>
                 {deleteError}
               </div>
             )}
@@ -263,6 +263,16 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
       {/* Mobile Sticky Action Bar */}
       <div className="summary-sticky-bar" role="region" aria-label="Finalize order">
         <span className="sr-only">Finalize order</span>
+        {finalizeError && (
+          <div className="alert alert-error" role="alert" style={{ width: '100%', marginBottom: 'var(--space-2)' }}>
+            {finalizeError}
+          </div>
+        )}
+        {deleteError && (
+          <div className="alert alert-error" role="alert" style={{ width: '100%', marginBottom: 'var(--space-2)' }}>
+            {deleteError}
+          </div>
+        )}
         <div className="summary-sticky-status-group">
           <span className="summary-sticky-status-label">{savingPastOrder ? 'Past Order' : 'Finalize order'}</span>
           <span className="summary-sticky-status-dot">·</span>
@@ -346,6 +356,14 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
             gap: var(--space-4);
             position: sticky;
             top: calc(var(--nav-top-height, 64px) + var(--space-4));
+          }
+
+          .cockpit-mobile-summary-card {
+            display: none !important;
+          }
+
+          .summary-sticky-bar {
+            display: none !important;
           }
         }
       `}</style>
