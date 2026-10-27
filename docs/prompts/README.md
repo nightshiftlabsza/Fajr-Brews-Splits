@@ -18,7 +18,10 @@ Run them one at a time, in number order, merging each reviewed branch before sta
 | 4 | **04 CSS engineering** | Tokens and CSS structure, no visual change. |
 | 5 | **05 UI desktop** | Full desktop redesign; phones must not get worse. |
 | 6 | **06 UI mobile (adversarial)** | Attacks and fixes phone layouts once desktop is done. |
-| 11 to 17 | Speed (11 to 13) and UI (14 to 17) | Their own prompt files; numbers are the order. |
+| 1 to 3 | Speed | Their own prompt files; numbers are the order. |
+| 4 | **04 Type and theme foundations** | Self-hosted fonts, type scale, weights, number style. Classic (emerald) and Modern (yinmn) typography. Runs after prompt 3 is merged. Basis: `docs/UI_AUDIT.md`. |
+| 5 | **05 Splits identity** | Header and sign-in brand lockup ("Splits, by Fajr Brews"). Owned by the brand thread. |
+| 7 to 9 | UI: shared components, order screens, phones and secondary pages | Written one at a time after the previous batch is reviewed. |
 | 18 | **18 Security (code only)** | Headers (report-only CSP, immutable asset cache), mailto and import validation, SVG logos. Runs after the UI prompts so the CSP matches the final fonts. |
 | 19 | **19 Final verification** | Report only, on the fully integrated branch. |
 
