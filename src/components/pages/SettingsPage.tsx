@@ -7,8 +7,8 @@ import { ConfirmModal } from '../ui/ConfirmModal';
 import { PeoplePage } from './PeoplePage';
 
 const THEMES: { id: Theme; name: string; description: string }[] = [
-  { id: 'emerald', name: 'Emerald Ledger', description: 'Warm mineral · Deep emerald · Serif headings' },
-  { id: 'yinmn', name: 'YInMn Ledger', description: 'Cool mineral · YInMn blue · Geometric headings' },
+  { id: 'emerald', name: 'Emerald Ledger', description: 'Classic · Deep emerald · Editorial serif headings' },
+  { id: 'yinmn', name: 'YInMn Ledger', description: 'Modern · YInMn blue · Clean grotesk type' },
 ];
 
 const MODES: { id: ThemeMode; label: string; icon: string }[] = [
