@@ -8,7 +8,6 @@ import {
   saveStartupSnapshot,
   type StartupSnapshot,
 } from '../lib/startupSnapshot';
-import { safeLocalStorage } from './appStore';
 
 type QueryResult = {
   data: unknown;
@@ -304,7 +303,7 @@ async function loadStore(config: StoreTestConfig = {}) {
 }
 
 afterEach(() => {
-  clearStartupSnapshot(safeLocalStorage);
+  clearStartupSnapshot(localStorage);
   try {
     localStorage.clear();
   } catch {
@@ -1199,7 +1198,7 @@ describe('appStore Realtime JSONB Hydration & Data Integrity', () => {
 
     it('hydrates snapshot before getSession resolves, then updates with fresh data', async () => {
       const snapshot = makeTestSnapshot();
-      saveStartupSnapshot(safeLocalStorage, snapshot);
+      saveStartupSnapshot(localStorage, snapshot);
 
       let resolveSession!: (value: any) => void;
       const sessionPromise = new Promise((resolve) => {
@@ -1277,15 +1276,15 @@ describe('appStore Realtime JSONB Hydration & Data Integrity', () => {
       expect(useAppStore.getState().people[0].name).toBe('Fresh Person');
       expect(useAppStore.getState().orders[0].name).toBe('Fresh Order');
 
-      const saved = readStartupSnapshot(safeLocalStorage);
+      const saved = readStartupSnapshot(localStorage);
       expect(saved).not.toBeNull();
       expect(saved?.orders[0].name).toBe('Fresh Order');
       expect(saved?.people[0].name).toBe('Fresh Person');
     });
 
     it('clears snapshot and falls through to sign-in when getSession returns no user', async () => {
-      saveStartupSnapshot(safeLocalStorage, makeTestSnapshot());
-      expect(readStartupSnapshot(safeLocalStorage)).not.toBeNull();
+      saveStartupSnapshot(localStorage, makeTestSnapshot());
+      expect(readStartupSnapshot(localStorage)).not.toBeNull();
 
       const { useAppStore } = await loadStore({
         session: null,
@@ -1293,7 +1292,7 @@ describe('appStore Realtime JSONB Hydration & Data Integrity', () => {
 
       await useAppStore.getState().initialize();
 
-      expect(readStartupSnapshot(safeLocalStorage)).toBeNull();
+      expect(readStartupSnapshot(localStorage)).toBeNull();
       expect(useAppStore.getState().user).toBeNull();
       expect(useAppStore.getState().accessStatus).toBe('none');
       expect(useAppStore.getState().isLoading).toBe(false);
@@ -1302,7 +1301,7 @@ describe('appStore Realtime JSONB Hydration & Data Integrity', () => {
     });
 
     it('clears snapshot and loads user B data when getSession returns user B', async () => {
-      saveStartupSnapshot(safeLocalStorage, makeTestSnapshot({ userId: 'user-a' }));
+      saveStartupSnapshot(localStorage, makeTestSnapshot({ userId: 'user-a' }));
 
       const { useAppStore } = await loadStore({
         session: {
@@ -1343,13 +1342,13 @@ describe('appStore Realtime JSONB Hydration & Data Integrity', () => {
       expect(useAppStore.getState().user?.id).toBe('user-b');
       expect(useAppStore.getState().orders[0].name).toBe('User B Order');
 
-      const saved = readStartupSnapshot(safeLocalStorage);
+      const saved = readStartupSnapshot(localStorage);
       expect(saved?.userId).toBe('user-b');
       expect(saved?.orders[0].name).toBe('User B Order');
     });
 
     it('keeps snapshot data on screen with error set and isSyncing false when refresh fails', async () => {
-      saveStartupSnapshot(safeLocalStorage, makeTestSnapshot());
+      saveStartupSnapshot(localStorage, makeTestSnapshot());
 
       const { useAppStore } = await loadStore({
         session: { user: { id: 'user-a', email: 'user-a@example.com' } },
@@ -1373,7 +1372,7 @@ describe('appStore Realtime JSONB Hydration & Data Integrity', () => {
         payerNote: 'Original Note',
         goodsTotalZar: 100,
       });
-      saveStartupSnapshot(safeLocalStorage, makeTestSnapshot({ orders: [snapshotOrder] }));
+      saveStartupSnapshot(localStorage, makeTestSnapshot({ orders: [snapshotOrder] }));
 
       let resolveSession!: (value: any) => void;
       const sessionPromise = new Promise((resolve) => {
@@ -1447,8 +1446,8 @@ describe('appStore Realtime JSONB Hydration & Data Integrity', () => {
     });
 
     it('clears the startup snapshot on signOut', async () => {
-      saveStartupSnapshot(safeLocalStorage, makeTestSnapshot());
-      expect(readStartupSnapshot(safeLocalStorage)).not.toBeNull();
+      saveStartupSnapshot(localStorage, makeTestSnapshot());
+      expect(readStartupSnapshot(localStorage)).not.toBeNull();
 
       const { useAppStore } = await loadStore({
         session: { user: { id: 'user-a', email: 'user-a@example.com' } },
@@ -1457,7 +1456,7 @@ describe('appStore Realtime JSONB Hydration & Data Integrity', () => {
 
       await useAppStore.getState().signOut();
 
-      expect(readStartupSnapshot(safeLocalStorage)).toBeNull();
+      expect(readStartupSnapshot(localStorage)).toBeNull();
       expect(useAppStore.getState().snapshotSavedAt).toBeNull();
     });
   });
