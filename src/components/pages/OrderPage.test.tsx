@@ -18,6 +18,7 @@ const mockStoreState = {
   roasterFeatureMessage: null as string | null,
   createOrder: vi.fn(),
   updateOrderStatus: vi.fn(),
+  deleteOrder: vi.fn(),
   updateOrder: vi.fn(),
   setCurrentOrderId: vi.fn(),
   createRoaster: vi.fn(),
@@ -96,6 +97,7 @@ describe('OrderPage component tests', () => {
     mockStoreState.linkedPersonId = null;
     mockStoreState.createOrder = vi.fn();
     mockStoreState.updateOrderStatus = vi.fn();
+    mockStoreState.deleteOrder = vi.fn().mockResolvedValue(undefined);
     mockStoreState.updateOrder = vi.fn();
     mockStoreState.setCurrentOrderId = vi.fn((id: string | null) => {
       mockStoreState.currentOrderId = id;
@@ -499,6 +501,120 @@ describe('OrderPage component tests', () => {
     } finally {
       window.HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
     }
+  });
+
+  describe('Delete Order', () => {
+    async function openDeleteModal() {
+      await act(async () => {
+        (container.querySelector('.order-actions-trigger') as HTMLButtonElement).click();
+      });
+      const item = Array.from(container.querySelectorAll('.dropdown-item')).find(
+        (el) => el.textContent?.includes('Delete Order'),
+      ) as HTMLButtonElement | undefined;
+      expect(item).toBeTruthy();
+      await act(async () => {
+        item?.click();
+      });
+    }
+
+    function modalButton(label: string): HTMLButtonElement {
+      const button = Array.from(document.querySelectorAll('button')).find(
+        (el) => el.textContent?.trim() === label && !el.classList.contains('dropdown-item'),
+      );
+      expect(button).toBeTruthy();
+      return button as HTMLButtonElement;
+    }
+
+    it('is shown to the owner and hidden from a plain member', async () => {
+      mockStoreState.orders = [makeOrder('order-1', 'Drop A', { ownerId: 'user-other' })];
+      mockStoreState.currentOrderId = 'order-1';
+      mockStoreState.user = { id: 'user-regular', email: 'regular@example.com' };
+      mockStoreState.memberRole = 'member';
+
+      await act(async () => {
+        root.render(<OrderPage onNavigateToHistory={vi.fn()} />);
+      });
+      await act(async () => {
+        (container.querySelector('.order-actions-trigger') as HTMLButtonElement).click();
+      });
+      expect(container.textContent).not.toContain('Delete Order');
+
+      mockStoreState.memberRole = 'admin';
+      await act(async () => {
+        root.render(<OrderPage onNavigateToHistory={vi.fn()} />);
+      });
+      expect(container.textContent).toContain('Delete Order');
+    });
+
+    it('cancel leaves the order alone and confirm deletes it, selecting the next order', async () => {
+      mockStoreState.orders = [makeOrder('order-1', 'Order 1'), makeOrder('order-2', 'Order 2')];
+      mockStoreState.currentOrderId = 'order-1';
+      mockStoreState.deleteOrder = vi.fn().mockImplementation(async (id: string) => {
+        mockStoreState.orders = mockStoreState.orders.filter((o) => o.id !== id);
+      });
+
+      await act(async () => {
+        root.render(<OrderPage onNavigateToHistory={vi.fn()} />);
+      });
+      await openDeleteModal();
+      expect(document.body.textContent).toContain('Delete "Order 1"?');
+
+      await act(async () => {
+        modalButton('Cancel').click();
+      });
+      expect(mockStoreState.deleteOrder).not.toHaveBeenCalled();
+
+      await openDeleteModal();
+      await act(async () => {
+        modalButton('Delete Order').click();
+      });
+      expect(mockStoreState.deleteOrder).toHaveBeenCalledWith('order-1');
+      expect(container.querySelector('.order-header-title')?.textContent).toBe('Order 2');
+    });
+
+    it('warns about recorded payments only when there are some', async () => {
+      mockStoreState.orders = [
+        makeOrder('order-1', 'Paid Order', {
+          payments: {
+            'person-1': { status: 'paid', amountPaid: 100 },
+            'person-2': { status: 'unpaid' },
+          },
+        }),
+      ];
+      mockStoreState.currentOrderId = 'order-1';
+
+      await act(async () => {
+        root.render(<OrderPage onNavigateToHistory={vi.fn()} />);
+      });
+      await openDeleteModal();
+      expect(document.body.textContent).toContain('1 recorded payment will be lost too.');
+      await act(async () => {
+        modalButton('Cancel').click();
+      });
+
+      mockStoreState.orders = [makeOrder('order-1', 'Paid Order')];
+      await act(async () => {
+        root.render(<OrderPage onNavigateToHistory={vi.fn()} />);
+      });
+      await openDeleteModal();
+      expect(document.body.textContent).not.toContain('will be lost too');
+    });
+
+    it('shows the error when deleting fails', async () => {
+      mockStoreState.orders = [makeOrder('order-1', 'Order 1')];
+      mockStoreState.currentOrderId = 'order-1';
+      mockStoreState.deleteOrder = vi.fn().mockRejectedValue(new Error('permission denied'));
+
+      await act(async () => {
+        root.render(<OrderPage onNavigateToHistory={vi.fn()} />);
+      });
+      await openDeleteModal();
+      await act(async () => {
+        modalButton('Delete Order').click();
+      });
+      expect(container.querySelector('.alert-error')?.textContent).toBe('permission denied');
+      expect(container.querySelector('.order-header-title')?.textContent).toBe('Order 1');
+    });
   });
 });
 
