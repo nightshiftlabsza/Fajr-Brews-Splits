@@ -8,7 +8,7 @@ Each file is a self-contained prompt: copy it whole into Antigravity. Every prom
 3. Each prompt runs in a new Antigravity chat on the normal project folder, on its own branch `prompt/<n>-<name>` cut from the current integration branch. Rename `.env.local` to `.env.local.bak` first so agents cannot reach live Supabase keys.
 
 ## Run order (the numbers are the order)
-Run them one at a time, in number order, merging each reviewed branch before starting the next. 1, 2 and 3 touch mostly different files and could run together only in separate git worktrees; 4 to 6 must follow one another because they rewrite the same CSS and page components; 7 needs everything merged.
+Run them one at a time, in number order, merging each reviewed branch before starting the next. 1, 2 and 3 touch mostly different files and could run together only in separate git worktrees; 4 to 6 must follow one another because they rewrite the same CSS and page components; 19 needs everything merged.
 
 | Order | Prompt | Notes |
 |---|---|---|
@@ -18,8 +18,9 @@ Run them one at a time, in number order, merging each reviewed branch before sta
 | 4 | **04 CSS engineering** | Tokens and CSS structure, no visual change. |
 | 5 | **05 UI desktop** | Full desktop redesign; phones must not get worse. |
 | 6 | **06 UI mobile (adversarial)** | Attacks and fixes phone layouts once desktop is done. |
-| 7a | **08 Security (code only)** | Headers (report-only CSP), mailto and import validation, SVG logos. Run after 6, before 7. |
-| 7 | **07 Final verification** | Report only, on the fully integrated branch. |
+| 11 to 17 | Speed (11 to 13) and UI (14 to 17) | Their own prompt files; numbers are the order. |
+| 18 | **18 Security (code only)** | Headers (report-only CSP, immutable asset cache), mailto and import validation, SVG logos. Runs after the UI prompts so the CSP matches the final fonts. |
+| 19 | **19 Final verification** | Report only, on the fully integrated branch. |
 
 Performance batch (see `docs/PERF_AUDIT.md`): **11 Fast startup** can run now, in parallel with 08 (no shared files). Then **12 Instant reopen** after 11 merges, then **13 Store selectors** after 12 merges.
 

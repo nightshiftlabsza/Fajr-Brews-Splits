@@ -1,4 +1,4 @@
-# Prompt 7: Independent final release verification
+# Prompt 19: Independent final release verification
 
 Branch: `release/candidate` (the fully integrated branch). You verify; you do not fix. Do not rely on any earlier prompt report: re-derive everything.
 
