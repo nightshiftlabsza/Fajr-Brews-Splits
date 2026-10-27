@@ -19,6 +19,7 @@ Run them one at a time, in number order, merging each reviewed branch before sta
 | 5 | **05 UI desktop** | Full desktop redesign; phones must not get worse. |
 | 6 | **06 UI mobile (adversarial)** | Attacks and fixes phone layouts once desktop is done. |
 | 7a | **08 Security (code only)** | Headers (report-only CSP), mailto and import validation, SVG logos. Run after 6, before 7. |
+| 7b | **09 Delete orders** | Adds Delete to the Order page menu. Needs no database change. Run after 6; touches only `OrderPage.tsx`. |
 | 7 | **07 Final verification** | Report only, on the fully integrated branch. |
 
 Claude reviews each report before the next wave starts. Merge a branch only after its review passes.
