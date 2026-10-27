@@ -38,7 +38,7 @@ Each Summary participant row shows a filled dark-green "Unpaid" segmented button
 15 `text-transform: uppercase` rules, with letter-spacing from 0.04 to 0.18em (11 different values). On one Summary screen: ORDER OVERVIEW, ORDER TOTAL & FINALIZATION, GRAND TOTAL, YOUR PERSONAL SHARE, YOU ARE THE ORDER PAYER, TOTAL AMOUNT DUE, EFT / BANKING DETAILS, plus every status pill and the mobile nav. When everything is a label, nothing is. This is the main "generic AI dashboard" tell in this app.
 
 ### 4. Repeated, meaningless identity marks
-A grey "OR" initials tile stands in for the roaster logo when there isn't one. It appears 5 times on one order screen (pill strip ×3, order header, summary header). The order title and status badge are repeated in the order header and again in "Order overview" directly below it. The brand mark is the ☕ emoji (header and sign-in), which renders differently on every platform.
+A grey "OR" initials tile stands in for the roaster logo when there isn't one. It appears 5 times on one order screen (pill strip ×3, order header, summary header). The order title and status badge are repeated in the order header and again in "Order overview" directly below it. The brand mark is the ☕ emoji (header and sign-in), which renders differently on every platform. The brand lockup (name, logo, header and sign-in mark) is being redesigned separately as "Splits, by Fajr Brews" (`design-exploration/splits-brand-brief.md`), so prompts 14 to 17 leave it alone.
 
 ### 5. Typography has no system
 - 30 distinct `font-size` values in `globals.css`, including 0.68, 0.72, 0.76, 0.78, 0.8, 0.82, 0.84 and 0.86rem. There is no type scale token.
@@ -99,7 +99,7 @@ Numbered in run order, after the speed prompts 11 to 13.
 | # | Prompt | Main files | Why this order |
 |---|---|---|---|
 | 14 | Type and theme foundations: self-hosted fonts, type scale, weights, number style | `index.html`, `tokens.css`, `globals.css`, `print.css`, `public/fonts/` | Everything else builds on the scale and fonts; almost no markup changes |
-| 15 | Shared components: one tab pattern, segmented control, badges, buttons and destructive actions, radius scale, eyebrow cleanup, warning contrast, no emoji icons | `globals.css`, `tokens.css`, `Header`, `SettingsPage`, `AuthPage`, `ConfirmModal` | Fixes patterns once before pages are recomposed |
+| 15 | Shared components: one tab pattern, segmented control, badges, buttons and destructive actions, radius scale, eyebrow cleanup, warning contrast, no emoji icons (except the brand mark) | `globals.css`, `tokens.css`, `Header`, `SettingsPage`, `AuthPage`, `ConfirmModal` | Fixes patterns once before pages are recomposed |
 | 16 | Order flow composition: order header and switcher, Coffees allocation display, Summary and participant rows, Invoices; remove the nested cards | `OrderPage`, `CoffeeLotsSection`, `OrderSummary`, `SettlementPacks`, `CoffeeCostSummary`, `InvoiceView` | Most-used, highest-value screens |
 | 17 | Phones and secondary pages: mobile title, nav and sticky bar, tables on phones, My Stats, Past Orders, Settings, sign-in, the "1,3" number bug, inline-style cleanup on touched pages | `App`, `Header`, `HistoryPage`, `MyStatsPage`, `SettingsPage`, `AuthPage`, `globals.css` | Builds on 15 and 16 |
 
