@@ -625,11 +625,53 @@ export const useAppStore = create<AppStore>((set, get) => ({
       let roasterFeatureMessage: string | null = null;
 
       if (hasWorkspaceAccess) {
-        const { data: fetchedPeopleRows, error: peopleError } = await supabase
+        const canFetchAllOrders = memberRow?.role === 'owner' || memberRow?.role === 'admin';
+
+        const peopleQuery = supabase
           .from('people')
           .select('*')
           .eq('workspace_id', WORKSPACE_ID)
           .order('name');
+
+        const primaryOrdersQuery = canFetchAllOrders
+          ? supabase
+              .from('orders')
+              .select('*')
+              .eq('workspace_id', WORKSPACE_ID)
+              .order('order_date', { ascending: false })
+          : memberRow
+            ? supabase
+                .from('orders')
+                .select('*')
+                .eq('workspace_id', WORKSPACE_ID)
+                .or(`owner_id.eq.${session.user.id},created_by.eq.${session.user.id}`)
+                .order('order_date', { ascending: false })
+            : null;
+
+        const participantOrdersQuery = linkedPersonId && !canFetchAllOrders
+          ? supabase.rpc('get_my_participant_orders')
+          : null;
+
+        const roastersQuery = memberRow
+          ? supabase
+              .from('roasters')
+              .select('*')
+              .eq('workspace_id', WORKSPACE_ID)
+              .order('updated_at', { ascending: false })
+          : null;
+
+        const [
+          { data: fetchedPeopleRows, error: peopleError },
+          primaryOrdersResult,
+          participantOrdersResult,
+          roastersResult,
+        ] = await Promise.all([
+          peopleQuery,
+          primaryOrdersQuery,
+          participantOrdersQuery,
+          roastersQuery,
+          get()._loadSettings(session.user.id),
+        ]);
 
         if (peopleError) {
           throw new Error(getErrorMessage(peopleError));
@@ -637,16 +679,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
         peopleRows = fetchedPeopleRows as DbPerson[] | null;
 
-        const canFetchAllOrders = memberRow?.role === 'owner' || memberRow?.role === 'admin';
         const fetchedOrdersById = new Map<string, DbOrder>();
 
-        if (canFetchAllOrders) {
-          const { data: fetchedOrderRows, error: orderError } = await supabase
-            .from('orders')
-            .select('*')
-            .eq('workspace_id', WORKSPACE_ID)
-            .order('order_date', { ascending: false });
-
+        if (primaryOrdersResult) {
+          const { data: fetchedOrderRows, error: orderError } = primaryOrdersResult;
           if (orderError) {
             throw new Error(getErrorMessage(orderError));
           }
@@ -654,27 +690,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
           for (const row of (fetchedOrderRows as DbOrder[] | null) ?? []) {
             fetchedOrdersById.set(row.id, row);
           }
-        } else if (memberRow) {
-          const { data: ownedOrderRows, error: ownedOrderError } = await supabase
-            .from('orders')
-            .select('*')
-            .eq('workspace_id', WORKSPACE_ID)
-            .or(`owner_id.eq.${session.user.id},created_by.eq.${session.user.id}`)
-            .order('order_date', { ascending: false });
-
-          if (ownedOrderError) {
-            throw new Error(getErrorMessage(ownedOrderError));
-          }
-
-          for (const row of (ownedOrderRows as DbOrder[] | null) ?? []) {
-            fetchedOrdersById.set(row.id, row);
-          }
         }
 
-        if (linkedPersonId && !canFetchAllOrders) {
-          const { data: scopedOrderRows, error: scopedOrderError } = await supabase
-            .rpc('get_my_participant_orders');
-
+        if (participantOrdersResult) {
+          const { data: scopedOrderRows, error: scopedOrderError } = participantOrdersResult;
           if (scopedOrderError) {
             throw new Error(getErrorMessage(scopedOrderError));
           }
@@ -686,13 +705,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
         orderRows = Array.from(fetchedOrdersById.values());
 
-        if (memberRow) {
-          const { data: fetchedRoasterRows, error: roasterError } = await supabase
-            .from('roasters')
-            .select('*')
-            .eq('workspace_id', WORKSPACE_ID)
-            .order('updated_at', { ascending: false });
-
+        if (roastersResult) {
+          const { data: fetchedRoasterRows, error: roasterError } = roastersResult;
           if (roasterError) {
             console.error('initialize: failed to load roasters', roasterError);
             roasterFeatureStatus = 'unavailable';
@@ -702,12 +716,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
             roasterFeatureStatus = roasters.length > 0 ? 'ready' : 'empty';
           }
         }
+      } else {
+        await get()._loadSettings(session.user.id);
       }
 
       const people = sortPeopleByName(dedupePeopleById((peopleRows ?? []).map(mapPerson)));
       const orders = (orderRows ?? []).map((row) => mapOrder(row));
-
-      await get()._loadSettings(session.user.id);
 
       // Apply saved theme + mode to DOM
       const currentTheme = get().settings.theme;
