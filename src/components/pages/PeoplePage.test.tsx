@@ -312,7 +312,7 @@ describe('PeoplePage deletion guards (BUG-ORD-09 / BUG-EDGE-05)', () => {
     expect(container.querySelector('.fb-modal-title')?.textContent).toContain('Remove "Evan"?');
   });
 
-  it('renders people in responsive people-grid with initials avatar, You badge, and title tooltips', async () => {
+  it('renders people in people-list with initials avatar, You badge, and title tooltips', async () => {
     const person1: Person = {
       id: 'p-1',
       workspaceId: 'ws-1',
@@ -338,10 +338,10 @@ describe('PeoplePage deletion guards (BUG-ORD-09 / BUG-EDGE-05)', () => {
       root.render(<PeoplePage />);
     });
 
-    const grid = container.querySelector('.people-grid');
-    expect(grid).toBeTruthy();
+    const list = container.querySelector('.people-list');
+    expect(list).toBeTruthy();
 
-    const cards = container.querySelectorAll('.person-directory-card');
+    const cards = container.querySelectorAll('.people-list-row');
     expect(cards.length).toBe(2);
 
     // Card 1 (Farooq - Linked Person "You")
