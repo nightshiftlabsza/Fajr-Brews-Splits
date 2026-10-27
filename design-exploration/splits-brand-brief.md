@@ -78,4 +78,12 @@ Most useful, in this order:
 5. One dark-mode screenshot per theme.
 6. An invoice view, if available, to show how the name appears on a document.
 
-Existing screenshots in the project's `design/baseline/` folder cover most of these (for example `emerald-light-desktop-home.png`, `yinmn-light-desktop-home.png`, `emerald-light-mobile-home.png`, `emerald-dark-mobile-home.png`, `auth-desktop.png`, `auth-mobile.png`, `emerald-light-desktop-invoices.png`). A YInMn mobile and dark set was not found there; capture those if Stitch needs them.
+These are included in `design-exploration/screenshots/` beside this file:
+
+- `emerald-light-desktop-home.png`, `emerald-light-desktop-summary.png`, `emerald-light-desktop-invoices.png`
+- `yinmn-light-desktop-home.png`, `yinmn-light-desktop-summary.png`, `yinmn-light-desktop-invoices.png`
+- `emerald-light-mobile-home.png`, `emerald-light-mobile-summary.png`
+- `emerald-dark-mobile-home.png`, `emerald-dark-mobile-summary.png`
+- `auth-desktop.png`, `auth-mobile.png`
+
+Gaps: there are no YInMn mobile screenshots and no YInMn dark screenshots. Stitch should extrapolate from the Emerald mobile and dark screens and the YInMn desktop screens, or those can be captured separately. These screenshots predate the Splits rename, so they still show the old "Fajr Brews / Coffee Splitter" header.
