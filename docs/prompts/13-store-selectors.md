@@ -1,6 +1,6 @@
 # Prompt 13: Stop hidden tabs re-rendering on every store change
 
-Branch: `prompt/13-store-selectors`, cut from `main` after prompt 12 is merged (both change `src/App.tsx`).
+Branch: `prompt/13-store-selectors`, cut from `main` after prompt 12 is merged (both change `src/App.tsx`). Must merge before any design prompt (14+) that edits components.
 
 ## Objective
 Make in-app interactions feel immediate by making each component re-render only when the store fields it actually uses change.
@@ -20,7 +20,7 @@ Make in-app interactions feel immediate by making each component re-render only 
 3. `App.tsx`: delete the no-op colour-scheme listener, its two refs and its cleanup. Keep the theme and mode lines that read localStorage.
 
 ## Constraints
-- No change to behaviour, markup, styling, store shape or store actions.
+- Hook lines only: no change to behaviour, markup, CSS, store shape or store actions.
 - Keep all five tabs mounted (scroll position and form state depend on it).
 - No `React.memo`, no `useMemo`/`useCallback` other than item 2; calculations cost about 3 ms for 41 orders and are not the problem.
 - Do not edit the existing component tests' expectations. Adjust a store mock only if a test fails because of the selector, and explain each one in the report.
