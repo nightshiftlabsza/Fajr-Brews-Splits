@@ -12,9 +12,10 @@ type StoreTestConfig = {
   session?: { user?: { id: string; email?: string | null; user_metadata?: { full_name?: string } } } | null;
   workspaceMember?: QueryResult;
   linkResolution?: QueryResult;
-  people?: QueryResult;
+  people?: QueryResult | Promise<QueryResult>;
   orders?: QueryResult;
   roasters?: QueryResult;
+  userSettings?: QueryResult;
   roasterInsert?: QueryResult;
   roasterUpdate?: QueryResult;
   orderUpdate?: QueryResult;
@@ -32,23 +33,26 @@ function makeAwaitable<T>(result: Promise<T> | T) {
   };
 }
 
-function createSelectBuilder(result: QueryResult) {
+function createSelectBuilder(result: QueryResult | Promise<QueryResult>) {
   const builder: {
     eq: ReturnType<typeof vi.fn>;
+    or: ReturnType<typeof vi.fn>;
     order: ReturnType<typeof vi.fn>;
     maybeSingle: ReturnType<typeof vi.fn>;
     single: ReturnType<typeof vi.fn>;
   } = {
     eq: vi.fn(),
+    or: vi.fn(),
     order: vi.fn(),
     maybeSingle: vi.fn(),
     single: vi.fn(),
   };
 
   builder.eq.mockImplementation(() => builder);
+  builder.or.mockImplementation(() => builder);
   builder.order.mockImplementation(() => makeAwaitable(result));
-  builder.maybeSingle.mockResolvedValue(result);
-  builder.single.mockResolvedValue(result);
+  builder.maybeSingle.mockImplementation(() => makeAwaitable(result));
+  builder.single.mockImplementation(() => makeAwaitable(result));
 
   return builder;
 }
@@ -62,7 +66,7 @@ function createSupabaseMock(config: StoreTestConfig) {
   const people = config.people ?? { data: [], error: null };
   const orders = config.orders ?? { data: [], error: null };
   const roasters = config.roasters ?? { data: [], error: null };
-  const userSettings = {
+  const userSettings = config.userSettings ?? {
     data: null,
     error: {
       code: 'PGRST116',
@@ -385,6 +389,73 @@ describe('appStore.initialize', () => {
     expect(useAppStore.getState().roasterFeatureMessage).toBe('Roasters are unavailable because the Supabase roaster migration has not been applied yet.');
     expect(useAppStore.getState().roasters).toEqual([]);
     expect(useAppStore.getState().error).toBeNull();
+  });
+
+  it('requests people, orders, roasters, and settings concurrently during owner initialization', async () => {
+    let resolvePeople!: (val: QueryResult) => void;
+    const peoplePromise = new Promise<QueryResult>((resolve) => {
+      resolvePeople = resolve;
+    });
+
+    const { useAppStore, supabase } = await loadStore({
+      session: { user: { id: 'user-1', email: 'owner@example.com' } },
+      workspaceMember: { data: { role: 'owner' }, error: null },
+      people: peoplePromise,
+    });
+
+    const initializePromise = useAppStore.getState().initialize();
+
+    // Allow microtasks to run so session & workspace check complete and parallel queries launch
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const queriedTables = supabase.from.mock.calls.map(([table]: [string]) => table);
+    expect(queriedTables).toContain('people');
+    expect(queriedTables).toContain('orders');
+    expect(queriedTables).toContain('roasters');
+    expect(queriedTables).toContain('user_settings');
+
+    resolvePeople({ data: [], error: null });
+    await initializePromise;
+  });
+
+  it('fails startup and sets error when people query fails', async () => {
+    const { useAppStore } = await loadStore({
+      session: { user: { id: 'user-1', email: 'owner@example.com' } },
+      workspaceMember: { data: { role: 'owner' }, error: null },
+      people: {
+        data: null,
+        error: {
+          code: 'PGRST500',
+          message: 'Database query failed for people',
+        },
+      },
+    });
+
+    await useAppStore.getState().initialize();
+
+    expect(useAppStore.getState().error).toBe('Error: Database query failed for people');
+    expect(useAppStore.getState().isLoading).toBe(false);
+    expect(useAppStore.getState().isInitialized).toBe(true);
+  });
+
+  it('fails startup and sets error when user settings fails with non-PGRST116 error', async () => {
+    const { useAppStore } = await loadStore({
+      session: { user: { id: 'user-1', email: 'owner@example.com' } },
+      workspaceMember: { data: { role: 'owner' }, error: null },
+      userSettings: {
+        data: null,
+        error: {
+          code: 'PGRST500',
+          message: 'Permission denied on user_settings',
+        },
+      },
+    });
+
+    await useAppStore.getState().initialize();
+
+    expect(useAppStore.getState().error).toBe('Error: Permission denied on user_settings');
+    expect(useAppStore.getState().isLoading).toBe(false);
+    expect(useAppStore.getState().isInitialized).toBe(true);
   });
 });
 
