@@ -2099,36 +2099,92 @@ input[type=number]::-webkit-outer-spin-button {
   }
 }
 
-/* ── People Directory Grid ───────────────────────────────── */
+/* ── People Directory List ───────────────────────────────── */
 
-.people-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: var(--space-4);
-}
-
-@media (max-width: 1023px) and (min-width: 768px) {
-  .people-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 767px) {
-  .people-grid {
-    grid-template-columns: 1fr;
-    gap: var(--space-3);
-  }
-}
-
-.person-directory-card {
+.people-list {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
-  transition: border-color var(--transition-fast);
+  overflow: hidden;
 }
 
-.person-directory-card:hover {
-  border-color: color-mix(in srgb, var(--color-accent) 30%, var(--color-border));
+.people-list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  transition: background var(--transition-fast);
+}
+
+.people-list-row + .people-list-row {
+  border-top: 1px solid var(--color-border);
+}
+
+.people-list-row:hover {
+  background: color-mix(in srgb, var(--color-accent) 4%, var(--color-surface));
+}
+
+.people-list-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.people-list-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.people-list-name-text {
+  font-weight: 700;
+  font-size: 0.9375rem;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.people-list-badge {
+  font-size: 0.6875rem;
+  padding: 1px 6px;
+  flex-shrink: 0;
+}
+
+.people-list-meta,
+.people-list-note {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.people-list-note {
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.people-list-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .people-list-row {
+    flex-wrap: wrap;
+    padding: var(--space-3);
+  }
+
+  .people-list-main {
+    flex-basis: calc(100% - 40px - var(--space-3));
+  }
+
+  .people-list-actions {
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
 }
 
 .person-avatar {

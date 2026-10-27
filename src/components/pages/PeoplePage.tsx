@@ -178,77 +178,39 @@ export function PeoplePage({ embedded = false }: PeoplePageProps = {}) {
         </div>
       )}
 
-      <div className="people-grid">
-        {filtered.map((person) => (
-          <div key={person.id} className="person-directory-card card-padded" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 'var(--space-4)' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)' }}>
+      <div className="people-list">
+        {filtered.map((person) => {
+          const contact = [person.phone, person.email].filter(Boolean).join(' · ') || 'No contact details';
+          return (
+            <div key={person.id} className="people-list-row">
               <div className="person-avatar" aria-hidden="true">
                 {getPersonInitials(person.name)}
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                  <div
-                    style={{
-                      fontWeight: 700,
-                      fontSize: '0.9375rem',
-                      color: 'var(--color-text-primary)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                    title={person.name}
-                  >
-                    {person.name}
-                  </div>
+              <div className="people-list-main">
+                <div className="people-list-name">
+                  <span className="people-list-name-text" title={person.name}>{person.name}</span>
                   {linkedPersonId === person.id && (
-                    <span className="wizard-badge wizard-badge-info" style={{ fontSize: '0.6875rem', padding: '1px 6px', flexShrink: 0 }}>
-                      You
-                    </span>
+                    <span className="wizard-badge wizard-badge-info people-list-badge">You</span>
                   )}
                 </div>
-                <div
-                  style={{
-                    fontSize: '0.8125rem',
-                    color: 'var(--color-text-muted)',
-                    marginTop: 2,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                  title={[person.phone, person.email].filter(Boolean).join(' · ') || 'No contact details'}
-                >
-                  {[person.phone, person.email].filter(Boolean).join(' · ') || 'No contact details'}
-                </div>
+                <div className="people-list-meta" title={contact}>{contact}</div>
                 {person.note && (
-                  <div
-                    style={{
-                      fontSize: '0.75rem',
-                      color: 'var(--color-text-muted)',
-                      marginTop: 4,
-                      fontStyle: 'italic',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                    title={person.note}
-                  >
-                    {person.note}
-                  </div>
+                  <div className="people-list-note" title={person.note}>{person.note}</div>
                 )}
               </div>
+              <div className="people-list-actions">
+                <button className="btn btn-ghost btn-sm" onClick={() => openEdit(person)}>Edit</button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ color: 'var(--color-unpaid)' }}
+                  onClick={() => handleDeleteClick(person)}
+                >
+                  Remove
+                </button>
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-2)', marginTop: 'auto' }}>
-              <button className="btn btn-ghost btn-sm" onClick={() => openEdit(person)}>Edit</button>
-              <button
-                className="btn btn-ghost btn-sm"
-                style={{ color: 'var(--color-unpaid)' }}
-                onClick={() => handleDeleteClick(person)}
-              >
-                Remove
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Modal Editor */}
