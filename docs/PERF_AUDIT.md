@@ -34,6 +34,6 @@ Checked and not a problem: one realtime channel, created once and torn down on s
 | Prompt | Content | Files | Run |
 |---|---|---|---|
 | 11 | F1, F2, F6 | `vite.config.ts`, `package*.json`, `appStore.ts` (initialize) | Now; no overlap with 08, 09, 10 |
-| 12 | F3 instant reopen from snapshot | `appStore.ts`, `App.tsx` | After 11, once the owner approves |
-| 13 | F4 selectors, F7, F8 | most components, `App.tsx` | After 09 and 10 merge |
-| 08 addition | F5 cache header | `public/_headers` | One line added to prompt 08 |
+| 12 | F3 instant reopen from snapshot (owner approved 2026-10-27) | `appStore.ts`, `App.tsx`, new `src/lib/startupSnapshot.ts` | After 11 merges |
+| 13 | F4 selectors, F7, F8 | 15 components, `App.tsx` | After 12 merges (09 and 10 are already merged) |
+| 08 addition | F5 cache header | `public/_headers` | Added to prompt 08 (PR #14) |

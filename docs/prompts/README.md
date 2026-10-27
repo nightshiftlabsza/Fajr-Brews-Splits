@@ -21,7 +21,7 @@ Run them one at a time, in number order, merging each reviewed branch before sta
 | 7a | **08 Security (code only)** | Headers (report-only CSP), mailto and import validation, SVG logos. Run after 6, before 7. |
 | 7 | **07 Final verification** | Report only, on the fully integrated branch. |
 
-Performance batch (see `docs/PERF_AUDIT.md`): **11 Fast startup** can run now, in parallel with 08 to 10 (no shared files). 12 and 13 follow once written.
+Performance batch (see `docs/PERF_AUDIT.md`): **11 Fast startup** can run now, in parallel with 08 (no shared files). Then **12 Instant reopen** after 11 merges, then **13 Store selectors** after 12 merges.
 
 Claude reviews each report before the next wave starts. Merge a branch only after its review passes.
 
