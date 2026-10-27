@@ -1,6 +1,6 @@
 # Prompt 11: Fast startup (stop preloading the PDF library, parallel startup queries)
 
-Branch: `prompt/11-fast-startup`, cut from current `main`. Touches only `vite.config.ts`, `package.json`, `package-lock.json`, `src/store/appStore.ts` (the `initialize` action only) and `src/store/appStore.test.ts`. Safe to run alongside prompts 08, 09 and 10: none of them touch these files.
+Branch: `prompt/11-fast-startup`, cut from current `main`. Touches only `vite.config.ts`, `package.json`, `package-lock.json`, `src/store/appStore.ts` (the `initialize` action only) and `src/store/appStore.test.ts`. Run first in the performance batch (11, then 12, then 13), before any design prompt (14+).
 
 ## Objective
 The owner sees the "Fajr Brews" loading screen for too long every time the app opens (including when a phone browser reloads a background tab). Cut the two verified causes on the startup path:
@@ -30,7 +30,7 @@ The owner sees the "Fajr Brews" loading screen for too long every time the app o
 - No change to what data is fetched, which columns, filters, RLS assumptions or the order of rows. Same queries, issued together.
 - No change to the loading screen, `isLoading`/`isSyncing`/`isInitialized` semantics, the `initializePromise` de-duplication, or any UI file.
 - No new dependencies, no new files except tests if you choose to put a new test in a new file (prefer `appStore.test.ts`).
-- Do not touch `src/lib/pdf.ts`, the PDF output, or any money logic.
+- Do not touch `src/lib/pdf.ts`, the PDF output, any money logic, or `index.html` (the font link belongs to the design work).
 
 ## Anti-patterns to avoid
 - Do not add caching, localStorage snapshots, service workers, or lazy-loaded pages here. Those are separate decisions.
