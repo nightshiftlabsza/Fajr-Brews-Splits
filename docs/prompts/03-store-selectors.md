@@ -1,6 +1,6 @@
-# Prompt 13: Stop hidden tabs re-rendering on every store change
+# Prompt 3 of 9: Stop hidden tabs re-rendering on every store change
 
-Branch: `prompt/13-store-selectors`, cut from `main` after prompt 12 is merged (both change `src/App.tsx`). Must merge before any design prompt (14+) that edits components.
+Branch: `prompt/03-store-selectors`, cut from `main` after prompt 2 is merged (both change `src/App.tsx`). Must merge before any design prompt (4 to 7) that edits components.
 
 ## Objective
 Make in-app interactions feel immediate by making each component re-render only when the store fields it actually uses change.

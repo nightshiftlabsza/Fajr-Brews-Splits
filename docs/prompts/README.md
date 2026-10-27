@@ -18,11 +18,11 @@ Run them one at a time, in number order, merging each reviewed branch before sta
 | 4 | **04 CSS engineering** | Tokens and CSS structure, no visual change. |
 | 5 | **05 UI desktop** | Full desktop redesign; phones must not get worse. |
 | 6 | **06 UI mobile (adversarial)** | Attacks and fixes phone layouts once desktop is done. |
-| 11 to 17 | Speed (11 to 13) and UI (14 to 17) | Their own prompt files; numbers are the order. |
+| 1 to 9 | Speed (1 to 3) and the rest of the plan (4 to 9) | Their own prompt files; numbers are the order. |
 | 18 | **18 Security (code only)** | Headers (report-only CSP, immutable asset cache), mailto and import validation, SVG logos. Runs after the UI prompts so the CSP matches the final fonts. |
 | 19 | **19 Final verification** | Report only, on the fully integrated branch. |
 
-Performance batch (see `docs/PERF_AUDIT.md`): **11 Fast startup** can run now, in parallel with 08 (no shared files). Then **12 Instant reopen** after 11 merges, then **13 Store selectors** after 12 merges.
+Performance batch (see `docs/PERF_AUDIT.md`): **Prompt 1 Fast startup** runs first. Then **Prompt 2 Instant reopen** after 1 merges, then **Prompt 3 Store selectors** after 2 merges. Design prompts (4 to 7) come after 3.
 
 Claude reviews each report before the next wave starts. Merge a branch only after its review passes.
 

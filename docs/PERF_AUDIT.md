@@ -23,7 +23,7 @@ The splash shows only when `isInitialized` is false, i.e. on a full page load. T
 | F3 | P1 | Every cold open blocks on the network | Splash waits for all queries; nothing is shown from the last visit | Show last-known data instantly from a local snapshot, refresh in the background (needs owner decision: data stays in the browser) | High that it removes the splash on return visits |
 | F4 | P1 | Every store change re-renders all five tabs | 15 components call `useAppStore()` with no selector; all tabs stay mounted; measured above | Select only the fields each component uses (`useShallow`). Run after prompts 09/10 merge (same files) | High |
 | F5 | P2 | Built assets may not be cached long-term | No `public/_headers`; Cloudflare Pages default revalidates every asset on each load. Not verified on the live site (blocked from the container) | Add `/assets/* Cache-Control: public, max-age=31536000, immutable` to the `_headers` file prompt 08 creates | Medium |
-| F6 | P2 | Unused dependency `jspdf-autotable` | No import anywhere in `src/` | Remove (folded into prompt 11) | High |
+| F6 | P2 | Unused dependency `jspdf-autotable` | No import anywhere in `src/` | Remove (folded into Prompt 1) | High |
 | F7 | P3 | `OrderSetup` debounced name/bank save timer restarts on any re-render | `patchOrder` is a new function each render and is an effect dependency (`OrderSetup.tsx` ~85, 177-211) | Mostly disappears with F4; revisit after | Medium |
 | F8 | P3 | Dead "force repaint" listener in `App.tsx` ~237-259 | Sets `data-mode` to the value it already has; CSS media queries update on their own | Delete with the next App.tsx change | High |
 
@@ -33,7 +33,7 @@ Checked and not a problem: one realtime channel, created once and torn down on s
 
 | Prompt | Content | Files | Run |
 |---|---|---|---|
-| 11 | F1, F2, F6 | `vite.config.ts`, `package*.json`, `appStore.ts` (initialize) | Now; no overlap with 08, 09, 10 |
-| 12 | F3 instant reopen from snapshot (owner approved 2026-10-27) | `appStore.ts`, `App.tsx`, new `src/lib/startupSnapshot.ts` | After 11 merges |
-| 13 | F4 selectors, F7, F8 | 15 components, `App.tsx` | After 12 merges (09 and 10 are already merged) |
-| 08 addition | F5 cache header | `public/_headers` | Added to prompt 08 (PR #14) |
+| Prompt 1 | F1, F2, F6 | `vite.config.ts`, `package*.json`, `appStore.ts` (initialize) | Now; no overlap with 08, 09, 10 |
+| Prompt 2 | F3 instant reopen from snapshot (owner approved 2026-10-27) | `appStore.ts`, `App.tsx`, new `src/lib/startupSnapshot.ts` | After prompt 1 merges |
+| Prompt 3 | F4 selectors, F7, F8 | 15 components, `App.tsx` | After prompt 2 merges (09 and 10 are already merged) |
+| 08 addition | F5 cache header | `public/_headers` | Added to security prompt (PR #14) |

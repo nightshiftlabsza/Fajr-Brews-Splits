@@ -1,6 +1,6 @@
-# Prompt 12: Instant reopen from last visit's data
+# Prompt 2 of 9: Instant reopen from last visit's data
 
-Branch: `prompt/12-instant-reopen`, cut from `main` **after prompt 11 is merged** (both change `initialize` in `src/store/appStore.ts`). Do not run at the same time as prompt 13 (both change `src/App.tsx`).
+Branch: `prompt/02-instant-reopen`, cut from `main` **after prompt 1 is merged** (both change `initialize` in `src/store/appStore.ts`). Do not run at the same time as prompt 3 (both change `src/App.tsx`).
 
 ## Objective
 When a signed-in user reopens the app (including when a phone browser reloads a tab it unloaded in the background), show their last-known people, orders, roasters and settings immediately instead of the "Fajr Brews" loading screen, then refresh from Supabase in the background. The owner has approved storing this copy in the browser's localStorage, provided it is wiped on sign-out.
@@ -58,7 +58,7 @@ When a signed-in user reopens the app (including when a phone browser reloads a 
 5. Gate from a clean state: `npm run typecheck && npm test && npm run build`. Paste real output.
 
 ## Stop conditions
-Stop and report instead of guessing if: prompt 11 is not merged into your base; an action that writes to Supabase cannot be gated without restructuring it; the existing tests need edits other than adding mock hooks; or anything seems to need SQL, live Supabase, or a dependency.
+Stop and report instead of guessing if: prompt 1 is not merged into your base; an action that writes to Supabase cannot be gated without restructuring it; the existing tests need edits other than adding mock hooks; or anything seems to need SQL, live Supabase, or a dependency.
 
 ## Completion report (AGENTS.md format)
 1. Files changed. 2. Diff summary per file. 3. Commands run with real output. 4. Each acceptance criterion: met / not met, with evidence. 5. Skipped or uncertain, including real-device timing (not measurable without the live backend).

@@ -1,6 +1,6 @@
-# Prompt 11: Fast startup (stop preloading the PDF library, parallel startup queries)
+# Prompt 1 of 9: Fast startup (stop preloading the PDF library, parallel startup queries)
 
-Branch: `prompt/11-fast-startup`, cut from current `main`. Touches only `vite.config.ts`, `package.json`, `package-lock.json`, `src/store/appStore.ts` (the `initialize` action only) and `src/store/appStore.test.ts`. Run first in the performance batch (11, then 12, then 13), before any design prompt (14+).
+Branch: `prompt/01-fast-startup`, cut from current `main`. Touches only `vite.config.ts`, `package.json`, `package-lock.json`, `src/store/appStore.ts` (the `initialize` action only) and `src/store/appStore.test.ts`. Run first. Prompts 2 and 3 follow it; the design prompts (4 to 7) come after 3.
 
 ## Objective
 The owner sees the "Fajr Brews" loading screen for too long every time the app opens (including when a phone browser reloads a background tab). Cut the two verified causes on the startup path:
@@ -62,7 +62,7 @@ Stop and report instead of guessing if: removing the manual chunk changes PDF ou
 - AC3: after the access check, `initialize` issues people, orders (both kinds where they apply), roasters and settings in one `Promise.all`; shown by a test that fails on the old code and passes on the new.
 - AC4: error and fallback behaviour unchanged (roaster soft failure, people/orders hard failure, settings `PGRST116` tolerated), each covered by a passing test.
 - AC5: no file outside the five listed is changed; no UI, money or PDF code touched; no new comments that narrate code.
-- AC6: gate passes with pasted output; test count is the baseline (424) plus only the new tests.
+- AC6: gate passes with pasted output; test count is the baseline (428 on current `main`) plus only the new tests.
 
 ## Ground rules (all prompts)
 - Read `AGENTS.md` and `docs/PROJECT_BRIEF.md` first; they are binding.
