@@ -21,7 +21,7 @@ Run them one at a time, in number order, merging each reviewed branch before sta
 | 1 to 3 | Speed | Their own prompt files; numbers are the order. |
 | 4 | **04 Type and theme foundations** | Self-hosted fonts, type scale, weights, number style. Classic (emerald) and Modern (yinmn) typography. Runs after prompt 3 is merged. Basis: `docs/UI_AUDIT.md`. |
 | 5 | **05 Splits identity** | Header and sign-in brand lockup ("Splits, by Fajr Brews"). Owned by the brand thread. |
-| 6 to 8 | UI: shared components, order screens, phones and secondary pages | Written one at a time after the previous batch is reviewed. |
+| 7 to 9 | UI: shared components, order screens, phones and secondary pages | Written one at a time after the previous batch is reviewed. |
 | 18 | **18 Security (code only)** | Headers (report-only CSP, immutable asset cache), mailto and import validation, SVG logos. Runs after the UI prompts so the CSP matches the final fonts. |
 | 19 | **19 Final verification** | Report only, on the fully integrated branch. |
 
