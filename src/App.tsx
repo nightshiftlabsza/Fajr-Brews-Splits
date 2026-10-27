@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from './store/appStore';
 import type { ThemeMode } from './types';
 import { AuthPage } from './components/auth/AuthPage';
@@ -107,7 +108,20 @@ export default function App() {
     linkResolution,
     dismissLinkResolution,
     confirmPersonLink,
-  } = useAppStore();
+  } = useAppStore(
+    useShallow((s) => ({
+      initialize: s.initialize,
+      isInitialized: s.isInitialized,
+      isSyncing: s.isSyncing,
+      error: s.error,
+      snapshotSavedAt: s.snapshotSavedAt,
+      user: s.user,
+      accessStatus: s.accessStatus,
+      linkResolution: s.linkResolution,
+      dismissLinkResolution: s.dismissLinkResolution,
+      confirmPersonLink: s.confirmPersonLink,
+    }))
+  );
   const [currentTab, setCurrentTab] = useState<AppTab>('order');
   const [authMode, setAuthMode] = useState<'default' | 'recovery'>(() => (
     typeof window !== 'undefined' && isRecoveryHash(window.location.hash) ? 'recovery' : 'default'
@@ -254,10 +268,6 @@ export default function App() {
     return () => window.cancelAnimationFrame(frameId);
   }, [currentTab]);
 
-  // Track mediaQuery listener for cleanup
-  const modeListenerRef = useRef<((e: MediaQueryListEvent) => void) | null>(null);
-  const modeMediaRef = useRef<MediaQueryList | null>(null);
-
   useEffect(() => {
     if (user && authMode !== 'recovery' && currentPath === RESET_PASSWORD_PATH) {
       updatePath(HOME_PATH, { replace: true });
@@ -278,30 +288,6 @@ export default function App() {
     } catch {
       // Private browsing — ignore
     }
-
-    // Listen for OS dark-mode changes (used when mode='auto')
-    try {
-      const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      modeMediaRef.current = mq;
-      const handler = () => {
-        // Force a repaint so @media (prefers-color-scheme) CSS re-evaluates
-        const mode = document.documentElement.getAttribute('data-mode');
-        if (mode === 'auto') {
-          // Toggling a dummy attribute triggers CSS re-evaluation
-          document.documentElement.setAttribute('data-mode', 'auto');
-        }
-      };
-      modeListenerRef.current = handler;
-      mq.addEventListener('change', handler);
-    } catch { /* ignore */ }
-
-    return () => {
-      try {
-        if (modeMediaRef.current && modeListenerRef.current) {
-          modeMediaRef.current.removeEventListener('change', modeListenerRef.current);
-        }
-      } catch { /* ignore */ }
-    };
   }, []);
 
   const [initTimeout, setInitTimeout] = useState(false);

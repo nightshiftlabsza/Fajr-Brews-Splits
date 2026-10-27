@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../../store/appStore';
 import type { Person } from '../../types';
 import { PersonEditor, type PersonFormValues } from '../people/PersonEditor';
@@ -20,7 +21,16 @@ function getPersonInitials(name: string): string {
 }
 
 export function PeoplePage({ embedded = false }: PeoplePageProps = {}) {
-  const { people, addPerson, updatePerson, deletePerson, orders, linkedPersonId } = useAppStore();
+  const { people, addPerson, updatePerson, deletePerson, orders, linkedPersonId } = useAppStore(
+    useShallow((s) => ({
+      people: s.people,
+      addPerson: s.addPerson,
+      updatePerson: s.updatePerson,
+      deletePerson: s.deletePerson,
+      orders: s.orders,
+      linkedPersonId: s.linkedPersonId,
+    }))
+  );
   const [editingId, setEditingId] = useState<string | 'new' | null>(null);
   const [form, setForm] = useState<PersonFormValues>(emptyForm);
   const [error, setError] = useState('');

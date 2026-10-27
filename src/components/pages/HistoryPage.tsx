@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../../store/appStore';
 import type { Order } from '../../types';
 import { formatDateShort, formatZAR, todayISO } from '../../lib/formatters';
@@ -50,7 +51,20 @@ export function HistoryPage({ participantOnly = false }: Props) {
     exportJSON,
     importJSON,
     setLastExportDate,
-  } = useAppStore();
+  } = useAppStore(
+    useShallow((s) => ({
+      orders: s.orders,
+      people: s.people,
+      roasters: s.roasters,
+      linkedPersonId: s.linkedPersonId,
+      linkResolution: s.linkResolution,
+      deleteOrder: s.deleteOrder,
+      createOrder: s.createOrder,
+      exportJSON: s.exportJSON,
+      importJSON: s.importJSON,
+      setLastExportDate: s.setLastExportDate,
+    }))
+  );
 
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
@@ -549,7 +563,16 @@ export function HistoryPage({ participantOnly = false }: Props) {
 }
 
 function PastOrderEditor({ order, onClose }: { order: Order; onClose: () => void }) {
-  const { sessionUi, setOrderWizardStep, roasters, people, updateOrder, flushOrderWrites } = useAppStore();
+  const { sessionUi, setOrderWizardStep, roasters, people, updateOrder, flushOrderWrites } = useAppStore(
+    useShallow((s) => ({
+      sessionUi: s.sessionUi,
+      setOrderWizardStep: s.setOrderWizardStep,
+      roasters: s.roasters,
+      people: s.people,
+      updateOrder: s.updateOrder,
+      flushOrderWrites: s.flushOrderWrites,
+    }))
+  );
   const commitStepRef = useRef<(() => Promise<void>) | null>(null);
   const [draftOrder, setDraftOrder] = useState<Order>(() => cloneOrder(order));
   const draftOrderRef = useRef<Order>(draftOrder);

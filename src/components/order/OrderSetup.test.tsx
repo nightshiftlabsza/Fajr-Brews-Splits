@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { act } from 'react';
+import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Order, Person, Roaster, RoasterFeatureStatus } from '../../types';
@@ -169,5 +169,55 @@ describe('OrderSetup roaster flow', () => {
     const addButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Add roaster');
     expect(addButton).toBeTruthy();
     expect(addButton?.getAttribute('disabled')).not.toBeNull();
+  });
+
+  it('preserves debounced name save timer across unrelated parent re-renders', () => {
+    vi.useFakeTimers();
+    try {
+      const order = makeOrder();
+      let triggerParentRender: () => void = () => {};
+      function Parent() {
+        const [, setTick] = useState(0);
+        triggerParentRender = () => setTick((t) => t + 1);
+        return <OrderSetup order={order} />;
+      }
+
+      act(() => {
+        root.render(<Parent />);
+      });
+
+      const input = container.querySelector('#order-name') as HTMLInputElement | null;
+      expect(input).toBeTruthy();
+
+      // Type a name
+      act(() => {
+        const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+        valueSetter?.call(input, 'April Drop');
+        input!.dispatchEvent(new Event('input', { bubbles: true }));
+        input!.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+
+      // Advance 200ms (< 450ms)
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(mockStoreState.updateOrder).not.toHaveBeenCalled();
+
+      // Trigger unrelated parent re-render before 450ms
+      act(() => {
+        triggerParentRender();
+      });
+
+      // Advance another 250ms (total 450ms from keystroke)
+      act(() => {
+        vi.advanceTimersByTime(250);
+      });
+
+      // Should have fired at 450ms
+      expect(mockStoreState.updateOrder).toHaveBeenCalledTimes(1);
+      expect(mockStoreState.updateOrder).toHaveBeenCalledWith('order-1', { name: 'April Drop' });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
