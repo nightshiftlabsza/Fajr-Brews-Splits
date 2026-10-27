@@ -15,6 +15,11 @@ import {
 import { assertCanPersistOrder } from '../lib/orderIntegrity';
 import { getNextActiveOrderId, getPreferredActiveOrderId, normalizeOrderStatus, syncOrderStatusFlags } from '../lib/orderLifecycle';
 import { createRoasterSnapshot, normalizeRoasterName } from '../lib/roasters';
+import {
+  clearStartupSnapshot,
+  readStartupSnapshot,
+  saveStartupSnapshot,
+} from '../lib/startupSnapshot';
 import type {
   Person,
   Order,
@@ -169,6 +174,7 @@ interface AppStore {
   isLoading: boolean;
   isSyncing: boolean;
   error: string | null;
+  snapshotSavedAt: string | null;
   sessionUi: {
     orderWizardSteps: Record<string, OrderWizardStep>;
     orderProtectionOpen: Record<string, boolean>;
@@ -222,6 +228,7 @@ interface AppStore {
   // ── Import/Export ─────────────────────────────────────────
   exportJSON: () => string;
   importJSON: (json: string) => Promise<void>;
+  saveSnapshot: () => void;
 
   // ── Internal ──────────────────────────────────────────────
   _setupRealtime: (workspaceId: string) => void;
@@ -232,15 +239,60 @@ interface AppStore {
 
 // ─── Safe localStorage (private-browsing guard) ──────────────
 
-const safeLocalStorage = {
+const memoryStorage: Map<string, string> = (() => {
+  const g = globalThis as unknown as { __fb_memory_storage__?: Map<string, string> };
+  if (!g.__fb_memory_storage__) {
+    g.__fb_memory_storage__ = new Map<string, string>();
+  }
+  return g.__fb_memory_storage__;
+})();
+
+function getStorage(): Storage | null {
+  if (typeof window !== 'undefined') {
+    try {
+      const storage = window.localStorage;
+      storage.setItem('__fb_test__', '1');
+      storage.removeItem('__fb_test__');
+      return storage;
+    } catch {
+      // Private browsing or opaque origin in jsdom
+    }
+  }
+  return null;
+}
+
+export const safeLocalStorage = {
   getItem: (key: string): string | null => {
-    try { return localStorage.getItem(key); } catch { return null; }
+    try {
+      const storage = getStorage();
+      if (storage) return storage.getItem(key);
+    } catch {
+      /* ignore */
+    }
+    return memoryStorage.get(key) ?? null;
   },
   setItem: (key: string, value: string): void => {
-    try { localStorage.setItem(key, value); } catch { /* ignore */ }
+    try {
+      const storage = getStorage();
+      if (storage) {
+        storage.setItem(key, value);
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
+    memoryStorage.set(key, value);
   },
   removeItem: (key: string): void => {
-    try { localStorage.removeItem(key); } catch { /* ignore */ }
+    try {
+      const storage = getStorage();
+      if (storage) {
+        storage.removeItem(key);
+      }
+    } catch {
+      /* ignore */
+    }
+    memoryStorage.delete(key);
   },
 };
 
@@ -489,6 +541,13 @@ async function uploadRoasterLogo(roasterId: string, file: File): Promise<{ logoP
 const orderWriteChains = new Map<string, Promise<void>>();
 const optimisticOrderSnapshots = new Map<string, Order>();
 let initializePromise: Promise<void> | null = null;
+let isAwaitingFreshData = false;
+
+function maybeWaitForFreshData(): Promise<void> | void {
+  if (isAwaitingFreshData && initializePromise) {
+    return initializePromise.catch(() => {});
+  }
+}
 
 // ─── Computed getter ─────────────────────────────────────────
 
@@ -496,22 +555,6 @@ export const getCurrentOrder = (state: AppStore): Order | null => {
   if (!state.currentOrderId) return null;
   return state.orders.find((o) => o.id === state.currentOrderId) ?? null;
 };
-
-// ─── Check for a cached Supabase session (skips splash on tab restore) ──────
-const hasCachedSession = (() => {
-  try {
-    const key = Object.keys(localStorage).find(
-      (k) => k.startsWith('sb-') && k.endsWith('-auth-token'),
-    );
-    if (!key) return false;
-    const raw = localStorage.getItem(key);
-    if (!raw) return false;
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    return Boolean(parsed?.access_token);
-  } catch {
-    return false;
-  }
-})();
 
 // ─── Store ────────────────────────────────────────────────────
 
@@ -529,10 +572,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
   roasterFeatureStatus: 'idle',
   roasterFeatureMessage: null,
   settings: { theme: 'emerald', themeMode: 'light' },
-  isInitialized: hasCachedSession,
+  isInitialized: false,
   isLoading: false,
   isSyncing: false,
   error: null,
+  snapshotSavedAt: null,
   sessionUi: {
     orderWizardSteps: {},
     orderProtectionOpen: {},
@@ -546,37 +590,95 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
 
     initializePromise = (async () => {
-    const silent = options?.silent ?? false;
-    const shouldBlock = !silent || !get().isInitialized;
+      const silent = options?.silent ?? false;
+      const isFirstPass = !silent && !get().isInitialized;
+      let showingSnapshot = false;
 
-    if (shouldBlock) {
-      set({ isLoading: true, isSyncing: false, error: null });
-    } else {
-      set({ isSyncing: true, error: null });
-    }
+      if (isFirstPass) {
+        const snapshot = readStartupSnapshot(safeLocalStorage);
+        if (snapshot) {
+          showingSnapshot = true;
+          isAwaitingFreshData = true;
 
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
+          const currentTheme = snapshot.settings.theme;
+          const currentMode = snapshot.settings.themeMode;
+          document.documentElement.setAttribute('data-theme', currentTheme);
+          document.documentElement.setAttribute('data-mode', currentMode);
 
-      if (!session?.user) {
-        set({
-          user: null,
-          accessStatus: 'none',
-          memberRole: null,
-          linkedPersonId: null,
-          linkResolution: defaultLinkResolution,
-          people: [],
-          roasters: [],
-          orders: [],
-          currentOrderId: null,
-          roasterFeatureStatus: 'idle',
-          roasterFeatureMessage: null,
-          isInitialized: true,
-          isLoading: false,
-          isSyncing: false,
-        });
-        return;
+          const currentOrderId = getPreferredActiveOrderId(
+            snapshot.orders,
+            safeLocalStorage.getItem('fb_current_order_id'),
+          );
+
+          set({
+            user: snapshot.user,
+            accessStatus: snapshot.accessStatus,
+            memberRole: snapshot.memberRole,
+            linkedPersonId: snapshot.linkedPersonId,
+            people: snapshot.people,
+            orders: snapshot.orders,
+            roasters: snapshot.roasters,
+            roasterFeatureStatus: snapshot.roasterFeatureStatus,
+            roasterFeatureMessage: null,
+            settings: snapshot.settings,
+            currentOrderId,
+            snapshotSavedAt: snapshot.savedAt,
+            isInitialized: true,
+            isLoading: false,
+            isSyncing: true,
+            error: null,
+          });
+        } else {
+          set({ isLoading: true, isSyncing: false, error: null });
+        }
+      } else if (silent) {
+        set({ isSyncing: true, error: null });
+      } else {
+        set({ isLoading: true, isSyncing: false, error: null });
       }
+
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+          throw sessionError;
+        }
+
+        if (!session?.user) {
+          clearStartupSnapshot(safeLocalStorage);
+          isAwaitingFreshData = false;
+          get()._teardownRealtime();
+          set({
+            user: null,
+            accessStatus: 'none',
+            memberRole: null,
+            linkedPersonId: null,
+            linkResolution: defaultLinkResolution,
+            people: [],
+            roasters: [],
+            orders: [],
+            currentOrderId: null,
+            roasterFeatureStatus: 'idle',
+            roasterFeatureMessage: null,
+            snapshotSavedAt: null,
+            isInitialized: true,
+            isLoading: false,
+            isSyncing: false,
+            error: null,
+          });
+          return;
+        }
+
+        if (showingSnapshot && session.user.id !== get().user?.id) {
+          clearStartupSnapshot(safeLocalStorage);
+          showingSnapshot = false;
+          set({
+            people: [],
+            orders: [],
+            roasters: [],
+            currentOrderId: null,
+            snapshotSavedAt: null,
+          });
+        }
 
       const user: AuthUser = {
         id: session.user.id,
@@ -606,6 +708,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const linkResolution = mapLinkResolution(linkPayload);
       const linkedPersonId = linkResolution.linkedPersonId ?? linkResolution.person?.personId ?? null;
       const hasWorkspaceAccess = Boolean(memberRow) || Boolean(linkedPersonId);
+
+      if (!hasWorkspaceAccess) {
+        clearStartupSnapshot(safeLocalStorage);
+      }
 
       if (memberRow) {
         // Setup Realtime before fetch so no events are missed during the fetch window
@@ -740,9 +846,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
         safeLocalStorage.removeItem('fb_current_order_id');
       }
 
+      const accessStatus = memberRow ? 'member' : linkedPersonId ? 'participant' : 'none';
+
+      if (accessStatus === 'none') {
+        clearStartupSnapshot(safeLocalStorage);
+      }
+
       set({
         user,
-        accessStatus: memberRow ? 'member' : linkedPersonId ? 'participant' : 'none',
+        accessStatus,
         memberRole: memberRow?.role ?? null,
         linkedPersonId,
         linkResolution,
@@ -755,9 +867,23 @@ export const useAppStore = create<AppStore>((set, get) => ({
         isInitialized: true,
         isLoading: false,
         isSyncing: false,
+        error: null,
+        snapshotSavedAt: null,
       });
+
+      isAwaitingFreshData = false;
+
+      if (accessStatus === 'member' || accessStatus === 'participant') {
+        get().saveSnapshot();
+      }
     } catch (err) {
-      set({ error: String(err), isInitialized: true, isLoading: false, isSyncing: false });
+      isAwaitingFreshData = false;
+      const message = String(err);
+      if (showingSnapshot || get().snapshotSavedAt) {
+        set({ isSyncing: false, error: message });
+      } else {
+        set({ error: message, isInitialized: true, isLoading: false, isSyncing: false });
+      }
     } finally {
       initializePromise = null;
     }
@@ -829,10 +955,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
     get()._teardownRealtime();
     orderWriteChains.clear();
     optimisticOrderSnapshots.clear();
+    clearStartupSnapshot(safeLocalStorage);
+    isAwaitingFreshData = false;
     await supabase.auth.signOut();
-      set({
-        user: null,
-        accessStatus: 'none',
+    set({
+      user: null,
+      accessStatus: 'none',
       memberRole: null,
       linkedPersonId: null,
       linkResolution: defaultLinkResolution,
@@ -842,6 +970,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       currentOrderId: null,
       roasterFeatureStatus: 'idle',
       roasterFeatureMessage: null,
+      snapshotSavedAt: null,
       isInitialized: true,
       isLoading: false,
       isSyncing: false,
@@ -853,6 +982,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   confirmPersonLink: async (personId) => {
+    const pendingRefresh = maybeWaitForFreshData();
+    if (pendingRefresh) await pendingRefresh;
     try {
       const { error } = await supabase.rpc('confirm_my_person_link', {
         p_person_id: personId,
@@ -880,6 +1011,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // ── People ────────────────────────────────────────────────
   addPerson: async (data) => {
+    const pendingRefresh = maybeWaitForFreshData();
+    if (pendingRefresh) await pendingRefresh;
     const { data: row, error } = await supabase
       .from('people')
       .insert({
@@ -902,6 +1035,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   updatePerson: async (id, data) => {
+    const pendingRefresh = maybeWaitForFreshData();
+    if (pendingRefresh) await pendingRefresh;
     const { error } = await supabase
       .from('people')
       .update({
@@ -926,6 +1061,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   deletePerson: async (id) => {
+    const pendingRefresh = maybeWaitForFreshData();
+    if (pendingRefresh) await pendingRefresh;
     const { error } = await supabase.from('people').delete().eq('id', id);
     if (error) throw new Error(error.message);
     set((s) => ({ people: s.people.filter((p) => p.id !== id) }));
@@ -933,6 +1070,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // ── Roasters ──────────────────────────────────────────────
   createRoaster: async ({ name, logoFile, logoUrl }) => {
+    const pendingRefresh = maybeWaitForFreshData();
+    if (pendingRefresh) await pendingRefresh;
     const trimmedName = name.trim().replace(/\s+/g, ' ');
     if (!trimmedName) {
       throw new Error('Roaster name is required.');
@@ -1009,6 +1148,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   updateRoaster: async (id, data) => {
+    const pendingRefresh = maybeWaitForFreshData();
+    if (pendingRefresh) await pendingRefresh;
     if (get().accessStatus !== 'member') {
       throw new Error('Only workspace members can manage roasters.');
     }
@@ -1098,6 +1239,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // ── Orders ────────────────────────────────────────────────
   createOrder: async (data) => {
+    const pendingRefresh = maybeWaitForFreshData();
+    if (pendingRefresh) await pendingRefresh;
     const userId = get().user?.id;
     const initialStatus = normalizeOrderStatus(data.status, data.isArchived ?? false);
     const isArchived = initialStatus === 'archived' || Boolean(data.isArchived);
@@ -1150,6 +1293,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   updateOrder: async (id, data) => {
+    const pendingRefresh = maybeWaitForFreshData();
+    if (pendingRefresh) await pendingRefresh;
     const targetOrder = get().orders.find((order) => order.id === id);
     if (!targetOrder) {
       return;
@@ -1248,18 +1393,24 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   joinOrder: async (orderId) => {
+    const pendingRefresh = maybeWaitForFreshData();
+    if (pendingRefresh) await pendingRefresh;
     const { error } = await supabase.rpc('join_planned_order', { p_order_id: orderId });
     if (error) throw new Error(error.message);
     await get().initialize({ silent: true });
   },
 
   leaveOrder: async (orderId) => {
+    const pendingRefresh = maybeWaitForFreshData();
+    if (pendingRefresh) await pendingRefresh;
     const { error } = await supabase.rpc('leave_planned_order', { p_order_id: orderId });
     if (error) throw new Error(error.message);
     await get().initialize({ silent: true });
   },
 
   deleteOrder: async (id) => {
+    const pendingRefresh = maybeWaitForFreshData();
+    if (pendingRefresh) await pendingRefresh;
     try {
       set({ error: null });
       const { error } = await supabase.from('orders').delete().eq('id', id);
@@ -1309,6 +1460,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // ── Workspace Members ─────────────────────────────────────
   flushOrderWrites: async (orderId) => {
+    const pendingRefresh = maybeWaitForFreshData();
+    if (pendingRefresh) await pendingRefresh;
     await (orderWriteChains.get(orderId) ?? Promise.resolve());
   },
 
@@ -1332,6 +1485,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   addMemberByEmail: async (email, role = 'member') => {
+    const pendingRefresh = maybeWaitForFreshData();
+    if (pendingRefresh) await pendingRefresh;
     // Look up profile by email
     const { data: profile, error: profileErr } = await supabase
       .from('profiles')
@@ -1359,6 +1514,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   removeMember: async (userId) => {
+    const pendingRefresh = maybeWaitForFreshData();
+    if (pendingRefresh) await pendingRefresh;
     const { error } = await supabase
       .from('workspace_members')
       .delete()
@@ -1390,6 +1547,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   _saveSettings: async (userId, settings) => {
+    const pendingRefresh = maybeWaitForFreshData();
+    if (pendingRefresh) await pendingRefresh;
     const current = get().settings;
     const merged = { ...current, ...settings };
 
@@ -1431,6 +1590,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   importJSON: async (json) => {
+    const pendingRefresh = maybeWaitForFreshData();
+    if (pendingRefresh) await pendingRefresh;
     const parsed = JSON.parse(json);
 
     if (parsed.version !== '1' && parsed.version !== '2') {
@@ -1608,6 +1769,27 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ currentOrderId: preferredId });
     if (preferredId) safeLocalStorage.setItem('fb_current_order_id', preferredId);
     else safeLocalStorage.removeItem('fb_current_order_id');
+  },
+
+  saveSnapshot: () => {
+    const state = get();
+    if (!state.user || (state.accessStatus !== 'member' && state.accessStatus !== 'participant')) {
+      return;
+    }
+    saveStartupSnapshot(safeLocalStorage, {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      userId: state.user.id,
+      user: state.user,
+      accessStatus: state.accessStatus,
+      memberRole: state.memberRole,
+      linkedPersonId: state.linkedPersonId,
+      people: state.people,
+      orders: state.orders,
+      roasters: state.roasters,
+      roasterFeatureStatus: state.roasterFeatureStatus,
+      settings: state.settings,
+    });
   },
 
   // ── Realtime ──────────────────────────────────────────────

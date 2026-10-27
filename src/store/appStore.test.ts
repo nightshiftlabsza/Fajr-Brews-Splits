@@ -2,6 +2,13 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Order, Person } from '../types';
+import {
+  clearStartupSnapshot,
+  readStartupSnapshot,
+  saveStartupSnapshot,
+  type StartupSnapshot,
+} from '../lib/startupSnapshot';
+import { safeLocalStorage } from './appStore';
 
 type QueryResult = {
   data: unknown;
@@ -10,6 +17,7 @@ type QueryResult = {
 
 type StoreTestConfig = {
   session?: { user?: { id: string; email?: string | null; user_metadata?: { full_name?: string } } } | null;
+  getSession?: () => Promise<{ data: { session: unknown }; error?: unknown }>;
   workspaceMember?: QueryResult;
   linkResolution?: QueryResult;
   people?: QueryResult | Promise<QueryResult>;
@@ -125,7 +133,9 @@ function createSupabaseMock(config: StoreTestConfig) {
 
   return {
     auth: {
-      getSession: vi.fn().mockResolvedValue({ data: { session: config.session ?? null } }),
+      getSession: config.getSession
+        ? vi.fn().mockImplementation(config.getSession)
+        : vi.fn().mockResolvedValue({ data: { session: config.session ?? null } }),
       signOut: vi.fn().mockResolvedValue({ error: null }),
     },
     rpc: vi.fn().mockImplementation((name: string) => {
@@ -294,6 +304,12 @@ async function loadStore(config: StoreTestConfig = {}) {
 }
 
 afterEach(() => {
+  clearStartupSnapshot(safeLocalStorage);
+  try {
+    localStorage.clear();
+  } catch {
+    // ignore
+  }
   vi.resetModules();
   vi.clearAllMocks();
   vi.unstubAllGlobals();
@@ -1137,6 +1153,312 @@ describe('appStore Realtime JSONB Hydration & Data Integrity', () => {
       expect(alloc).toBeDefined();
       expect(alloc?.participants[0].personId).toBe(person!.id);
       expect(alloc?.participants[0].personId).not.toBe('old-p-99');
+    });
+  });
+
+  describe('startup snapshot and instant reopen', () => {
+    function makeTestSnapshot(overrides: Partial<StartupSnapshot> = {}): StartupSnapshot {
+      return {
+        version: 1,
+        savedAt: new Date().toISOString(),
+        userId: 'user-a',
+        user: {
+          id: 'user-a',
+          email: 'user-a@example.com',
+          fullName: 'User A',
+        },
+        accessStatus: 'member',
+        memberRole: 'owner',
+        linkedPersonId: 'person-a',
+        people: [
+          {
+            id: 'person-a',
+            workspaceId: 'workspace-1',
+            name: 'Snapshot Person',
+            createdAt: '2026-03-18T00:00:00.000Z',
+            updatedAt: '2026-03-18T00:00:00.000Z',
+          },
+        ],
+        orders: [
+          makeStoreOrder({
+            id: 'order-1',
+            name: 'Snapshot Order',
+            payerNote: 'Snapshot note',
+            goodsTotalZar: 150,
+          }),
+        ],
+        roasters: [],
+        roasterFeatureStatus: 'ready',
+        settings: {
+          theme: 'emerald',
+          themeMode: 'light',
+        },
+        ...overrides,
+      };
+    }
+
+    it('hydrates snapshot before getSession resolves, then updates with fresh data', async () => {
+      const snapshot = makeTestSnapshot();
+      saveStartupSnapshot(safeLocalStorage, snapshot);
+
+      let resolveSession!: (value: any) => void;
+      const sessionPromise = new Promise((resolve) => {
+        resolveSession = resolve;
+      });
+
+      const { useAppStore } = await loadStore({
+        getSession: () => sessionPromise as any,
+        workspaceMember: { data: { role: 'owner' }, error: null },
+        people: {
+          data: [
+            {
+              id: 'person-fresh',
+              workspace_id: 'workspace-1',
+              name: 'Fresh Person',
+              created_at: '2026-03-18T00:00:00.000Z',
+              updated_at: '2026-03-18T00:00:00.000Z',
+            },
+          ],
+          error: null,
+        },
+        orders: {
+          data: [
+            {
+              id: 'order-fresh',
+              workspace_id: 'workspace-1',
+              name: 'Fresh Order',
+              order_date: '2026-03-19',
+              status: 'planning',
+              roaster_id: null,
+              roaster_snapshot: null,
+              payer_id: 'person-fresh',
+              payer_bank: { bankName: '', accountNumber: '', beneficiary: '' },
+              reference_template: 'FAJR-{ORDER}-{NAME}',
+              goods_total_zar: '300',
+              lots: [],
+              fees: [],
+              payments: {},
+              is_archived: false,
+              created_at: '2026-03-19T00:00:00.000Z',
+              updated_at: '2026-03-19T00:00:00.000Z',
+            },
+          ],
+          error: null,
+        },
+      });
+
+      const initPromise = useAppStore.getState().initialize();
+
+      // Before getSession resolves
+      expect(useAppStore.getState().isInitialized).toBe(true);
+      expect(useAppStore.getState().isLoading).toBe(false);
+      expect(useAppStore.getState().isSyncing).toBe(true);
+      expect(useAppStore.getState().people).toHaveLength(1);
+      expect(useAppStore.getState().people[0].name).toBe('Snapshot Person');
+      expect(useAppStore.getState().orders).toHaveLength(1);
+      expect(useAppStore.getState().orders[0].name).toBe('Snapshot Order');
+
+      // Resolve getSession
+      resolveSession({
+        data: {
+          session: {
+            user: {
+              id: 'user-a',
+              email: 'user-a@example.com',
+            },
+          },
+        },
+      });
+
+      await initPromise;
+
+      // After resolving
+      expect(useAppStore.getState().isSyncing).toBe(false);
+      expect(useAppStore.getState().people[0].name).toBe('Fresh Person');
+      expect(useAppStore.getState().orders[0].name).toBe('Fresh Order');
+
+      const saved = readStartupSnapshot(safeLocalStorage);
+      expect(saved).not.toBeNull();
+      expect(saved?.orders[0].name).toBe('Fresh Order');
+      expect(saved?.people[0].name).toBe('Fresh Person');
+    });
+
+    it('clears snapshot and falls through to sign-in when getSession returns no user', async () => {
+      saveStartupSnapshot(safeLocalStorage, makeTestSnapshot());
+      expect(readStartupSnapshot(safeLocalStorage)).not.toBeNull();
+
+      const { useAppStore } = await loadStore({
+        session: null,
+      });
+
+      await useAppStore.getState().initialize();
+
+      expect(readStartupSnapshot(safeLocalStorage)).toBeNull();
+      expect(useAppStore.getState().user).toBeNull();
+      expect(useAppStore.getState().accessStatus).toBe('none');
+      expect(useAppStore.getState().isLoading).toBe(false);
+      expect(useAppStore.getState().isInitialized).toBe(true);
+      expect(useAppStore.getState().orders).toHaveLength(0);
+    });
+
+    it('clears snapshot and loads user B data when getSession returns user B', async () => {
+      saveStartupSnapshot(safeLocalStorage, makeTestSnapshot({ userId: 'user-a' }));
+
+      const { useAppStore } = await loadStore({
+        session: {
+          user: {
+            id: 'user-b',
+            email: 'user-b@example.com',
+          },
+        },
+        workspaceMember: { data: { role: 'owner' }, error: null },
+        orders: {
+          data: [
+            {
+              id: 'order-b',
+              workspace_id: 'workspace-1',
+              name: 'User B Order',
+              order_date: '2026-03-20',
+              status: 'planning',
+              roaster_id: null,
+              roaster_snapshot: null,
+              payer_id: 'person-b',
+              payer_bank: { bankName: '', accountNumber: '', beneficiary: '' },
+              reference_template: 'FAJR-{ORDER}-{NAME}',
+              goods_total_zar: '400',
+              lots: [],
+              fees: [],
+              payments: {},
+              is_archived: false,
+              created_at: '2026-03-20T00:00:00.000Z',
+              updated_at: '2026-03-20T00:00:00.000Z',
+            },
+          ],
+          error: null,
+        },
+      });
+
+      await useAppStore.getState().initialize();
+
+      expect(useAppStore.getState().user?.id).toBe('user-b');
+      expect(useAppStore.getState().orders[0].name).toBe('User B Order');
+
+      const saved = readStartupSnapshot(safeLocalStorage);
+      expect(saved?.userId).toBe('user-b');
+      expect(saved?.orders[0].name).toBe('User B Order');
+    });
+
+    it('keeps snapshot data on screen with error set and isSyncing false when refresh fails', async () => {
+      saveStartupSnapshot(safeLocalStorage, makeTestSnapshot());
+
+      const { useAppStore } = await loadStore({
+        session: { user: { id: 'user-a', email: 'user-a@example.com' } },
+        workspaceMember: { data: { role: 'owner' }, error: null },
+        people: { data: null, error: { message: 'Network offline' } },
+      });
+
+      await useAppStore.getState().initialize();
+
+      expect(useAppStore.getState().orders[0].name).toBe('Snapshot Order');
+      expect(useAppStore.getState().people[0].name).toBe('Snapshot Person');
+      expect(useAppStore.getState().isSyncing).toBe(false);
+      expect(useAppStore.getState().error).toBe('Error: Network offline');
+      expect(useAppStore.getState().snapshotSavedAt).not.toBeNull();
+    });
+
+    it('defers updateOrder called while refresh is in flight until refresh resolves and patches fresh data', async () => {
+      const snapshotOrder = makeStoreOrder({
+        id: 'order-gated-1',
+        name: 'Snapshot Gated Order',
+        payerNote: 'Original Note',
+        goodsTotalZar: 100,
+      });
+      saveStartupSnapshot(safeLocalStorage, makeTestSnapshot({ orders: [snapshotOrder] }));
+
+      let resolveSession!: (value: any) => void;
+      const sessionPromise = new Promise((resolve) => {
+        resolveSession = resolve;
+      });
+
+      const { useAppStore, supabase } = await loadStore({
+        getSession: () => sessionPromise as any,
+        workspaceMember: { data: { role: 'owner' }, error: null },
+        orders: {
+          data: [
+            {
+              id: 'order-gated-1',
+              workspace_id: 'workspace-1',
+              name: 'Fresh Server Order',
+              order_date: '2026-03-18',
+              status: 'planning',
+              roaster_id: null,
+              roaster_snapshot: null,
+              payer_id: 'person-1',
+              payer_bank: { bankName: '', accountNumber: '', beneficiary: '' },
+              reference_template: 'FAJR-{ORDER}-{NAME}',
+              payer_note: 'Original Note',
+              goods_total_zar: '250',
+              lots: snapshotOrder.lots,
+              fees: [],
+              payments: {},
+              is_archived: false,
+              created_at: '2026-03-18T00:00:00.000Z',
+              updated_at: '2026-03-18T00:00:00.000Z',
+            },
+          ],
+          error: null,
+        },
+      });
+
+      const initPromise = useAppStore.getState().initialize();
+
+      // Verified hydrated from snapshot
+      expect(useAppStore.getState().orders[0].name).toBe('Snapshot Gated Order');
+
+      // Call updateOrder while refresh is in flight
+      const updatePromise = useAppStore.getState().updateOrder('order-gated-1', {
+        payerNote: 'Edited while syncing',
+      });
+
+      // Supabase update has not been invoked yet
+      expect(supabase.__mocks.orderUpdate).not.toHaveBeenCalled();
+
+      // Resolve background refresh
+      resolveSession({
+        data: {
+          session: {
+            user: {
+              id: 'user-a',
+              email: 'user-a@example.com',
+            },
+          },
+        },
+      });
+
+      await initPromise;
+      await updatePromise;
+
+      // Update was sent to Supabase on top of fresh order
+      expect(supabase.__mocks.orderUpdate).toHaveBeenCalled();
+      const updatedOrder = useAppStore.getState().orders.find((o) => o.id === 'order-gated-1')!;
+      expect(updatedOrder.name).toBe('Fresh Server Order');
+      expect(updatedOrder.payerNote).toBe('Edited while syncing');
+      expect(updatedOrder.goodsTotalZar).toBe(250);
+    });
+
+    it('clears the startup snapshot on signOut', async () => {
+      saveStartupSnapshot(safeLocalStorage, makeTestSnapshot());
+      expect(readStartupSnapshot(safeLocalStorage)).not.toBeNull();
+
+      const { useAppStore } = await loadStore({
+        session: { user: { id: 'user-a', email: 'user-a@example.com' } },
+        workspaceMember: { data: { role: 'owner' }, error: null },
+      });
+
+      await useAppStore.getState().signOut();
+
+      expect(readStartupSnapshot(safeLocalStorage)).toBeNull();
+      expect(useAppStore.getState().snapshotSavedAt).toBeNull();
     });
   });
 });

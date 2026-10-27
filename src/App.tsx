@@ -74,11 +74,34 @@ export function getAuthReinitializeOptions(isInitialized: boolean): { silent?: b
   return isInitialized ? { silent: true } : {};
 }
 
+export function formatSnapshotSavedAt(isoString: string): string {
+  try {
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return isoString;
+    const diffMs = Date.now() - date.getTime();
+    const diffMins = Math.floor(diffMs / (60 * 1000));
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 1) return 'yesterday';
+    if (diffDays < 30) return `${diffDays}d ago`;
+
+    return date.toLocaleDateString();
+  } catch {
+    return isoString;
+  }
+}
+
 export default function App() {
   const {
     initialize,
     isInitialized,
     isSyncing,
+    error,
+    snapshotSavedAt,
     user,
     accessStatus,
     linkResolution,
@@ -110,6 +133,22 @@ export default function App() {
 
     window.addEventListener('popstate', handlePopState);
     handlePopState();
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        useAppStore.getState().saveSnapshot();
+      }
+    };
+    const handlePageHide = () => {
+      useAppStore.getState().saveSnapshot();
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pagehide', handlePageHide);
+    }
 
     const hashError = parseAuthHashError(window.location.hash);
     if (hashError) {
@@ -161,6 +200,12 @@ export default function App() {
 
     return () => {
       window.removeEventListener('popstate', handlePopState);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('pagehide', handlePageHide);
+      }
       subscription.unsubscribe();
     };
   }, []);
@@ -366,6 +411,39 @@ export default function App() {
         >
           Syncing...
         </div>
+      )}
+
+      {!isSyncing && error && snapshotSavedAt && (
+        <aside
+          role="status"
+          aria-live="polite"
+          className="alert alert-warning"
+          style={{
+            position: 'fixed',
+            top: 72,
+            right: 16,
+            zIndex: 20,
+            padding: '6px 12px',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: '0.75rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--space-2)',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          <span>Couldn't refresh. Showing data saved {formatSnapshotSavedAt(snapshotSavedAt)}.</span>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+              void initialize({ silent: true });
+            }}
+            style={{ padding: '2px 6px', fontSize: '0.75rem' }}
+          >
+            Retry
+          </button>
+        </aside>
       )}
 
       <main className="app-main">

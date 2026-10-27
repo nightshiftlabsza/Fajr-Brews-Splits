@@ -9,6 +9,10 @@ const mockStoreState = {
   initialize: vi.fn().mockResolvedValue(undefined),
   isInitialized: true,
   isLoading: false,
+  isSyncing: false,
+  error: null as string | null,
+  snapshotSavedAt: null as string | null,
+  saveSnapshot: vi.fn(),
   user: { id: 'user-1', email: 'owner@example.com' } as { id: string; email?: string } | null,
   accessStatus: 'member' as 'checking' | 'member' | 'participant' | 'none' | 'error',
   linkResolution: {
@@ -418,5 +422,64 @@ describe('App loading shell', () => {
 
     expect(container.textContent).toContain('Database linking failed');
     expect(container.querySelector('.alert.alert-error')).toBeTruthy();
+  });
+
+  it('renders stale-data notice after failed refresh with snapshot data, calls retry on click, and hides after success', async () => {
+    mockStoreState.isInitialized = true;
+    mockStoreState.isLoading = false;
+    mockStoreState.isSyncing = false;
+    mockStoreState.error = 'Network offline';
+    mockStoreState.snapshotSavedAt = new Date().toISOString();
+    mockStoreState.user = { id: 'u1', email: 'test@example.com' };
+    mockStoreState.accessStatus = 'member';
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Couldn't refresh. Showing data saved");
+    const retryButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Retry');
+    expect(retryButton).toBeTruthy();
+
+    await act(async () => {
+      retryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(mockStoreState.initialize).toHaveBeenCalledWith({ silent: true });
+
+    mockStoreState.error = null;
+    mockStoreState.snapshotSavedAt = null;
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).not.toContain("Couldn't refresh. Showing data saved");
+  });
+
+  it('saves snapshot on page visibility hidden and pagehide', async () => {
+    mockStoreState.isInitialized = true;
+    mockStoreState.user = { id: 'u1', email: 'test@example.com' };
+    mockStoreState.accessStatus = 'member';
+
+    await act(async () => {
+      root.render(<App />);
+      await Promise.resolve();
+    });
+
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(mockStoreState.saveSnapshot).toHaveBeenCalled();
+
+    mockStoreState.saveSnapshot.mockClear();
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'));
+    });
+    expect(mockStoreState.saveSnapshot).toHaveBeenCalled();
   });
 });
