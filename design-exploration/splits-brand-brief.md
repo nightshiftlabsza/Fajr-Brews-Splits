@@ -1,6 +1,6 @@
 # Splits (by Fajr Brews): Brand and Header Exploration Brief
 
-For Google Stitch. Use together with the existing `design.md` and the screenshots listed at the end.
+For Google Stitch. Use together with `design.md` (a copy sits beside this file) and the screenshots listed at the end. `design.md` marks what is current versus planned; where it lists a planned font, treat it as one input, not a requirement.
 
 ## What this is
 
