@@ -1,6 +1,6 @@
-# Prompt 9: People directory as a list
+# Prompt 10: People directory as a list
 
-Branch: `prompt/09-people-list`, cut from current `main`. Run one prompt at a time; do not start while another prompt's branch is unmerged and touching `globals.css` or `PeoplePage.tsx`.
+Branch: `prompt/10-people-list`, cut from current `main`. Run one prompt at a time; do not start while another prompt's branch is unmerged and touching `globals.css` or `PeoplePage.tsx`.
 
 ## Objective
 Change the People directory from a grid of cards to a compact single-column list: one row per person. No behaviour change.
@@ -22,7 +22,7 @@ Search, add/edit modal, delete rules, store, other pages, sorting or new feature
 
 ## Acceptance criteria
 - Standalone People page and the embedded one in Settings both show the list; no grid or card classes remain anywhere (`grep -rn "people-grid\|person-directory-card" src` returns nothing).
-- Works at 1280px and 360px; state what you checked and how (mock-data screenshots saved to `docs/evidence/09-people-list/`, desktop and 360px).
+- Works at 1280px and 360px; state what you checked and how (mock-data screenshots saved to `docs/evidence/10-people-list/`, desktop and 360px).
 - Uses only existing tokens; no hard-coded colours; no new dependencies.
 - Edit and Remove still work (tested). Existing tests still pass, with only the necessary selector changes in `PeoplePage.test.tsx`.
 - Gate green: `npm run typecheck && npm test && npm run build` (there is no linter; do not add one).
