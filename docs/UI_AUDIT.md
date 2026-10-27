@@ -1,6 +1,6 @@
 # UI audit (2026-10-27)
 
-Design and visual-quality audit of `main` at `52ccb12`. It is the basis for UI prompts 14 to 17.
+Design and visual-quality audit of `main` at `52ccb12`. It is the basis for UI prompts 4 to 7.
 
 ## How this was checked
 
@@ -9,7 +9,7 @@ Design and visual-quality audit of `main` at `52ccb12`. It is the basis for UI p
 - Read `tokens.css`, `globals.css`, `print.css`, `index.html` and the page components; counted patterns with grep. Measured contrast with the WCAG formula.
 - Rendered the Summary screen with five candidate font setups (screens in the project's `design/fonts/` folder).
 
-**Not checked:** the Goods & Fees step (the mock never reached it), People, modals and dropdowns open, keyboard-only use, screen readers, real phones, Safari. The Impeccable detector could not run in this sandbox; prompt 14 runs it locally. Prompt 14 starts by filling these gaps.
+**Not checked:** the Goods & Fees step (the mock never reached it), People, modals and dropdowns open, keyboard-only use, screen readers, real phones, Safari. The Impeccable detector could not run in this sandbox; prompt 4 runs it locally. Prompt 4 starts by filling these gaps.
 
 ## What the product is
 
@@ -38,7 +38,7 @@ Each Summary participant row shows a filled dark-green "Unpaid" segmented button
 15 `text-transform: uppercase` rules, with letter-spacing from 0.04 to 0.18em (11 different values). On one Summary screen: ORDER OVERVIEW, ORDER TOTAL & FINALIZATION, GRAND TOTAL, YOUR PERSONAL SHARE, YOU ARE THE ORDER PAYER, TOTAL AMOUNT DUE, EFT / BANKING DETAILS, plus every status pill and the mobile nav. When everything is a label, nothing is. This is the main "generic AI dashboard" tell in this app.
 
 ### 4. Repeated, meaningless identity marks
-A grey "OR" initials tile stands in for the roaster logo when there isn't one. It appears 5 times on one order screen (pill strip ×3, order header, summary header). The order title and status badge are repeated in the order header and again in "Order overview" directly below it. The brand mark is the ☕ emoji (header and sign-in), which renders differently on every platform. The brand lockup (name, logo, header and sign-in mark) is being redesigned separately as "Splits, by Fajr Brews" (`design-exploration/splits-brand-brief.md`), so prompts 14 to 17 leave it alone.
+A grey "OR" initials tile stands in for the roaster logo when there isn't one. It appears 5 times on one order screen (pill strip ×3, order header, summary header). The order title and status badge are repeated in the order header and again in "Order overview" directly below it. The brand mark is the ☕ emoji (header and sign-in), which renders differently on every platform. The brand lockup (name, logo, header and sign-in mark) is being redesigned separately as "Splits, by Fajr Brews" (`design-exploration/splits-brand-brief.md`), so prompts 4 to 7 leave it alone.
 
 ### 5. Typography has no system
 - 30 distinct `font-size` values in `globals.css`, including 0.68, 0.72, 0.76, 0.78, 0.8, 0.82, 0.84 and 0.86rem. There is no type scale token.
@@ -79,7 +79,7 @@ The top nav uses filled pills, Settings tabs are pills on an underline, and the 
 
 **Why these fonts:**
 - **Keep Emerald's fonts.** Fraunces + Manrope already gives the classic theme its character, and the screenshots show it reads well. Changing it would be change for its own sake. I compared Source Serif 4 + Source Sans 3 (flatter, and its narrower body text shifted layouts) and Newsreader + Manrope (fine, but no better than Fraunces). The fix is how the fonts are used, not which ones.
-- **Replace Space Grotesk + Inter with Hanken Grotesk** for the modern theme. It is one variable family, so one font file. Its figures stay tight with tabular-nums. It has more character than Inter without Space Grotesk's quirks. I rejected Instrument Sans (indistinguishable from Inter at UI sizes) and Schibsted Grotesk (its tabular figures space out money as "R1 , 501 . 61"). All three chosen fonts are SIL Open Font License, which allows self-hosting; prompt 14 must confirm this from each project's own licence file.
+- **Replace Space Grotesk + Inter with Hanken Grotesk** for the modern theme. It is one variable family, so one font file. Its figures stay tight with tabular-nums. It has more character than Inter without Space Grotesk's quirks. I rejected Instrument Sans (indistinguishable from Inter at UI sizes) and Schibsted Grotesk (its tabular figures space out money as "R1 , 501 . 61"). All three chosen fonts are SIL Open Font License, which allows self-hosting; prompt 4 must confirm this from each project's own licence file.
 - **Drop** Space Grotesk, Inter, IBM Plex Mono, and the Sora and Cormorant references.
 
 **Principles that the later prompts apply:**
@@ -94,16 +94,16 @@ The top nav uses filled pills, Settings tabs are pills on an underline, and the 
 
 ## Batches
 
-Numbered in run order, after the speed prompts 11 to 13.
+Numbered in run order, after the speed prompts 1 to 3.
 
 | # | Prompt | Main files | Why this order |
 |---|---|---|---|
-| 14 | Type and theme foundations: self-hosted fonts, type scale, weights, number style | `index.html`, `tokens.css`, `globals.css`, `print.css`, `public/fonts/` | Everything else builds on the scale and fonts; almost no markup changes |
-| 15 | Shared components: one tab pattern, segmented control, badges, buttons and destructive actions, radius scale, eyebrow cleanup, warning contrast, no emoji icons (except the brand mark) | `globals.css`, `tokens.css`, `Header`, `SettingsPage`, `AuthPage`, `ConfirmModal` | Fixes patterns once before pages are recomposed |
-| 16 | Order flow composition: order header and switcher, Coffees allocation display, Summary and participant rows, Invoices; remove the nested cards | `OrderPage`, `CoffeeLotsSection`, `OrderSummary`, `SettlementPacks`, `CoffeeCostSummary`, `InvoiceView` | Most-used, highest-value screens |
-| 17 | Phones and secondary pages: mobile title, nav and sticky bar, tables on phones, My Stats, Past Orders, Settings, sign-in, the "1,3" number bug, inline-style cleanup on touched pages | `App`, `Header`, `HistoryPage`, `MyStatsPage`, `SettingsPage`, `AuthPage`, `globals.css` | Builds on 15 and 16 |
+| 4 | Type and theme foundations: self-hosted fonts, type scale, weights, number style | `index.html`, `tokens.css`, `globals.css`, `print.css`, `public/fonts/` | Everything else builds on the scale and fonts; almost no markup changes |
+| 5 | Shared components: one tab pattern, segmented control, badges, buttons and destructive actions, radius scale, eyebrow cleanup, warning contrast, no emoji icons (except the brand mark) | `globals.css`, `tokens.css`, `Header`, `SettingsPage`, `AuthPage`, `ConfirmModal` | Fixes patterns once before pages are recomposed |
+| 6 | Order flow composition: order header and switcher, Coffees allocation display, Summary and participant rows, Invoices; remove the nested cards | `OrderPage`, `CoffeeLotsSection`, `OrderSummary`, `SettlementPacks`, `CoffeeCostSummary`, `InvoiceView` | Most-used, highest-value screens |
+| 7 | Phones and secondary pages: mobile title, nav and sticky bar, tables on phones, My Stats, Past Orders, Settings, sign-in, the "1,3" number bug, inline-style cleanup on touched pages | `App`, `Header`, `HistoryPage`, `MyStatsPage`, `SettingsPage`, `AuthPage`, `globals.css` | Builds on 5 and 6 |
 
-Prompts 15 to 17 are written after each previous batch is reviewed, so they start from the real result.
+Prompts 5 to 7 are written after each previous batch is reviewed, so they start from the real result.
 
 ## Skills and agents for Antigravity
 
@@ -118,6 +118,6 @@ Checked on 2026-10-27 against the two repos' READMEs and skill files.
 - **Emil Kowalski skills** (`emilkowalski/skills`, MIT). Use only three:
   - `emil-design-eng` for polish critique.
   - `break-ui` for worst-case data: long names, many people, zero orders.
-  - `mobile-native` for phone details (tap highlight, input zoom, safe areas), in prompt 17.
+  - `mobile-native` for phone details (tap highlight, input zoom, safe areas), in prompt 7.
   - Skip the animation skills (motion is not a problem here), `ask-sonner` and `pick-ui-library` (no new dependencies), `prototype` (no competing redesigns), and the Swift, Expo and Apple ones.
 - **Multi-agent:** in each batch, use separate critic, font/CSS and responsive/regression agents. The main agent alone edits files and settles disagreements. Critics receive the acceptance criteria, not "review this".

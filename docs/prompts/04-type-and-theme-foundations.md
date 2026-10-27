@@ -1,6 +1,6 @@
-# Prompt 14: Type and theme foundations
+# Prompt 4 of 9: Type and theme foundations
 
-Branch `prompt/14-type-foundations`, cut from current `main` **after prompts 11, 12 and 13 are merged**. Read `AGENTS.md` and `docs/UI_AUDIT.md` (sections 5 and "Design direction") first; they are part of this prompt.
+Branch `prompt/04-type-foundations`, cut from current `main` **after prompts 1, 2 and 3 are merged**. Read `AGENTS.md` and `docs/UI_AUDIT.md` (sections 5 and "Design direction") first; they are part of this prompt.
 
 ## Objective
 Give the two themes distinct, deliberate typography and a single type system, and load fonts faster and more reliably than today. The **Classic** theme is `emerald` (Emerald Ledger). The **Modern** theme is `yinmn` (YInMn Ledger). This batch changes fonts, sizes, weights and number styling only. Layout, components, colours and copy stay as they are, apart from the two theme descriptions in Settings.
@@ -43,7 +43,7 @@ Give the two themes distinct, deliberate typography and a single type system, an
 6. **Settings copy.** Theme descriptions become "Classic · Deep emerald · Editorial serif headings" and "Modern · YInMn blue · Clean grotesk type". Nothing else in Settings changes.
 
 ## Out of scope
-The header and sign-in brand lockup (name, logo, "Coffee Splitter" line; it is being redesigned separately as "Splits, by Fajr Brews"; the new fonts simply apply to it), layout, spacing, borders, radii, colours, components, uppercase labels and their tracking (prompt 15), inline styles in components (except a `fontFamily` or `fontSize` that blocks the token switch; list any you touch), money logic, PDF generation (`pdf.ts` and its embedded fonts), and anything the speed prompts own.
+The header and sign-in brand lockup (name, logo, "Coffee Splitter" line; it is being redesigned separately as "Splits, by Fajr Brews"; the new fonts simply apply to it), layout, spacing, borders, radii, colours, components, uppercase labels and their tracking (prompt 5), inline styles in components (except a `fontFamily` or `fontSize` that blocks the token switch; list any you touch), money logic, PDF generation (`pdf.ts` and its embedded fonts), and anything the speed prompts own.
 
 ## Skills and agents
 - **Install** Impeccable at project scope for Antigravity: `npx impeccable install --providers=antigravity --scope=project --no-hooks`. Do not run `init`.
@@ -69,7 +69,7 @@ The header and sign-in brand lockup (name, logo, "Coffee Splitter" line; it is b
 5. Layout shift: run a cold load (cache disabled) at 390px and 1440px for both themes and report cumulative layout shift from a `PerformanceObserver('layout-shift')`, before and after. After must be ≤ before, and under 0.02 at both widths.
 6. Fonts blocked: with every font file request aborted, screenshots of Summary at 390px and 1440px show readable text with no clipping or overflow.
 7. Glyphs: render a test string on a scratch page (not committed): "Aleksandra Wiśniewska-Kowalczyk · Ébrahim · R1,234.56 · 250g · “quotes” — ✓ →". It must show no missing-glyph boxes in either theme. Say which glyphs come from a fallback font.
-8. Before/after screenshots at 390, 820 and 1440px of Coffees & Bags, Summary, Invoices, Past Orders, My Stats, Settings and Sign-in. Use Classic light, Modern light and Classic dark. Save them under `docs/evidence/14-type/before|after/`. Inspect every pair yourself and list each visible change and any defect found and fixed.
+8. Before/after screenshots at 390, 820 and 1440px of Coffees & Bags, Summary, Invoices, Past Orders, My Stats, Settings and Sign-in. Use Classic light, Modern light and Classic dark. Save them under `docs/evidence/04-type/before|after/`. Inspect every pair yourself and list each visible change and any defect found and fixed.
 9. The two themes are visibly different in headings, body and numbers at 390px and 1440px, and no text wraps worse than before (compare headings, nav, buttons and the pill strip).
 10. Gate: `npm run typecheck && npm test && npm run build` pass. Paste the output. No test is changed unless a test asserted a removed font name; if so, explain.
 11. The diff touches only `index.html`, `src/styles/*`, `src/assets/fonts/*`, the two description strings in `SettingsPage.tsx`, and the evidence folder. If anything else changed, explain why.
