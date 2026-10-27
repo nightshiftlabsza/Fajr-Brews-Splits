@@ -8,7 +8,7 @@ The owner sees the "Fajr Brews" loading screen for too long every time the app o
 2. `initialize` fetches startup data one query after another instead of together.
 
 ## Verified context (checked by Claude on `main` at `cf7b216`)
-- `npm run build` on `main` prints `pdf-*.js 358.62 kB │ gzip: 118.49 kB`, and `dist/index.html` contains `<link rel="modulepreload" ... href="/assets/pdf-*.js">`. The entry chunk starts with `import{_ as Xa}from"./pdf-*.js"`: Vite's preload helper was placed into the `pdf` manual chunk, so the entry chunk imports that chunk statically and the browser fetches all of jsPDF at startup.
+- `npm run build` on `main` prints `pdf-*.js 358.62 kB │ gzip: 118.49 kB`, and `dist/index.html` has a modulepreload link for `/assets/pdf-*.js`. The entry chunk starts with `import{_ as Xa}from"./pdf-*.js"`: Vite's preload helper was placed into the `pdf` manual chunk, so the entry chunk imports that chunk statically and the browser fetches all of jsPDF at startup.
 - Cause: `vite.config.ts` `build.rollupOptions.output.manualChunks.pdf: ['jspdf', 'jspdf-autotable']`. `src/lib/pdf.ts:7` already loads jsPDF with `await import('jspdf')`, so the manual chunk is unnecessary.
 - Claude removed that one line locally and rebuilt: the modulepreload for the PDF chunk disappears and jsPDF becomes its own lazy chunk (`jspdf.es.min-*.js`, 118 kB gzip) loaded only when a PDF is made. Startup JavaScript drops from about 275 kB to about 158 kB gzip (entry + vendor). Reproduce this; do not take it on trust.
 - `jspdf-autotable` is a dependency but nothing in `src/` imports it (`grep -rn autotable src` returns nothing).
