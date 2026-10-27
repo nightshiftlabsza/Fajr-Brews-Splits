@@ -7,7 +7,7 @@ Close the code-side security items from the prompt 3 audit that are safe to fix 
 
 ## Verified context
 - Client-only React app, Supabase publishable key in the bundle: the real trust boundary is RLS, not this code. These changes are defence in depth.
-- Deploy target per `README.md`: Cloudflare Pages (`public/_redirects`). The owner may confirm a different host; if the owner's note below says so, follow it. HOST NOTE: (none yet; default to Cloudflare Pages)
+- Deploy target (confirmed by the owner): Cloudflare Pages. Put the headers in `public/_headers` (next to `public/_redirects`). Do not add Vercel, Netlify or other host config.
 - `src/lib/sharing.ts:53` builds `mailto:${email}?...` from stored person emails without validating them.
 - `importJSON` in `src/store/appStore.ts` (about line 1419) inserts ids from a user-chosen JSON file; invalid ids abort that user's own write mid-import.
 - The roaster logo picker (`src/components/roaster/RoasterPicker.tsx`, about line 233) accepts SVG; the new storage rule only allows PNG, JPEG and WebP.
