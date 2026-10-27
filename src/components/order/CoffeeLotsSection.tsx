@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../../store/appStore';
 import type { Bag, BagSplitMode, CoffeeLot, Order, Person } from '../../types';
 import { formatGrams, parseMoneyInput } from '../../lib/formatters';
@@ -50,7 +51,13 @@ const emptyLotForm: LotFormState = {
 };
 
 export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCommit }: Props) {
-  const { people, addPerson, updateOrder } = useAppStore();
+  const { people, addPerson, updateOrder } = useAppStore(
+    useShallow((s) => ({
+      people: s.people,
+      addPerson: s.addPerson,
+      updateOrder: s.updateOrder,
+    }))
+  );
   const patchOrder = onOrderChange ?? ((patch: Partial<Order>) => updateOrder(order.id, patch));
 
   const [editingLotId, setEditingLotId] = useState<string | 'new' | null>(null);

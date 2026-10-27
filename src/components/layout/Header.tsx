@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../../store/appStore';
 import type { AppTab } from '../../types';
 
@@ -22,7 +23,12 @@ const PARTICIPANT_TABS: { id: AppTab; label: string }[] = [
 ];
 
 export function Header({ currentTab, onTabChange, participantOnly = false }: HeaderProps) {
-  const { user, signOut } = useAppStore();
+  const { user, signOut } = useAppStore(
+    useShallow((s) => ({
+      user: s.user,
+      signOut: s.signOut,
+    }))
+  );
   const tabs = participantOnly ? PARTICIPANT_TABS : FULL_TABS;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);

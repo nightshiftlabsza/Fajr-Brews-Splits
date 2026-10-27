@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from './store/appStore';
 import type { ThemeMode } from './types';
 import { AuthPage } from './components/auth/AuthPage';
@@ -74,17 +75,53 @@ export function getAuthReinitializeOptions(isInitialized: boolean): { silent?: b
   return isInitialized ? { silent: true } : {};
 }
 
+export function formatSnapshotSavedAt(isoString: string): string {
+  try {
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return isoString;
+    const diffMs = Date.now() - date.getTime();
+    const diffMins = Math.floor(diffMs / (60 * 1000));
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 1) return 'yesterday';
+    if (diffDays < 30) return `${diffDays}d ago`;
+
+    return date.toLocaleDateString();
+  } catch {
+    return isoString;
+  }
+}
+
 export default function App() {
   const {
     initialize,
     isInitialized,
     isSyncing,
+    error,
+    snapshotSavedAt,
     user,
     accessStatus,
     linkResolution,
     dismissLinkResolution,
     confirmPersonLink,
-  } = useAppStore();
+  } = useAppStore(
+    useShallow((s) => ({
+      initialize: s.initialize,
+      isInitialized: s.isInitialized,
+      isSyncing: s.isSyncing,
+      error: s.error,
+      snapshotSavedAt: s.snapshotSavedAt,
+      user: s.user,
+      accessStatus: s.accessStatus,
+      linkResolution: s.linkResolution,
+      dismissLinkResolution: s.dismissLinkResolution,
+      confirmPersonLink: s.confirmPersonLink,
+    }))
+  );
   const [currentTab, setCurrentTab] = useState<AppTab>('order');
   const [authMode, setAuthMode] = useState<'default' | 'recovery'>(() => (
     typeof window !== 'undefined' && isRecoveryHash(window.location.hash) ? 'recovery' : 'default'
@@ -110,6 +147,22 @@ export default function App() {
 
     window.addEventListener('popstate', handlePopState);
     handlePopState();
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        useAppStore.getState().saveSnapshot();
+      }
+    };
+    const handlePageHide = () => {
+      useAppStore.getState().saveSnapshot();
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pagehide', handlePageHide);
+    }
 
     const hashError = parseAuthHashError(window.location.hash);
     if (hashError) {
@@ -161,6 +214,12 @@ export default function App() {
 
     return () => {
       window.removeEventListener('popstate', handlePopState);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('pagehide', handlePageHide);
+      }
       subscription.unsubscribe();
     };
   }, []);
@@ -209,10 +268,6 @@ export default function App() {
     return () => window.cancelAnimationFrame(frameId);
   }, [currentTab]);
 
-  // Track mediaQuery listener for cleanup
-  const modeListenerRef = useRef<((e: MediaQueryListEvent) => void) | null>(null);
-  const modeMediaRef = useRef<MediaQueryList | null>(null);
-
   useEffect(() => {
     if (user && authMode !== 'recovery' && currentPath === RESET_PASSWORD_PATH) {
       updatePath(HOME_PATH, { replace: true });
@@ -233,30 +288,6 @@ export default function App() {
     } catch {
       // Private browsing — ignore
     }
-
-    // Listen for OS dark-mode changes (used when mode='auto')
-    try {
-      const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      modeMediaRef.current = mq;
-      const handler = () => {
-        // Force a repaint so @media (prefers-color-scheme) CSS re-evaluates
-        const mode = document.documentElement.getAttribute('data-mode');
-        if (mode === 'auto') {
-          // Toggling a dummy attribute triggers CSS re-evaluation
-          document.documentElement.setAttribute('data-mode', 'auto');
-        }
-      };
-      modeListenerRef.current = handler;
-      mq.addEventListener('change', handler);
-    } catch { /* ignore */ }
-
-    return () => {
-      try {
-        if (modeMediaRef.current && modeListenerRef.current) {
-          modeMediaRef.current.removeEventListener('change', modeListenerRef.current);
-        }
-      } catch { /* ignore */ }
-    };
   }, []);
 
   const [initTimeout, setInitTimeout] = useState(false);
@@ -366,6 +397,39 @@ export default function App() {
         >
           Syncing...
         </div>
+      )}
+
+      {!isSyncing && error && snapshotSavedAt && (
+        <aside
+          role="status"
+          aria-live="polite"
+          className="alert alert-warning"
+          style={{
+            position: 'fixed',
+            top: 72,
+            right: 16,
+            zIndex: 20,
+            padding: '6px 12px',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: '0.75rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--space-2)',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          <span>Couldn't refresh. Showing data saved {formatSnapshotSavedAt(snapshotSavedAt)}.</span>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+              void initialize({ silent: true });
+            }}
+            style={{ padding: '2px 6px', fontSize: '0.75rem' }}
+          >
+            Retry
+          </button>
+        </aside>
       )}
 
       <main className="app-main">
