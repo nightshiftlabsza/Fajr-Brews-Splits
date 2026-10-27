@@ -20,6 +20,13 @@ interface Props {
   onNavigateToHistory: () => void;
 }
 
+function getDeleteDescription(order: Order): string {
+  const base = 'This permanently deletes the order and cannot be undone. To keep a record, archive it instead.';
+  const paymentCount = Object.values(order.payments).filter((p) => p.status !== 'unpaid').length;
+  if (paymentCount === 0) return base;
+  return `${base} ${paymentCount} recorded ${paymentCount === 1 ? 'payment' : 'payments'} will be lost too.`;
+}
+
 export function OrderPage({ onNavigateToHistory }: Props) {
   const {
     orders,
@@ -30,6 +37,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
     currentOrderId,
     createOrder,
     updateOrderStatus,
+    deleteOrder,
     updateOrder,
     setCurrentOrderId,
     linkedPersonId,
@@ -49,6 +57,9 @@ export function OrderPage({ onNavigateToHistory }: Props) {
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [archiveTargetOrder, setArchiveTargetOrder] = useState<Order | null>(null);
   const [archiving, setArchiving] = useState(false);
+  const [deleteTargetOrder, setDeleteTargetOrder] = useState<Order | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [shareCopySuccess, setShareCopySuccess] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -211,6 +222,22 @@ export function OrderPage({ onNavigateToHistory }: Props) {
     }
   }
 
+  async function confirmDeleteOrder() {
+    if (!deleteTargetOrder) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteOrder(deleteTargetOrder.id);
+      const remaining = activeOrders.filter((o) => o.id !== deleteTargetOrder.id);
+      setActiveOrderId(remaining[0]?.id ?? null);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'Failed to delete this order. Please try again.');
+    } finally {
+      setDeleting(false);
+      setDeleteTargetOrder(null);
+    }
+  }
+
   function handleShareLink(order: Order) {
     setActionsMenuOpen(false);
     const joinUrl = `${window.location.origin}${window.location.pathname}?joinOrder=${order.id}`;
@@ -310,6 +337,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
         </div>
       </div>
 
+      {deleteError && <div className="alert alert-error" role="alert" style={{ marginBottom: 'var(--space-4)' }}>{deleteError}</div>}
       {createError && <div className="alert alert-warning" style={{ marginBottom: 'var(--space-4)' }}>{createError}</div>}
       {shareCopySuccess && (
         <div className="alert alert-success" style={{ marginBottom: 'var(--space-4)' }}>
@@ -421,6 +449,17 @@ export function OrderPage({ onNavigateToHistory }: Props) {
                     }}
                   >
                     📦 Archive Order
+                  </button>
+
+                  <button
+                    type="button"
+                    className="dropdown-item dropdown-item-danger"
+                    onClick={() => {
+                      setActionsMenuOpen(false);
+                      setDeleteTargetOrder(currentOrder);
+                    }}
+                  >
+                    🗑 Delete Order
                   </button>
                 </>
               )}
@@ -563,6 +602,20 @@ export function OrderPage({ onNavigateToHistory }: Props) {
           isLoading={archiving}
           onConfirm={confirmArchiveOrder}
           onCancel={() => setArchiveTargetOrder(null)}
+        />
+      )}
+
+      {deleteTargetOrder && (
+        <ConfirmModal
+          isOpen={true}
+          title={`Delete "${deleteTargetOrder.name}"?`}
+          description={getDeleteDescription(deleteTargetOrder)}
+          confirmText="Delete Order"
+          cancelText="Cancel"
+          variant="danger"
+          isLoading={deleting}
+          onConfirm={confirmDeleteOrder}
+          onCancel={() => setDeleteTargetOrder(null)}
         />
       )}
 
