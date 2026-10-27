@@ -1,4 +1,4 @@
-# Prompt 4 of 9: Type and theme foundations
+# Prompt 4 of 10: Type and theme foundations
 
 Branch `prompt/04-type-foundations`, cut from current `main` **after prompts 1, 2 and 3 are merged**. Read `AGENTS.md` and `docs/UI_AUDIT.md` (sections 5 and "Design direction") first; they are part of this prompt.
 
@@ -43,7 +43,7 @@ Give the two themes distinct, deliberate typography and a single type system, an
 6. **Settings copy.** Theme descriptions become "Classic · Deep emerald · Editorial serif headings" and "Modern · YInMn blue · Clean grotesk type". Nothing else in Settings changes.
 
 ## Out of scope
-The header and sign-in brand lockup (name, logo, "Coffee Splitter" line; it is being redesigned separately as "Splits, by Fajr Brews"; the new fonts simply apply to it), layout, spacing, borders, radii, colours, components, uppercase labels and their tracking (prompt 5), inline styles in components (except a `fontFamily` or `fontSize` that blocks the token switch; list any you touch), money logic, PDF generation (`pdf.ts` and its embedded fonts), and anything the speed prompts own.
+The header and sign-in brand lockup (name, logo, "Coffee Splitter" line; it is redesigned in prompt 5, "Splits identity"; the new fonts simply apply to it), layout, spacing, borders, radii, colours, components, uppercase labels and their tracking (prompt 6), inline styles in components (except a `fontFamily` or `fontSize` that blocks the token switch; list any you touch), money logic, PDF generation (`pdf.ts` and its embedded fonts), and anything the speed prompts own.
 
 ## Skills and agents
 - **Install** Impeccable at project scope for Antigravity: `npx impeccable install --providers=antigravity --scope=project --no-hooks`. Do not run `init`.
