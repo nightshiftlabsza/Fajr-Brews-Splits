@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../../store/appStore';
 import { HOME_PATH } from '../../lib/appConfig';
 
@@ -29,7 +30,14 @@ export function AuthPage({
   initialError = '',
   initialNotice = '',
 }: AuthPageProps) {
-  const { signIn, signUp, requestPasswordReset, updatePassword } = useAppStore();
+  const { signIn, signUp, requestPasswordReset, updatePassword } = useAppStore(
+    useShallow((s) => ({
+      signIn: s.signIn,
+      signUp: s.signUp,
+      requestPasswordReset: s.requestPasswordReset,
+      updatePassword: s.updatePassword,
+    }))
+  );
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

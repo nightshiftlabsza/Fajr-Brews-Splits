@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../../store/appStore';
 import type { Order, PayerBank, Person, Roaster } from '../../types';
 import { todayISO } from '../../lib/formatters';
@@ -81,8 +82,24 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
     createRoaster,
     user,
     memberRole,
-  } = useAppStore();
-  const patchOrder = onOrderChange ?? ((patch: Partial<Order>) => updateOrder(order.id, patch));
+  } = useAppStore(
+    useShallow((s) => ({
+      people: s.people,
+      roasters: s.roasters,
+      orders: s.orders,
+      accessStatus: s.accessStatus,
+      roasterFeatureStatus: s.roasterFeatureStatus,
+      roasterFeatureMessage: s.roasterFeatureMessage,
+      updateOrder: s.updateOrder,
+      createRoaster: s.createRoaster,
+      user: s.user,
+      memberRole: s.memberRole,
+    }))
+  );
+  const patchOrder = useCallback(
+    (patch: Partial<Order>) => (onOrderChange ? onOrderChange(patch) : updateOrder(order.id, patch)),
+    [onOrderChange, updateOrder, order.id]
+  );
 
   const isLocked = !onOrderChange && isOrderLocked(order);
   const isOwner = onOrderChange ? true : (!order.ownerId || order.ownerId === user?.id || memberRole === 'owner' || memberRole === 'admin');

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../../store/appStore';
 import { OrderSetup } from '../order/OrderSetup';
 import { CoffeeLotsSection } from '../order/CoffeeLotsSection';
@@ -41,7 +42,22 @@ export function OrderPage({ onNavigateToHistory }: Props) {
     updateOrder,
     setCurrentOrderId,
     linkedPersonId,
-  } = useAppStore();
+  } = useAppStore(
+    useShallow((s) => ({
+      orders: s.orders,
+      people: s.people,
+      roasters: s.roasters,
+      user: s.user,
+      memberRole: s.memberRole,
+      currentOrderId: s.currentOrderId,
+      createOrder: s.createOrder,
+      updateOrderStatus: s.updateOrderStatus,
+      deleteOrder: s.deleteOrder,
+      updateOrder: s.updateOrder,
+      setCurrentOrderId: s.setCurrentOrderId,
+      linkedPersonId: s.linkedPersonId,
+    }))
+  );
 
   const activeOrders = useMemo(() => getActiveOrders(orders), [orders]);
 

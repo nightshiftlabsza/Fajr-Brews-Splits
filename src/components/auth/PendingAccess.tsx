@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import type { PersonLinkCandidate } from '../../types';
 import { useAppStore } from '../../store/appStore';
 
@@ -23,7 +24,14 @@ function formatCandidateDetail(candidate: PersonLinkCandidate): string {
 }
 
 export function PendingAccess() {
-  const { user, signOut, linkResolution, confirmPersonLink } = useAppStore();
+  const { user, signOut, linkResolution, confirmPersonLink } = useAppStore(
+    useShallow((s) => ({
+      user: s.user,
+      signOut: s.signOut,
+      linkResolution: s.linkResolution,
+      confirmPersonLink: s.confirmPersonLink,
+    }))
+  );
   const [submittingPersonId, setSubmittingPersonId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);

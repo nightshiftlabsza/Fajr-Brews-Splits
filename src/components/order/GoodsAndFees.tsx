@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import type { Order, Fee, FeeAllocationType, Person } from '../../types';
 import { useAppStore } from '../../store/appStore';
 import { formatZAR, parseMoneyInput } from '../../lib/formatters';
@@ -41,7 +42,12 @@ interface Props {
 }
 
 export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
-  const { people, updateOrder } = useAppStore();
+  const { people, updateOrder } = useAppStore(
+    useShallow((s) => ({
+      people: s.people,
+      updateOrder: s.updateOrder,
+    }))
+  );
   const patchOrder = onOrderChange ?? ((patch: Partial<Order>) => updateOrder(order.id, patch));
   const isLocked = !onOrderChange && isOrderLocked(order);
 

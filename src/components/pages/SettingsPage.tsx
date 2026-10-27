@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../../store/appStore';
 import type { Theme, ThemeMode, WorkspaceMember } from '../../types';
 import { formatDateShort, todayISO } from '../../lib/formatters';
@@ -23,7 +24,24 @@ export function SettingsPage() {
     user, memberRole, accessStatus, settings, setTheme, setThemeMode, signOut,
     workspaceMembers, fetchWorkspaceMembers, addMemberByEmail, removeMember,
     exportJSON, importJSON, setLastExportDate,
-  } = useAppStore();
+  } = useAppStore(
+    useShallow((s) => ({
+      user: s.user,
+      memberRole: s.memberRole,
+      accessStatus: s.accessStatus,
+      settings: s.settings,
+      setTheme: s.setTheme,
+      setThemeMode: s.setThemeMode,
+      signOut: s.signOut,
+      workspaceMembers: s.workspaceMembers,
+      fetchWorkspaceMembers: s.fetchWorkspaceMembers,
+      addMemberByEmail: s.addMemberByEmail,
+      removeMember: s.removeMember,
+      exportJSON: s.exportJSON,
+      importJSON: s.importJSON,
+      setLastExportDate: s.setLastExportDate,
+    }))
+  );
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [membersLoaded, setMembersLoaded] = useState(false);

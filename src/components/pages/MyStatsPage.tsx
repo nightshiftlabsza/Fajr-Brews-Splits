@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../../store/appStore';
 import {
   calculateMyStatsSummary,
@@ -20,7 +21,15 @@ const RANGE_OPTIONS: { id: StatsRangePreset; label: string }[] = [
 ];
 
 export function MyStatsPage() {
-  const { orders, roasters, people, linkedPersonId, linkResolution } = useAppStore();
+  const { orders, roasters, people, linkedPersonId, linkResolution } = useAppStore(
+    useShallow((s) => ({
+      orders: s.orders,
+      roasters: s.roasters,
+      people: s.people,
+      linkedPersonId: s.linkedPersonId,
+      linkResolution: s.linkResolution,
+    }))
+  );
   const [range, setRange] = useState<StatsDateRange>({ preset: 'all' });
 
   const personNames = useMemo(

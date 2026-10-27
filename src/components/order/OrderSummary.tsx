@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import type { Order, PaymentRecord } from '../../types';
 import { useAppStore } from '../../store/appStore';
 import { calculate } from '../../lib/calculations';
@@ -18,7 +19,19 @@ interface Props {
 }
 
 export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
-  const { people, roasters, orders, updateOrder, deleteOrder, setCurrentOrderId, flushOrderWrites, user, memberRole } = useAppStore();
+  const { people, roasters, orders, updateOrder, deleteOrder, setCurrentOrderId, flushOrderWrites, user, memberRole } = useAppStore(
+    useShallow((s) => ({
+      people: s.people,
+      roasters: s.roasters,
+      orders: s.orders,
+      updateOrder: s.updateOrder,
+      deleteOrder: s.deleteOrder,
+      setCurrentOrderId: s.setCurrentOrderId,
+      flushOrderWrites: s.flushOrderWrites,
+      user: s.user,
+      memberRole: s.memberRole,
+    }))
+  );
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { InvoiceActions } from '../invoice/InvoiceActions';
 import { InvoiceView } from '../invoice/InvoiceView';
 import { formatDate, formatZAR, generatePaymentReference, todayISO } from '../../lib/formatters';
@@ -26,7 +27,13 @@ export function SettlementPacks({
   paymentEditingEnabled = false,
   visiblePersonIds,
 }: Props) {
-  const { user, linkedPersonId, memberRole } = useAppStore();
+  const { user, linkedPersonId, memberRole } = useAppStore(
+    useShallow((s) => ({
+      user: s.user,
+      linkedPersonId: s.linkedPersonId,
+      memberRole: s.memberRole,
+    }))
+  );
   const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
 
   const isWorkspaceManager = memberRole === 'owner' || memberRole === 'admin';
