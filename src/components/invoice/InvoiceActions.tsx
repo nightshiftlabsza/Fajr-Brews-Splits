@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Order, Person, PersonCalculation } from '../../types';
-import { generateInvoicePDF } from '../../lib/pdf';
 import { copyPaymentSummary, openWhatsApp, openEmail } from '../../lib/sharing';
+import { useAppStore } from '../../store/appStore';
 
 interface Props {
   order: Order;
@@ -17,6 +17,7 @@ export function InvoiceActions({ order, person, payer, calc, showPrint = true }:
   const [copied, setCopied] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  const theme = useAppStore((state) => state.settings.theme);
   const payload = { order, person, payer, calc };
 
   async function handleCopy() {
@@ -37,7 +38,8 @@ export function InvoiceActions({ order, person, payer, calc, showPrint = true }:
     setGenerating(true);
     setActionError(null);
     try {
-      await generateInvoicePDF(order, person, payer, calc);
+      const { generateInvoicePDF } = await import('../../lib/pdf');
+      await generateInvoicePDF(order, person, payer, calc, theme);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Failed to generate PDF. Please try again.');
     } finally {

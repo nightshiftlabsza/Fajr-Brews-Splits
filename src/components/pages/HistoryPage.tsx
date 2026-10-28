@@ -11,7 +11,6 @@ import { OrderSetup } from '../order/OrderSetup';
 import { CoffeeLotsSection } from '../order/CoffeeLotsSection';
 import { GoodsAndFees } from '../order/GoodsAndFees';
 import { CoffeeCostSummary } from '../order/CoffeeCostSummary';
-import { generateOrderInvoicePDF } from '../../lib/pdf';
 import { getParticipantScopedOrders, orderIncludesPerson } from '../../lib/myStats';
 import { resolveOrderRoaster } from '../../lib/roasters';
 import { RoasterAvatar } from '../roaster/RoasterAvatar';
@@ -65,6 +64,8 @@ export function HistoryPage({ participantOnly = false }: Props) {
       setLastExportDate: s.setLastExportDate,
     }))
   );
+
+  const theme = useAppStore((s) => s.settings.theme);
 
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
@@ -184,7 +185,8 @@ export function HistoryPage({ participantOnly = false }: Props) {
     setOrderInvoiceError(null);
 
     try {
-      await generateOrderInvoicePDF(selectedOrder, people, selectedOrderResult);
+      const { generateOrderInvoicePDF } = await import('../../lib/pdf');
+      await generateOrderInvoicePDF(selectedOrder, people, selectedOrderResult, theme);
     } catch (error) {
       setOrderInvoiceError(error instanceof Error ? error.message : 'Failed to generate the full order invoice.');
     } finally {
