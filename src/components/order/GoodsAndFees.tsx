@@ -579,17 +579,19 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
         }
 
         .ledger-label-total {
-          font-size: 1rem;
-          font-weight: 800;
+          font-size: var(--text-base);
+          font-weight: 700;
           color: var(--color-text-primary);
         }
 
         .ledger-value-total {
           text-align: right;
-          font-size: 1.25rem;
-          font-weight: 800;
+          font-size: var(--text-xl);
+          font-weight: 700;
           color: var(--color-accent);
-          font-family: var(--font-display);
+          font-family: var(--font-body);
+          font-variant-numeric: tabular-nums;
+          letter-spacing: normal;
         }
       `}</style>
     </div>

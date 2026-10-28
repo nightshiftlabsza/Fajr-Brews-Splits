@@ -348,8 +348,8 @@ export function SettlementPacks({
         }
 
         .personal-share-name {
-          font-size: 1.25rem;
-          font-weight: 800;
+          font-size: var(--text-xl);
+          font-weight: 700;
           color: var(--color-text-primary);
           margin: 0;
         }
@@ -380,10 +380,12 @@ export function SettlementPacks({
         }
 
         .personal-share-amount {
-          font-size: 1.75rem;
-          font-weight: 800;
+          font-size: var(--text-2xl);
+          font-weight: 700;
           color: var(--color-accent);
-          font-family: var(--font-display);
+          font-family: var(--font-body);
+          font-variant-numeric: tabular-nums;
+          letter-spacing: normal;
         }
 
         .personal-share-grams {

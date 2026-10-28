@@ -1,0 +1,26 @@
+{
+  "classic": {
+    "cls_390": 0,
+    "cls_1440": 0,
+    "fonts": [
+      {
+        "url": "http://localhost:5173/src/assets/fonts/manrope/manrope-latin.woff2",
+        "status": 200,
+        "bytes": 24836
+      }
+    ],
+    "totalFontBytes": 24836
+  },
+  "modern": {
+    "cls_390": 0,
+    "cls_1440": 0,
+    "fonts": [
+      {
+        "url": "http://localhost:5173/src/assets/fonts/manrope/manrope-latin.woff2",
+        "status": 200,
+        "bytes": 24836
+      }
+    ],
+    "totalFontBytes": 24836
+  }
+}

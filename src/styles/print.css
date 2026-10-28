@@ -43,7 +43,7 @@
     background: #fff !important;
     color: #1A1208 !important;
     font-size: 11pt;
-    font-family: 'Sora', 'Inter', sans-serif;
+    font-family: var(--font-body);
   }
 
   .app-main {
@@ -118,6 +118,6 @@
 
   /* ── Typography ────────────────────────────────────────── */
   h1, h2, h3 {
-    font-family: 'Cormorant Garamond', Georgia, serif !important;
+    font-family: var(--font-display) !important;
   }
 }
