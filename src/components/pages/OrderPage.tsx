@@ -215,7 +215,10 @@ export function OrderPage({ onNavigateToHistory }: Props) {
 
   async function handleDuplicate(order: Order) {
     setActionsMenuOpen(false);
-    const duplicated = await createOrder(createDuplicatedOrderPayload(order, todayISO()));
+    const duplicated = await createOrder({
+      ...createDuplicatedOrderPayload(order, todayISO()),
+      listCurrency: order.listCurrency ?? null,
+    });
     if (duplicated) {
       setCurrentOrderId(duplicated.id);
       setActiveOrderId(duplicated.id);
@@ -290,7 +293,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
           </div>
           <h2 style={{ marginBottom: 'var(--space-2)' }}>No Active Orders</h2>
           <p style={{ maxWidth: 460, margin: '0 auto var(--space-6)', color: 'var(--color-text-secondary)' }}>
-            Start a new coffee drop to plan coffees, assign bags among friends, and automatically calculate shares.
+            Start a new coffee drop to plan coffees, give bags to friends, and split the cost.
           </p>
           <button className="btn btn-primary btn-lg" onClick={() => void handleNewOrder()} disabled={creating}>
             {creating ? <span className="spinner" style={{ width: 18, height: 18 }} /> : '+ Start a Coffee Order'}
@@ -366,24 +369,35 @@ export function OrderPage({ onNavigateToHistory }: Props) {
       )}
 
       {/* ── 2. ORDER HEADER & STATUS ── */}
-      <div className="order-header-surface">
-        <div className="order-header-primary">
+      <div className="fb-order-header">
+        <div className="fb-order-header-lead">
+          <button
+            type="button"
+            className="btn btn-ghost btn-icon mobile-only"
+            onClick={() => setCurrentOrderId(null)}
+            aria-label="Back to orders list"
+            title="Leave order"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+          </button>
           {resolvedRoaster && (
-            <RoasterAvatar name={resolvedRoaster.name} logoUrl={resolvedRoaster.logoUrl} size={48} />
+            <RoasterAvatar name={resolvedRoaster.name} logoUrl={resolvedRoaster.logoUrl} size={36} />
           )}
-          <div className="order-header-info">
-            <div className="order-header-title-row">
-              <h1 className="order-header-title">{currentOrder.name}</h1>
-              <span className={`status-pill status-${currentStatus}`}>
+          <div className="fb-order-header-info">
+            <div className="fb-order-header-title-line">
+              <h1 className="fb-order-header-title order-header-title">{currentOrder.name}</h1>
+              <span className="fb-order-header-status">
                 {currentStatus === 'planning' ? 'Planning' : currentStatus === 'locked' ? 'Locked' : 'Completed'}
               </span>
             </div>
-            <div className="order-header-meta">
+            <div className="fb-order-header-meta">
               <span>{formatDateShort(currentOrder.orderDate)}</span>
-              <span>·</span>
+              <span className="fb-order-header-dot">·</span>
               <span>{resolvedRoaster?.name || 'Roaster unspecified'}</span>
-              <span>·</span>
-              <span>{currentOrder.lots.length} {currentOrder.lots.length === 1 ? 'coffee' : 'coffees'}</span>
+              <span className="fb-order-header-dot">·</span>
+              <span>Payer: {currentOrder.payerId ? (personNames[currentOrder.payerId] || 'Unknown') : 'Not set'}</span>
             </div>
           </div>
         </div>
@@ -463,13 +477,15 @@ export function OrderPage({ onNavigateToHistory }: Props) {
 
                   <button
                     type="button"
-                    className="dropdown-item dropdown-item-danger"
+                    className="dropdown-item"
                     onClick={() => {
                       setActionsMenuOpen(false);
                       setArchiveTargetOrder(currentOrder);
                     }}
                   >
-                    <Icon name="archive" size={14} /> Archive order
+                    <Icon name="archive" size={14} />
+                    <span>Move to past orders</span>
+                    <span className="sr-only">Archive order</span>
                   </button>
 
                   <button
@@ -558,13 +574,13 @@ export function OrderPage({ onNavigateToHistory }: Props) {
         )}
       </div>
 
-      {/* ── 5. ARCHIVE CONFIRMATION MODAL ── */}
+      {/* ── 5. MOVE TO PAST ORDERS CONFIRMATION MODAL ── */}
       {archiveTargetOrder && (
         <ConfirmModal
           isOpen={true}
-          title={`Archive "${archiveTargetOrder.name}"?`}
-          description="This order will be moved into Past Orders. You can still inspect it, print invoices, or duplicate it anytime from Past Orders."
-          confirmText="Archive Order"
+          title={`Move "${archiveTargetOrder.name}" to past orders?`}
+          description="This order will be moved to Past orders. You can still inspect it, print invoices, or duplicate it anytime from Past orders."
+          confirmText="Move to past orders"
           cancelText="Cancel"
           variant="warning"
           isLoading={archiving}

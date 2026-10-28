@@ -11,7 +11,18 @@ import { OrderSummary } from './OrderSummary';
 import { StepTabs } from './StepTabs';
 import { SettlementPacks } from './SettlementPacks';
 import { CoffeeCostSummary } from './CoffeeCostSummary';
+import { RoasterCurrencyField } from './RoasterCurrencyField';
 import { calculate } from '../../lib/calculations';
+import { BagAssignPanel } from './BagAssignPanel';
+import { LotEditorForm, type LotFormState } from './LotEditorForm';
+import { OrderPage } from '../pages/OrderPage';
+import { HistoryPage } from '../pages/HistoryPage';
+import { PeoplePage } from '../pages/PeoplePage';
+import { MyStatsPage } from '../pages/MyStatsPage';
+import { SettingsPage } from '../pages/SettingsPage';
+import { RoasterPicker } from '../roaster/RoasterPicker';
+import { AuthPage } from '../auth/AuthPage';
+import { PendingAccess } from '../auth/PendingAccess';
 
 const mockStoreState = {
   people: [] as Person[],
@@ -25,15 +36,38 @@ const mockStoreState = {
   roasterFeatureMessage: null,
   updateOrder: vi.fn().mockResolvedValue(undefined),
   deleteOrder: vi.fn().mockResolvedValue(undefined),
+  createOrder: vi.fn().mockResolvedValue(undefined),
   addPerson: vi.fn().mockResolvedValue({ id: 'person-new', name: 'New Person' }),
+  updatePerson: vi.fn().mockResolvedValue(undefined),
+  deletePerson: vi.fn().mockResolvedValue(undefined),
   createRoaster: vi.fn(),
   setCurrentOrderId: vi.fn(),
   flushOrderWrites: vi.fn().mockResolvedValue(undefined),
+  settings: {
+    theme: 'emerald' as const,
+    themeMode: 'light' as const,
+    lastExportDate: '2026-03-20T10:00:00.000Z',
+  },
+  sessionUi: { orderWizardSteps: {} as Record<string, 'setup' | 'coffees' | 'goods' | 'summary' | 'invoices'> },
+  currentOrderId: 'order-1',
+  activeOrderIds: ['order-1'],
+  linkResolution: { status: 'ready', person: null },
+  fetchWorkspaceMembers: vi.fn().mockResolvedValue(undefined),
+  workspaceMembers: [],
+  exportJSON: vi.fn().mockReturnValue('{}'),
+  importJSON: vi.fn().mockResolvedValue(undefined),
+  setLastExportDate: vi.fn(),
+  setTheme: vi.fn(),
+  setThemeMode: vi.fn(),
+  signOut: vi.fn(),
+  setOrderWizardStep: vi.fn(),
+  error: null,
+  isSyncing: false,
 };
 
 vi.mock('../../store/appStore', () => ({
   useAppStore: Object.assign(
-    () => mockStoreState,
+    (selector?: (s: typeof mockStoreState) => unknown) => (selector ? selector(mockStoreState) : mockStoreState),
     {
       getState: vi.fn(() => mockStoreState),
       setState: vi.fn(),
@@ -246,5 +280,135 @@ describe('Banned words in rendered order components', () => {
     });
     const text = extractVisibleText(container);
     assertNoBannedWords('OrderSummary', text);
+  });
+
+  it('RoasterCurrencyField does not render banned words', () => {
+    act(() => {
+      root.render(<RoasterCurrencyField value="EUR" onChange={vi.fn()} />);
+    });
+    const trigger = container.querySelector('.roaster-currency-trigger') as HTMLButtonElement;
+    act(() => {
+      trigger.click();
+    });
+    const text = extractVisibleText(container);
+    assertNoBannedWords('RoasterCurrencyField', text);
+  });
+
+  it('BagAssignPanel does not render banned words', () => {
+    act(() => {
+      root.render(
+        <BagAssignPanel
+          bag={{ id: 'b-1', splitMode: 'unassigned', buyers: [] }}
+          bagIndex={0}
+          bagSize={250}
+          people={people}
+          onSave={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      );
+    });
+    const text = extractVisibleText(container);
+    assertNoBannedWords('BagAssignPanel', text);
+  });
+
+  it('LotEditorForm does not render banned words', () => {
+    const formState: LotFormState = {
+      name: 'Kenya AA',
+      foreignPricePerBag: '18.50',
+      gramsPerBag: '250',
+      initialBagCount: '1',
+      selectedBuyerIds: [],
+      bags: [],
+    };
+    act(() => {
+      root.render(
+        <LotEditorForm
+          form={formState}
+          error=""
+          isNew={true}
+          currencyCode="EUR"
+          onChange={vi.fn()}
+          onSaveLater={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      );
+    });
+    const text = extractVisibleText(container);
+    assertNoBannedWords('LotEditorForm', text);
+  });
+
+  it('OrderPage does not render banned words', () => {
+    act(() => {
+      root.render(<OrderPage onNavigateToHistory={vi.fn()} />);
+    });
+    const text = extractVisibleText(container);
+    assertNoBannedWords('OrderPage', text);
+  });
+
+  it('HistoryPage does not render banned words', () => {
+    act(() => {
+      root.render(<HistoryPage />);
+    });
+    const text = extractVisibleText(container);
+    assertNoBannedWords('HistoryPage', text);
+  });
+
+  it('PeoplePage does not render banned words', () => {
+    act(() => {
+      root.render(<PeoplePage />);
+    });
+    const text = extractVisibleText(container);
+    assertNoBannedWords('PeoplePage', text);
+  });
+
+  it('MyStatsPage does not render banned words', () => {
+    act(() => {
+      root.render(<MyStatsPage />);
+    });
+    const text = extractVisibleText(container);
+    assertNoBannedWords('MyStatsPage', text);
+  });
+
+  it('SettingsPage does not render banned words', () => {
+    act(() => {
+      root.render(<SettingsPage />);
+    });
+    const text = extractVisibleText(container);
+    assertNoBannedWords('SettingsPage', text);
+  });
+
+  it('RoasterPicker does not render banned words', () => {
+    act(() => {
+      root.render(
+        <RoasterPicker
+          orders={[]}
+          roasters={[]}
+          selectedRoasterId={null}
+          selectedRoasterSnapshot={null}
+          featureStatus="ready"
+          canManageRoasters={true}
+          onSelectRoaster={vi.fn()}
+          onCreateRoaster={vi.fn().mockResolvedValue({ id: 'r-1', name: 'Roaster 1' })}
+        />
+      );
+    });
+    const text = extractVisibleText(container);
+    assertNoBannedWords('RoasterPicker', text);
+  });
+
+  it('AuthPage does not render banned words', () => {
+    act(() => {
+      root.render(<AuthPage />);
+    });
+    const text = extractVisibleText(container);
+    assertNoBannedWords('AuthPage', text);
+  });
+
+  it('PendingAccess does not render banned words', () => {
+    act(() => {
+      root.render(<PendingAccess />);
+    });
+    const text = extractVisibleText(container);
+    assertNoBannedWords('PendingAccess', text);
   });
 });

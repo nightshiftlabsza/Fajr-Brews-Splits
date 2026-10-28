@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Order, Fee, FeeAllocationType } from '../../types';
 import { useAppStore } from '../../store/appStore';
 import { formatZAR, parseMoneyInput } from '../../lib/formatters';
+import { formatListPrice } from '../../lib/listPriceFormat';
 import { normalizeFeeAllocationType } from '../../lib/invoiceFormatter';
 import { isOrderLocked } from '../../lib/orderLifecycle';
 import { ConfirmModal } from '../ui/ConfirmModal';
@@ -63,6 +64,13 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
 
   const totalFees = order.fees.reduce((s, f) => s + (f.amountZar || 0), 0);
   const grandTotal = (order.goodsTotalZar || 0) + totalFees;
+
+  const totalForeignListPrice = useMemo(() => {
+    return order.lots.reduce((acc, lot) => {
+      const bagCount = Array.isArray(lot.bags) && lot.bags.length > 0 ? lot.bags.length : (lot.quantity || 1);
+      return acc + (lot.foreignPricePerBag || 0) * bagCount;
+    }, 0);
+  }, [order.lots]);
 
   useEffect(() => {
     setGoodsInput(order.goodsTotalZar > 0 ? String(order.goodsTotalZar) : '');
@@ -163,7 +171,7 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
   return (
     <div className="wizard-step-stack">
       {/* Goods Total Section */}
-      <section className="wizard-panel">
+      <section className="wizard-panel fb-ruled-panel">
         <div className="wizard-card-header">
           <div>
             <h2 className="wizard-card-title">Order goods total (ZAR)</h2>
@@ -177,31 +185,40 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
           <label className="field-label" htmlFor="order-goods-total-zar">
             Total coffee goods (ZAR) *
           </label>
-          <div className="goods-input-container">
-            <span className="goods-zar-prefix" aria-hidden="true">
-              R
-            </span>
-            <input
-              id="order-goods-total-zar"
-              className="input goods-total-prominent-input num-cell"
-              type="text"
-              inputMode="decimal"
-              value={goodsInput}
-              onChange={(e) => setGoodsInput(e.target.value)}
-              onBlur={saveGoods}
-              placeholder="e.g. 1850.00"
-              disabled={isLocked}
-            />
+          <div className="fb-goods-input-row">
+            <div className="goods-input-container">
+              <span className="goods-zar-prefix" aria-hidden="true">
+                R
+              </span>
+              <input
+                id="order-goods-total-zar"
+                className="input goods-total-prominent-input num-cell"
+                type="text"
+                inputMode="decimal"
+                value={goodsInput}
+                onChange={(e) => setGoodsInput(e.target.value)}
+                onBlur={saveGoods}
+                placeholder="e.g. 1850.00"
+                disabled={isLocked}
+              />
+            </div>
+
+            {totalForeignListPrice > 0 && (
+              <div className="fb-foreign-sum-badge" title="Sum of roaster coffee prices">
+                <span>Sum of coffee prices:</span>
+                <strong>{formatListPrice(totalForeignListPrice, order.listCurrency)}</strong>
+              </div>
+            )}
           </div>
-          <div className="field-hint goods-field-hint">
+          <div className="field-hint goods-field-hint" style={{ marginTop: 'var(--space-2)' }}>
             <Icon name="info" size={14} className="goods-hint-icon" />
-            <span>This is the final converted total paid to the foreign roaster in ZAR. Each coffee and member share is calculated from this amount.</span>
+            <span>Each coffee's share of what you paid is worked out from its price per bag.</span>
           </div>
         </div>
       </section>
 
       {/* Fees List Section */}
-      <section className="wizard-panel">
+      <section className="wizard-panel fb-ruled-panel">
         <div className="wizard-card-header">
           <div>
             <h2 className="wizard-card-title">Additional fees</h2>
@@ -254,34 +271,35 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
                 </div>
               </div>
 
-              {/* Fee Allocation Options */}
+              {/* Fee Split Choice (Compact Styled Radio Rows) */}
               <div className="field fee-options-span">
                 <label className="field-label">How to split this fee</label>
-                <div className="fee-options-stack">
+                <div className="fb-fee-options-list" role="radiogroup" aria-label="Fee split choice">
                   {HUMAN_FEE_OPTIONS.map((opt) => {
                     const isSelected = feeType === opt.value;
                     return (
-                      <label
+                      <div
                         key={opt.value}
-                        className={`fee-option-card ${isSelected ? 'is-selected' : ''}`}
+                        role="radio"
+                        aria-checked={isSelected}
+                        tabIndex={0}
+                        className={`fb-fee-option-row ${isSelected ? 'is-selected' : ''}`}
+                        onClick={() => setFeeType(opt.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === ' ' || e.key === 'Enter') {
+                            e.preventDefault();
+                            setFeeType(opt.value);
+                          }
+                        }}
                       >
-                        <input
-                          type="radio"
-                          name="feeAllocationType"
-                          value={opt.value}
-                          checked={isSelected}
-                          onChange={() => setFeeType(opt.value)}
-                          className="fee-radio-input"
-                        />
-                        <div>
-                          <div className="fee-option-title">
-                            {opt.title}
-                          </div>
-                          <div className="fee-option-subtitle">
-                            {opt.subtitle}
-                          </div>
+                        <span className="fb-custom-radio" aria-hidden="true">
+                          {isSelected && <span className="fb-custom-radio-dot" />}
+                        </span>
+                        <div className="fb-fee-option-content">
+                          <span className="fb-fee-option-title">{opt.title}</span>
+                          <span className="fb-fee-option-subtitle">{opt.subtitle}</span>
                         </div>
-                      </label>
+                      </div>
                     );
                   })}
                 </div>

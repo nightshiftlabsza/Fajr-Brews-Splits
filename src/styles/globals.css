@@ -4,6 +4,11 @@
 
 @import './fonts.css';
 @import './tokens.css';
+@import './currency.css';
+@import './order-coffees.css';
+@import './order-screens.css';
+@import './phone.css';
+@import './pages.css';
 
 /* ── Reset ───────────────────────────────────────────────── */
 

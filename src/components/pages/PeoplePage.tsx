@@ -111,7 +111,7 @@ export function PeoplePage({ embedded = false }: PeoplePageProps = {}) {
           (o.lots ?? []).some((l) => l.bags?.some((b) => b.buyers?.some((buyer) => buyer.personId === person.id)))),
     );
     if (participantOrder) {
-      return `Cannot remove "${person.name}" because they have assigned shares or allocations in active order "${participantOrder.name}". Please remove or reassign their shares before removing this person.`;
+      return `Cannot remove "${person.name}" because they have assigned coffee bags in active order "${participantOrder.name}". Please remove or reassign their bags before removing this person.`;
     }
 
     return null;

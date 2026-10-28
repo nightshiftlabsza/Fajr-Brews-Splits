@@ -135,13 +135,11 @@ describe('OrderSummary', () => {
       );
     });
 
-    expect(container.textContent).toContain('Order overview');
-
-
-    expect(container.textContent).toContain('Participants & invoices');
+    expect(container.textContent).toContain('Grand total');
+    expect(container.textContent).toContain('Who owes what');
     expect(container.textContent).toContain('Finalize order');
-    expect(container.textContent).toContain('Save to past orders');
-    expect(container.textContent).toContain('Delete order');
+    expect(container.textContent).toContain('Move to past orders');
+    expect(container.textContent).not.toContain('Delete order');
     expect(container.textContent).not.toContain('Payment state');
     expect(container.textContent).not.toContain('Invoices and sharing');
   });
@@ -263,37 +261,13 @@ describe('OrderSummary', () => {
       );
     });
 
-    clickButtonByText(container, 'Save to past orders');
+    clickButtonByText(container, 'Move to past orders');
     await act(async () => {
       await Promise.resolve();
     });
 
-    expect(mockStoreState.updateOrder).toHaveBeenCalledWith('order-1', { isArchived: true });
-    expect(mockStoreState.flushOrderWrites).toHaveBeenCalledWith('order-1');
-    expect(mockStoreState.setCurrentOrderId).toHaveBeenCalledWith('order-2');
-    expect(onFinalize).toHaveBeenCalledTimes(1);
-  });
-
-  it('deletes the active order from the main summary after confirmation', async () => {
-    act(() => {
-      root.render(
-        <OrderSummary
-          order={makeOrder()}
-          onJumpToStep={() => undefined}
-          onFinalize={() => undefined}
-        />,
-      );
-    });
-
-    clickButtonByText(container, 'Delete order');
-
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(container.textContent).toContain('Delete "March Drop"?');
     const modalConfirmBtn = Array.from(container.querySelectorAll<HTMLButtonElement>('.fb-modal-actions button')).find((b) =>
-      b.textContent?.includes('Delete order')
+      b.textContent?.includes('Move to past orders')
     );
     expect(modalConfirmBtn).toBeTruthy();
     act(() => {
@@ -304,8 +278,24 @@ describe('OrderSummary', () => {
       await Promise.resolve();
     });
 
+    expect(mockStoreState.updateOrder).toHaveBeenCalledWith('order-1', { isArchived: true });
     expect(mockStoreState.flushOrderWrites).toHaveBeenCalledWith('order-1');
-    expect(mockStoreState.deleteOrder).toHaveBeenCalledWith('order-1');
+    expect(mockStoreState.setCurrentOrderId).toHaveBeenCalledWith('order-2');
+    expect(onFinalize).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not render a delete order button on summary (delete lives in order actions)', () => {
+    act(() => {
+      root.render(
+        <OrderSummary
+          order={makeOrder()}
+          onJumpToStep={() => undefined}
+          onFinalize={() => undefined}
+        />,
+      );
+    });
+
+    expect(container.textContent).not.toContain('Delete order');
   });
 
   it('saves archived past-order corrections without unarchiving the order', async () => {
@@ -354,7 +344,7 @@ describe('OrderSummary', () => {
 
     const mainCol = cockpitGrid?.querySelector('.cockpit-main-column');
     expect(mainCol).toBeTruthy();
-    expect(mainCol?.querySelector('.order-summary-overview')).toBeTruthy();
+    expect(mainCol?.querySelector('.fb-summary-hero-card')).toBeTruthy();
 
     const sidebarCol = cockpitGrid?.querySelector('.cockpit-sidebar-column');
     expect(sidebarCol).toBeTruthy();
@@ -367,12 +357,9 @@ describe('OrderSummary', () => {
 
     const lineItems = sidebarCol?.querySelectorAll('.cockpit-line-item');
     expect(lineItems?.length).toBeGreaterThanOrEqual(3); // Goods, Fees, People charged
-
-    // Mobile summary card is also present in DOM for small screen collapse
-    expect(container.querySelector('.cockpit-mobile-summary-card')).toBeTruthy();
   });
 
-  it('includes desktop defense-in-depth hiding rules for summary-sticky-bar and cockpit-mobile-summary-card in inline style', () => {
+  it('includes desktop defense-in-depth hiding rules for summary-sticky-bar in inline style', () => {
     act(() => {
       root.render(
         <OrderSummary
@@ -387,7 +374,6 @@ describe('OrderSummary', () => {
     const summaryStyle = styleTags.find((s) => s.textContent?.includes('.rounding-absorption-badge'));
     expect(summaryStyle?.textContent).toContain('.summary-sticky-bar');
     expect(summaryStyle?.textContent).toContain('display: none !important');
-    expect(summaryStyle?.textContent).toContain('.cockpit-mobile-summary-card');
   });
 
   it('renders finalize error in both desktop sidebar and mobile sticky bar when order finalization fails', async () => {
@@ -403,7 +389,18 @@ describe('OrderSummary', () => {
       );
     });
 
-    clickButtonByText(container, 'Save to past orders');
+    clickButtonByText(container, 'Move to past orders');
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const modalConfirmBtn = Array.from(container.querySelectorAll<HTMLButtonElement>('.fb-modal-actions button')).find((b) =>
+      b.textContent?.includes('Move to past orders')
+    );
+    act(() => {
+      modalConfirmBtn?.click();
+    });
+
     await act(async () => {
       await Promise.resolve();
     });
@@ -414,49 +411,6 @@ describe('OrderSummary', () => {
     expect(stickyAlert).toBeTruthy();
     expect(sidebarAlert?.textContent).toContain('Network error syncing final order');
     expect(stickyAlert?.textContent).toContain('Network error syncing final order');
-  });
-
-  it('renders delete error in both desktop sidebar and mobile sticky bar when order deletion fails', async () => {
-    mockStoreState.deleteOrder = vi.fn().mockRejectedValue(new Error('Failed to delete order from database'));
-
-    act(() => {
-      root.render(
-        <OrderSummary
-          order={makeOrder()}
-          onJumpToStep={() => undefined}
-          onFinalize={() => undefined}
-        />,
-      );
-    });
-
-    clickButtonByText(container, 'Delete order');
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    clickButtonByText(container, 'Delete order');
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    // In ConfirmModal
-    const modalConfirmBtn = Array.from(container.querySelectorAll<HTMLButtonElement>('.fb-modal-actions button')).find((b) =>
-      b.textContent?.includes('Delete order')
-    );
-    expect(modalConfirmBtn).toBeTruthy();
-    act(() => {
-      modalConfirmBtn?.click();
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    const sidebarAlert = container.querySelector('.cockpit-sidebar-column .alert.alert-error');
-    const stickyAlert = container.querySelector('.summary-sticky-bar .alert.alert-error');
-    expect(sidebarAlert).toBeTruthy();
-    expect(stickyAlert).toBeTruthy();
-    expect(sidebarAlert?.textContent).toContain('Failed to delete order from database');
-    expect(stickyAlert?.textContent).toContain('Failed to delete order from database');
   });
 
   it('verifies globals.css defines .sr-only and hides summary-sticky-bar on desktop', () => {

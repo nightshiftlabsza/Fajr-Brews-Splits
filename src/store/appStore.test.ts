@@ -9,6 +9,39 @@ import {
   type StartupSnapshot,
 } from '../lib/startupSnapshot';
 
+const testLocalStorage = (() => {
+  const store = new Map<string, string>();
+  return {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, String(value));
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    clear: () => {
+      store.clear();
+    },
+    get length() {
+      return store.size;
+    },
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+  };
+})();
+
+Object.defineProperty(globalThis, 'localStorage', {
+  value: testLocalStorage,
+  configurable: true,
+  writable: true,
+});
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'localStorage', {
+    value: testLocalStorage,
+    configurable: true,
+    writable: true,
+  });
+}
+
 type QueryResult = {
   data: unknown;
   error: { message: string; code?: string } | null;

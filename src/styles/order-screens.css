@@ -1,0 +1,376 @@
+/* ============================================================
+   Fajr Brews — Order Screens Styles (Setup, Goods & Fees, Summary)
+   Ruled ledger styling, token hairlines, and compact header
+   ============================================================ */
+
+/* ── Compact Order Header ────────────────────────────────── */
+
+.fb-order-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.fb-order-header-lead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  flex: 1;
+}
+
+.fb-order-header-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.fb-order-header-title-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.fb-order-header-title {
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0;
+  line-height: var(--leading-tight);
+}
+
+.fb-order-header-status {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-raised);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+
+.fb-order-header-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  flex-wrap: wrap;
+}
+
+.fb-order-header-dot {
+  color: var(--color-border-strong);
+}
+
+/* ── Ruled Card & Fieldset Styles ────────────────────────── */
+
+.fb-ruled-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.fb-ruled-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.fb-ruled-panel-title {
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.fb-ruled-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+/* ── Expandable Details ("How this works") ───────────────── */
+
+.fb-details-block {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-2);
+}
+
+.fb-details-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--color-accent);
+  user-select: none;
+}
+
+.fb-details-summary:hover {
+  text-decoration: underline;
+}
+
+.fb-details-content {
+  margin-top: var(--space-2);
+  line-height: var(--leading-dense);
+  color: var(--color-text-secondary);
+}
+
+/* ── Bank Details Collapsible ────────────────────────────── */
+
+.fb-bank-summary-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.fb-bank-summary-text {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Goods and Fees: Foreign sum and Custom Fee Radios ───── */
+
+.fb-goods-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.fb-foreign-sum-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 2px;
+}
+
+.fb-fee-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.fb-fee-option-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.fb-fee-option-row:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-strong);
+}
+
+.fb-fee-option-row.is-selected {
+  background: var(--color-surface-raised);
+  border-color: var(--color-accent);
+}
+
+.fb-custom-radio {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+  transition: all var(--transition-fast);
+}
+
+.fb-fee-option-row.is-selected .fb-custom-radio {
+  border-color: var(--color-accent);
+}
+
+.fb-custom-radio-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+}
+
+.fb-fee-option-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fb-fee-option-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.fb-fee-option-subtitle {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  line-height: var(--leading-dense);
+}
+
+/* ── Summary Screen Hero and Ruled Breakdown ─────────────── */
+
+.fb-summary-hero-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
+  text-align: center;
+}
+
+.fb-summary-hero-label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-1);
+}
+
+.fb-summary-hero-amount {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 2.75rem);
+  font-weight: 800;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.fb-summary-hero-sub {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  flex-wrap: wrap;
+}
+
+.fb-participant-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  min-height: 52px;
+  gap: var(--space-3);
+}
+
+.fb-participant-row:last-child {
+  border-bottom: none;
+}
+
+.fb-participant-lead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  flex: 1;
+}
+
+.fb-participant-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fb-participant-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.fb-participant-grams {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.fb-participant-amount-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.fb-participant-amount {
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Collapsible Table Accordion ─────────────────────────── */
+
+.fb-cost-accordion {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+  overflow: hidden;
+}
+
+.fb-cost-accordion-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+  user-select: none;
+  list-style: none;
+}
+
+.fb-cost-accordion-summary::-webkit-details-marker {
+  display: none;
+}
+
+.fb-cost-accordion-body {
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-4);
+}

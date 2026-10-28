@@ -147,7 +147,7 @@ export function AuthPage({
             ? 'Send yourself a password reset email'
             : mode === 'recovery'
               ? 'Choose a new password for your account'
-              : 'Shared coffee order reconciliation'}
+              : 'Split coffee orders with friends'}
         </p>
 
         {(mode === 'login' || mode === 'signup') ? (

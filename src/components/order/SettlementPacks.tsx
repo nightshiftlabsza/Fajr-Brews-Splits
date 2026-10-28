@@ -5,6 +5,7 @@ import { InvoiceView } from '../invoice/InvoiceView';
 import { formatDate, formatZAR, generatePaymentReference, todayISO } from '../../lib/formatters';
 import { useAppStore } from '../../store/appStore';
 import { PaymentStatusChip } from './PaymentStatusChip';
+import { Sheet } from '../ui/Sheet';
 import type { CalculationResult, Order, PaymentRecord, PaymentStatus, Person } from '../../types';
 
 interface Props {
@@ -191,16 +192,18 @@ export function SettlementPacks({
             if (!calc) return null;
 
             return (
-              <div key={personId} className={`settlement-pack ${isExpanded ? 'is-open' : ''}`}>
-                <div className="settlement-pack-header">
-                  <div className="settlement-pack-primary">
-                    <div className="settlement-pack-name">
-                      {resolvedPerson.name}
-                      {personId === order.payerId && <span className="wizard-inline-meta">Payer</span>}
-                      {!person && <span className="wizard-inline-meta is-deleted">Deleted</span>}
-                    </div>
-                    <div className="settlement-pack-copy num-cell">
-                      {calc.totalGrams}g
+              <div key={personId} className={`fb-participant-row settlement-pack ${isExpanded ? 'is-open' : ''}`}>
+                <div className="settlement-pack-header" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                  <div className="fb-participant-lead settlement-pack-primary">
+                    <div className="fb-participant-info">
+                      <div className="fb-participant-name settlement-pack-name" title={resolvedPerson.name}>
+                        {resolvedPerson.name}
+                        {personId === order.payerId && <span className="wizard-inline-meta" style={{ marginLeft: 'var(--space-2)' }}>Payer</span>}
+                        {!person && <span className="wizard-inline-meta is-deleted" style={{ marginLeft: 'var(--space-2)' }}>Deleted</span>}
+                      </div>
+                      <div className="fb-participant-grams settlement-pack-copy num-cell">
+                        {calc.totalGrams}g
+                      </div>
                     </div>
                   </div>
 
@@ -222,8 +225,8 @@ export function SettlementPacks({
                     }}
                   />
 
-                  <div className="settlement-pack-topline">
-                    <strong className="settlement-pack-total num-cell">
+                  <div className="fb-participant-amount-group settlement-pack-topline">
+                    <strong className="fb-participant-amount settlement-pack-total num-cell">
                       {formatZAR(calc.totalFinal)}
                     </strong>
                     <button
