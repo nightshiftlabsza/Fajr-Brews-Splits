@@ -28,13 +28,18 @@ const mockStoreState = {
   exportJSON: vi.fn(() => '{}'),
   importJSON: vi.fn(),
   setLastExportDate: vi.fn(),
+  settings: {
+    theme: 'emerald' as const,
+    themeMode: 'light' as const,
+  },
   sessionUi: {
     orderWizardSteps: {} as Record<string, 'setup' | 'coffees' | 'goods' | 'summary'>,
   },
 };
 
 vi.mock('../../store/appStore', () => ({
-  useAppStore: () => mockStoreState,
+  useAppStore: (selector?: (state: any) => any) =>
+    typeof selector === 'function' ? selector(mockStoreState) : mockStoreState,
 }));
 
 vi.mock('../../lib/pdf', () => ({
@@ -478,6 +483,7 @@ describe('HistoryPage', () => {
       expect.objectContaining({
         totalOrderZar: expect.any(Number),
       }),
+      'emerald',
     );
   });
 
