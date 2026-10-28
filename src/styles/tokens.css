@@ -14,7 +14,7 @@
 
   /* Semantic status defaults */
   --color-primary:    #1B5E40;
-  --color-warning:    #d97706;
+  --color-warning:    #92400e;
   --color-warning-bg: #fef3c7;
 
   /* Spacing rhythm (base 4px) */
@@ -66,6 +66,9 @@
 
 /* Light (default) */
 [data-theme="emerald"] {
+  --radius-sm:            6px;
+  --radius-md:            10px;
+  --radius-lg:            16px;
   --color-bg:             #F4F7F2;
   --color-surface:        #FFFFFF;
   --color-surface-raised: #EBF0E7;
@@ -90,6 +93,7 @@
   --color-partial:        #7A5A14;
   --color-partial-bg:     #FAF0D0;
   --color-warning:        #d97706;
+  --color-warning-text:   #92400e;
   --color-warning-bg:     #fef3c7;
   --color-unpaid:         #8B2020;
   --color-unpaid-bg:      #F8DADA;
@@ -133,6 +137,7 @@
   --color-partial:        #F5D060;
   --color-partial-bg:     #2A2010;
   --color-warning:        #f59e0b;
+  --color-warning-text:   #fbbf24;
   --color-warning-bg:     #78350f;
   --color-unpaid:         #F87171;
   --color-unpaid-bg:      #2A1010;
@@ -172,7 +177,7 @@
     --color-paid-bg:        #1A3C24;
     --color-partial:        #F5D060;
     --color-partial-bg:     #2A2010;
-    --color-warning:        #f59e0b;
+    --color-warning:        #fbbf24;
     --color-warning-bg:     #78350f;
     --color-unpaid:         #F87171;
     --color-unpaid-bg:      #2A1010;
@@ -191,6 +196,9 @@
 
 /* Light (default) */
 [data-theme="yinmn"] {
+  --radius-sm:            4px;
+  --radius-md:            6px;
+  --radius-lg:            12px;
   --color-bg:             #EEF0F7;
   --color-surface:        #FFFFFF;
   --color-surface-raised: #E4E8F4;
@@ -215,6 +223,7 @@
   --color-partial:        #7A5C1B;
   --color-partial-bg:     #F5EDD0;
   --color-warning:        #d97706;
+  --color-warning-text:   #92400e;
   --color-warning-bg:     #fef3c7;
   --color-unpaid:         #8B2020;
   --color-unpaid-bg:      #F8DADA;
@@ -258,6 +267,7 @@
   --color-partial:        #F5D060;
   --color-partial-bg:     #2A2010;
   --color-warning:        #f59e0b;
+  --color-warning-text:   #fbbf24;
   --color-warning-bg:     #78350f;
   --color-unpaid:         #F87171;
   --color-unpaid-bg:      #2A1010;
@@ -297,7 +307,7 @@
     --color-paid-bg:        #1A3C24;
     --color-partial:        #F5D060;
     --color-partial-bg:     #2A2010;
-    --color-warning:        #f59e0b;
+    --color-warning:        #fbbf24;
     --color-warning-bg:     #78350f;
     --color-unpaid:         #F87171;
     --color-unpaid-bg:      #2A1010;

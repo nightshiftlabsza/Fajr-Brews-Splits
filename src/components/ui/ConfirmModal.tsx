@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { Icon } from './Icon';
 
 export interface ConfirmModalProps {
   isOpen: boolean;
@@ -98,7 +99,7 @@ export function ConfirmModal({
       >
         <div className="fb-modal-header">
           <div className="fb-modal-icon" aria-hidden="true">
-            {variant === 'danger' ? '⚠️' : '☕'}
+            <Icon name={variant === 'danger' || variant === 'warning' ? 'warning' : 'info'} size={20} />
           </div>
           <div>
             <h3 id="fb-modal-title" className="fb-modal-title">{title}</h3>
