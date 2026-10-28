@@ -80,6 +80,7 @@ describe('invoiceFormatter', () => {
     const invoice = buildInvoiceModel({ order, person: ahmed, payer: abdul, calc: ahmedCalc });
     const summary = buildPaymentSummaryText({ order, person: ahmed, payer: abdul, calc: ahmedCalc });
 
+    expect(invoice.title).toBe('Splits');
     expect(invoice.coffeeLines[0]).toMatchObject({
       name: 'Pastel Hour',
       detail: 'Bag 1: 125g from 250g bag',

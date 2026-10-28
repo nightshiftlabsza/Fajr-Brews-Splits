@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../../store/appStore';
 import { HOME_PATH } from '../../lib/appConfig';
+import { SplitsLockup } from '../brand/SplitsLockup';
 
 type Mode = 'login' | 'signup' | 'success' | 'forgot' | 'recovery';
 
@@ -115,9 +116,7 @@ export function AuthPage({
       <div className="auth-shell">
         <div className="auth-card">
           <div className="auth-brand">
-            <span className="auth-brand-icon">☕</span>
-            <h1>Fajr Brews</h1>
-            <p className="auth-subtitle">Coffee Splitter</p>
+            <SplitsLockup size="large" />
           </div>
           <div className="alert alert-success" style={{ marginBottom: 0 }}>
             <strong>Account created.</strong>
@@ -140,9 +139,7 @@ export function AuthPage({
     <div className="auth-shell">
       <div className="auth-card">
         <div className="auth-brand">
-          <span className="auth-brand-icon">☕</span>
-          <h1>Fajr Brews</h1>
-          <p className="auth-subtitle">Coffee Splitter</p>
+          <SplitsLockup size="large" />
         </div>
 
         <p className="auth-tagline">
@@ -339,31 +336,9 @@ export function AuthPage({
         }
 
         .auth-brand {
-          text-align: center;
-          margin-bottom: var(--space-2);
-        }
-
-        .auth-brand-icon {
-          font-size: 2.5rem;
-          display: block;
-          margin-bottom: var(--space-3);
-        }
-
-        .auth-brand h1 {
-          font-family: var(--font-display);
-          font-size: 1.875rem;
-          font-weight: 700;
-          letter-spacing: -0.01em;
-          color: var(--color-text-primary);
-        }
-
-        .auth-subtitle {
-          font-size: 0.75rem;
-          font-weight: 700;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-          color: var(--color-text-muted);
-          margin-top: 2px;
+          display: flex;
+          justify-content: center;
+          margin-bottom: var(--space-4);
         }
 
         .auth-tagline {

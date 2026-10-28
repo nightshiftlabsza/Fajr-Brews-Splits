@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { PersonLinkCandidate } from '../../types';
 import { useAppStore } from '../../store/appStore';
+import { SplitsLockup } from '../brand/SplitsLockup';
 
 function formatCandidateDetail(candidate: PersonLinkCandidate): string {
   if (candidate.matchReason === 'email' && candidate.email) {
@@ -59,7 +60,9 @@ export function PendingAccess() {
   return (
     <div className="pending-access-shell">
       <div className="pending-access-card">
-        <div className="pending-access-icon">🔒</div>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--space-6)' }}>
+          <SplitsLockup size="large" />
+        </div>
         <h2 style={{ marginBottom: 'var(--space-3)' }}>
           {hasCandidates ? 'Confirm your match' : 'Access pending'}
         </h2>

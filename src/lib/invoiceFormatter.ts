@@ -175,7 +175,7 @@ export function buildInvoiceModel({ order, person, payer, calc }: InvoicePayload
   }
 
   return {
-    title: 'Fajr Brews',
+    title: 'Splits',
     orderName: order.name,
     orderDate: formatDate(order.orderDate),
     personName: person.name,
