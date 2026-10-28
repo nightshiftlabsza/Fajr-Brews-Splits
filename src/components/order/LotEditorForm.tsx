@@ -6,6 +6,7 @@ import {
   formatCompactAllocationSummary,
   syncLotWithSelectedBuyers,
 } from '../../lib/allocationInference';
+import { Icon } from '../ui/Icon';
 
 export interface LotFormState {
   name: string;
@@ -86,9 +87,9 @@ export function LotEditorForm({
   const compactSummary = formatCompactAllocationSummary(form.bags, grams, personNameMap);
 
   return (
-    <div className="lot-editor-form-stack" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+    <div className="lot-editor-form-stack">
       <div className="field">
-        <label className="field-label">Coffee Name *</label>
+        <label className="field-label">Coffee name *</label>
         <input
           className="input"
           value={form.name}
@@ -98,53 +99,50 @@ export function LotEditorForm({
         />
       </div>
 
-      <div className="lot-specs-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 'var(--space-3)' }}>
+      <div className="lot-specs-grid">
         <div className="field">
-          <label className="field-label">List Price *</label>
+          <label className="field-label">Price per bag *</label>
           <input
-            className="input"
+            className="input num-cell"
             type="number"
             value={form.foreignPricePerBag}
             onChange={setField('foreignPricePerBag')}
             min="0.01"
             step="0.01"
             placeholder="18.50"
-            style={{ fontVariantNumeric: 'tabular-nums' }}
           />
         </div>
 
         <div className="field">
-          <label className="field-label">Grams / Bag *</label>
+          <label className="field-label">Grams per bag *</label>
           <input
-            className="input"
+            className="input num-cell"
             type="number"
             value={form.gramsPerBag}
             onChange={setField('gramsPerBag')}
             min="1"
             step="1"
             placeholder="250"
-            style={{ fontVariantNumeric: 'tabular-nums' }}
           />
         </div>
 
         <div className="field">
           <label className="field-label">Bags *</label>
           <input
-            className="input"
+            className="input num-cell"
             type="number"
             value={form.initialBagCount}
             onChange={setField('initialBagCount')}
             min="1"
             step="1"
             placeholder="1"
-            style={{ fontVariantNumeric: 'tabular-nums' }}
           />
         </div>
       </div>
 
       {/* Buyers Selector */}
-      <div className="field" style={{ margin: 0 }}>
-        <label className="field-label" style={{ marginBottom: '6px' }}>Buyers</label>
+      <div className="field buyer-field">
+        <label className="field-label buyer-chips-label">Buyers</label>
         <div className="buyer-chips-wrap">
           {people.map((p) => {
             const isSelected = form.selectedBuyerIds.includes(p.id);
@@ -155,8 +153,8 @@ export function LotEditorForm({
                 className={`buyer-chip ${isSelected ? 'is-selected' : ''}`}
                 onClick={() => handleToggleBuyer(p.id)}
               >
-                {isSelected ? '✓ ' : '+ '}
-                {p.name}
+                <Icon name={isSelected ? 'check' : 'plus'} size={12} />
+                <span>{p.name}</span>
               </button>
             );
           })}
@@ -165,28 +163,15 @@ export function LotEditorForm({
             className="buyer-chip buyer-chip-add"
             onClick={onAddNewPerson}
           >
-            + Add Person
+            <Icon name="plus" size={12} />
+            <span>Add person</span>
           </button>
         </div>
 
         {/* Live Inferred Allocation Preview */}
-        <div
-          style={{
-            marginTop: 'var(--space-2)',
-            padding: '8px 12px',
-            background: 'var(--color-surface-raised)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: '0.8125rem',
-            color: 'var(--color-text-secondary)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            flexWrap: 'wrap',
-          }}
-        >
-          <span style={{ fontWeight: 700, color: 'var(--color-accent)' }}>Allocation:</span>
-          <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+        <div className="lot-editor-preview">
+          <span className="lot-editor-preview-label">Who gets what:</span>
+          <span className="num-cell">
             {bagCount} × {formatGrams(grams)} · {compactSummary}
           </span>
         </div>
@@ -194,14 +179,62 @@ export function LotEditorForm({
 
       {error && <div className="alert alert-error">{error}</div>}
 
-      <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', marginTop: 'var(--space-1)' }}>
+      <div className="lot-editor-actions">
         <button type="button" className="btn btn-primary" onClick={onSave}>
-          {isNew ? 'Create Coffee' : 'Save Changes'}
+          {isNew ? 'Create coffee' : 'Save changes'}
         </button>
         <button type="button" className="btn btn-ghost" onClick={onCancel}>
           Cancel
         </button>
       </div>
+
+      <style>{`
+        .lot-editor-form-stack {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-4);
+        }
+
+        .lot-specs-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+          gap: var(--space-3);
+        }
+
+        .buyer-field {
+          margin: 0;
+        }
+
+        .buyer-chips-label {
+          margin-bottom: 6px;
+        }
+
+        .lot-editor-preview {
+          margin-top: var(--space-2);
+          padding: 8px 12px;
+          background: var(--color-surface-raised);
+          border: 1px solid var(--color-border);
+          border-radius: var(--radius-sm);
+          font-size: 0.8125rem;
+          color: var(--color-text-secondary);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .lot-editor-preview-label {
+          font-weight: 700;
+          color: var(--color-accent);
+        }
+
+        .lot-editor-actions {
+          display: flex;
+          gap: var(--space-3);
+          flex-wrap: wrap;
+          margin-top: var(--space-1);
+        }
+      `}</style>
     </div>
   );
 }

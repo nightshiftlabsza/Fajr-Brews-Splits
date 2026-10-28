@@ -4,6 +4,7 @@ import { InvoiceActions } from '../invoice/InvoiceActions';
 import { InvoiceView } from '../invoice/InvoiceView';
 import { formatDate, formatZAR, generatePaymentReference, todayISO } from '../../lib/formatters';
 import { useAppStore } from '../../store/appStore';
+import { PaymentStatusChip } from './PaymentStatusChip';
 import type { CalculationResult, Order, PaymentRecord, PaymentStatus, Person } from '../../types';
 
 interface Props {
@@ -21,7 +22,7 @@ export function SettlementPacks({
   order,
   people,
   result,
-  title = 'Participants & Invoices',
+  title = 'Participants & invoices',
   description,
   onPaymentChange,
   paymentEditingEnabled = false,
@@ -73,43 +74,47 @@ export function SettlementPacks({
 
   return (
     <section className="wizard-panel settlement-packs-section">
-      <div className="wizard-card-header" style={{ marginBottom: 'var(--space-3)' }}>
+      <div className="settlement-header">
         <div>
           <div className="wizard-card-title">{title}</div>
           {description && <p className="wizard-card-copy">{description}</p>}
         </div>
       </div>
 
-      {/* ── Friction Point #5: Elevated Personal Share Card for Logged-In User ── */}
+      {/* Personal Share for Logged-In User */}
       {isCurrentUserParticipant && myPerson && myCalc && (
         <div className="personal-share-hero-card">
           <div className="personal-share-header">
             <div>
-              <span className="personal-share-badge">Your Personal Share</span>
+              <span className="personal-share-badge">Your personal share</span>
               <h3 className="personal-share-name">{myPerson.name}</h3>
             </div>
             <div className="personal-share-status">
-              <StatusPill payment={myPayment} />
+              <PaymentStatusChip
+                status={myPayment?.status || 'unpaid'}
+                readOnly={true}
+                personName={myPerson.name}
+              />
               {currentPersonId === order.payerId && (
-                <span className="wizard-inline-meta" style={{ marginLeft: 6 }}>You are the order payer</span>
+                <span className="wizard-inline-meta personal-share-payer-meta">You are the order payer</span>
               )}
             </div>
           </div>
 
           <div className="personal-share-body">
             <div className="personal-share-amount-box">
-              <span className="personal-share-amount-label">Total Amount Due</span>
-              <span className="personal-share-amount" style={{ fontVariantNumeric: 'tabular-nums' }}>
+              <span className="personal-share-amount-label">Total amount due</span>
+              <span className="personal-share-amount num-cell">
                 {formatZAR(myCalc.totalFinal)}
               </span>
-              <span className="personal-share-grams" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                {myCalc.totalGrams}g of coffee ({myCalc.lotBreakdowns.length} {myCalc.lotBreakdowns.length === 1 ? 'lot' : 'lots'})
+              <span className="personal-share-grams num-cell">
+                {myCalc.totalGrams}g of coffee ({myCalc.lotBreakdowns.length} {myCalc.lotBreakdowns.length === 1 ? 'coffee' : 'coffees'})
               </span>
             </div>
 
             {order.payerBank && (order.payerBank.bankName || order.payerBank.accountNumber) && (
               <div className="personal-share-bank-box">
-                <div className="personal-share-bank-title">EFT / Banking Details</div>
+                <div className="personal-share-bank-title">EFT / banking details</div>
                 <div className="personal-share-bank-grid">
                   <div>
                     <span className="bank-meta-label">Bank:</span>
@@ -117,7 +122,7 @@ export function SettlementPacks({
                   </div>
                   <div>
                     <span className="bank-meta-label">Account:</span>
-                    <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{order.payerBank.accountNumber}</strong>
+                    <strong className="num-cell">{order.payerBank.accountNumber}</strong>
                   </div>
                   {order.payerBank.beneficiary && (
                     <div>
@@ -128,12 +133,12 @@ export function SettlementPacks({
                   {order.payerBank.branch && (
                     <div>
                       <span className="bank-meta-label">Branch:</span>
-                      <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{order.payerBank.branch}</strong>
+                      <strong className="num-cell">{order.payerBank.branch}</strong>
                     </div>
                   )}
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <span className="bank-meta-label">Payment Ref:</span>
-                    <strong style={{ color: 'var(--color-accent)' }}>
+                  <div className="bank-grid-full-row">
+                    <span className="bank-meta-label">Payment ref:</span>
+                    <strong className="payment-ref-text">
                       {generatePaymentReference(order, myPerson.name)}
                     </strong>
                   </div>
@@ -154,7 +159,7 @@ export function SettlementPacks({
         </div>
       )}
 
-      {/* ── Participant Cards List ── */}
+      {/* Participant Ruled List */}
       <div className="settlement-pack-list">
         {result.personIds
           .filter((personId) => !visiblePersonIds || visiblePersonIds.includes(personId))
@@ -192,43 +197,35 @@ export function SettlementPacks({
                     <div className="settlement-pack-name">
                       {resolvedPerson.name}
                       {personId === order.payerId && <span className="wizard-inline-meta">Payer</span>}
-                      {!person && <span className="wizard-inline-meta" style={{ color: 'var(--color-warning)' }}>Deleted</span>}
+                      {!person && <span className="wizard-inline-meta is-deleted">Deleted</span>}
                     </div>
-                    <div className="settlement-pack-copy" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    <div className="settlement-pack-copy num-cell">
                       {calc.totalGrams}g
                     </div>
                   </div>
 
-                  {/* Owner quick payment status toggle controls */}
-                  {canEditPayments && onPaymentChange && personId !== order.payerId && (
-                    <div className="settlement-quick-status-buttons" role="group" aria-label={`Payment status for ${resolvedPerson.name}`}>
-                      {(['unpaid', 'partial', 'paid'] as PaymentStatus[]).map((option) => (
-                        <button
-                          key={option}
-                          type="button"
-                          className={`btn btn-sm ${status === option ? 'btn-primary' : 'btn-ghost'}`}
-                          onClick={() => {
-                            const datePaid = payment?.datePaid || todayISO();
-                            if (option === 'paid') {
-                              onPaymentChange(personId, { status: 'paid', amountPaid: calc.totalFinal, datePaid });
-                            } else if (option === 'partial') {
-                              onPaymentChange(personId, { status: 'partial', amountPaid: payment?.amountPaid || 0, datePaid });
-                            } else {
-                              onPaymentChange(personId, { status: 'unpaid' });
-                            }
-                          }}
-                        >
-                          {option === 'unpaid' ? 'Unpaid' : option === 'partial' ? 'Partial' : 'Paid'}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  {/* Payment status chip replaces three buttons plus a pill */}
+                  <PaymentStatusChip
+                    status={status}
+                    readOnly={!canEditPayments || personId === order.payerId}
+                    personName={resolvedPerson.name}
+                    onStatusChange={(newStatus: PaymentStatus) => {
+                      if (!onPaymentChange) return;
+                      const datePaid = payment?.datePaid || todayISO();
+                      if (newStatus === 'paid') {
+                        onPaymentChange(personId, { status: 'paid', amountPaid: calc.totalFinal, datePaid });
+                      } else if (newStatus === 'partial') {
+                        onPaymentChange(personId, { status: 'partial', amountPaid: payment?.amountPaid || 0, datePaid });
+                      } else {
+                        onPaymentChange(personId, { status: 'unpaid' });
+                      }
+                    }}
+                  />
 
                   <div className="settlement-pack-topline">
-                    <strong className="settlement-pack-total" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    <strong className="settlement-pack-total num-cell">
                       {formatZAR(calc.totalFinal)}
                     </strong>
-                    <StatusPill payment={payment} readOnly={!canEditPayments} />
                     <button
                       type="button"
                       className={`btn btn-sm ${isExpanded ? 'btn-secondary' : 'btn-ghost'}`}
@@ -241,12 +238,13 @@ export function SettlementPacks({
 
                 {canEditPayments && onPaymentChange && status === 'partial' && (
                   <div className="summary-partial-fields">
-                    <div className="field" style={{ margin: 0, flex: 1, minWidth: 160 }}>
-                      <label className="field-label" style={{ fontSize: '0.75rem' }}>Amount paid (ZAR)</label>
-                      <div style={{ position: 'relative' }}>
-                        <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)', fontWeight: 700, pointerEvents: 'none' }}>R</span>
+                    <div className="field summary-partial-field-amount">
+                      <label className="field-label compact-label">Amount paid (ZAR)</label>
+                      <div className="input-with-zar-prefix">
+                        <span className="input-prefix-zar" aria-hidden="true">R</span>
                         <input
-                          className="input"
+                          className="input input-with-prefix num-cell"
+                          style={{ minHeight: 44, fontSize: '1rem' }}
                           type="number"
                           value={payment?.amountPaid ?? ''}
                           onChange={(e) => onPaymentChange(personId, {
@@ -256,18 +254,17 @@ export function SettlementPacks({
                           })}
                           min="0"
                           step="0.01"
-                          style={{ paddingLeft: 26, minHeight: 44, fontSize: '1rem', fontVariantNumeric: 'tabular-nums' }}
                         />
                       </div>
                       {payment?.amountPaid !== undefined && payment.amountPaid > 0 && (
-                        <span className="field-hint" style={{ fontSize: '0.75rem', fontVariantNumeric: 'tabular-nums' }}>
+                        <span className="field-hint compact-hint num-cell">
                           Outstanding: {formatZAR(Math.max(0, calc.totalFinal - payment.amountPaid))}
                         </span>
                       )}
                     </div>
 
-                    <div className="field" style={{ margin: 0, flex: 1, minWidth: 140 }}>
-                      <label className="field-label" style={{ fontSize: '0.75rem' }}>Date paid</label>
+                    <div className="field summary-partial-field-date">
+                      <label className="field-label compact-label">Date paid</label>
                       <input
                         className="input"
                         type="date"
@@ -277,7 +274,6 @@ export function SettlementPacks({
                           status: 'partial',
                           datePaid: e.target.value,
                         })}
-                        style={{ minHeight: 44, fontSize: '1rem' }}
                       />
                     </div>
                   </div>
@@ -285,7 +281,7 @@ export function SettlementPacks({
 
                 {isExpanded && (
                   <div className="settlement-pack-preview">
-                    <div className="settlement-expanded-actions" style={{ marginBottom: 'var(--space-4)' }}>
+                    <div className="settlement-expanded-actions">
                       <InvoiceActions
                         order={order}
                         person={resolvedPerson}
@@ -316,13 +312,16 @@ export function SettlementPacks({
       </div>
 
       <style>{`
+        .settlement-header {
+          margin-bottom: var(--space-3);
+        }
+
         .personal-share-hero-card {
           background: color-mix(in srgb, var(--color-accent-light) 25%, var(--color-surface));
           border: 1px solid color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
           border-radius: var(--radius-md);
           padding: var(--space-5);
           margin-bottom: var(--space-5);
-          box-shadow: var(--shadow-xs);
         }
 
         .personal-share-header {
@@ -335,16 +334,18 @@ export function SettlementPacks({
         }
 
         .personal-share-badge {
-          font-size: 0.6875rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
+          font-size: var(--text-xs);
+          font-weight: 600;
           color: var(--color-accent);
           background: color-mix(in srgb, var(--color-accent-light) 60%, var(--color-surface));
           padding: 2px 8px;
-          border-radius: 999px;
+          border-radius: var(--radius-sm);
           display: inline-block;
           margin-bottom: 4px;
+        }
+
+        .personal-share-payer-meta {
+          margin-left: 6px;
         }
 
         .personal-share-name {
@@ -352,6 +353,12 @@ export function SettlementPacks({
           font-weight: 700;
           color: var(--color-text-primary);
           margin: 0;
+        }
+
+        .personal-share-status {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
         }
 
         .personal-share-body {
@@ -372,10 +379,8 @@ export function SettlementPacks({
         }
 
         .personal-share-amount-label {
-          font-size: 0.75rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
+          font-size: var(--text-xs);
+          font-weight: 600;
           color: var(--color-text-muted);
         }
 
@@ -383,13 +388,10 @@ export function SettlementPacks({
           font-size: var(--text-2xl);
           font-weight: 700;
           color: var(--color-accent);
-          font-family: var(--font-body);
-          font-variant-numeric: tabular-nums;
-          letter-spacing: normal;
         }
 
         .personal-share-grams {
-          font-size: 0.8125rem;
+          font-size: var(--text-sm);
           color: var(--color-text-secondary);
         }
 
@@ -401,10 +403,8 @@ export function SettlementPacks({
         }
 
         .personal-share-bank-title {
-          font-size: 0.75rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
+          font-size: var(--text-xs);
+          font-weight: 600;
           color: var(--color-text-muted);
           margin-bottom: var(--space-2);
         }
@@ -413,12 +413,20 @@ export function SettlementPacks({
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
           gap: 6px 12px;
-          font-size: 0.8125rem;
+          font-size: var(--text-sm);
         }
 
         .bank-meta-label {
           color: var(--color-text-muted);
           margin-right: 4px;
+        }
+
+        .bank-grid-full-row {
+          grid-column: 1 / -1;
+        }
+
+        .payment-ref-text {
+          color: var(--color-accent);
         }
 
         .personal-share-actions-row {
@@ -427,20 +435,61 @@ export function SettlementPacks({
           gap: var(--space-2);
           flex-wrap: wrap;
         }
+
+        .is-deleted {
+          color: var(--color-warning-text, var(--color-warning));
+        }
+
+        .settlement-pack-total {
+          min-width: 90px;
+          text-align: right;
+        }
+
+        .compact-label {
+          font-size: var(--text-xs);
+        }
+
+        .compact-hint {
+          font-size: var(--text-xs);
+        }
+
+        .summary-partial-field-amount {
+          margin: 0;
+          flex: 1;
+          min-width: 160px;
+        }
+
+        .summary-partial-field-date {
+          margin: 0;
+          flex: 1;
+          min-width: 140px;
+        }
+
+        .input-with-zar-prefix {
+          position: relative;
+        }
+
+        .input-prefix-zar {
+          position: absolute;
+          left: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: var(--color-text-muted);
+          font-weight: 700;
+          pointer-events: none;
+        }
+
+        .input-with-prefix {
+          padding-left: 26px;
+          min-height: 44px;
+          font-size: 1rem;
+        }
+
+        .settlement-expanded-actions {
+          margin-bottom: var(--space-4);
+        }
       `}</style>
     </section>
-  );
-}
-
-function StatusPill({ payment, readOnly }: { payment?: PaymentRecord; readOnly?: boolean }) {
-  const status = payment?.status || 'unpaid';
-  return (
-    <span
-      className={`pill pill-${status}`}
-      title={readOnly ? 'Payment status is managed by the order organizer' : undefined}
-    >
-      {status === 'paid' ? 'Paid' : status === 'partial' ? 'Partial' : 'Unpaid'}
-    </span>
   );
 }
 

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import type { Order, Fee, FeeAllocationType, Person } from '../../types';
+import type { Order, Fee, FeeAllocationType } from '../../types';
 import { useAppStore } from '../../store/appStore';
 import { formatZAR, parseMoneyInput } from '../../lib/formatters';
-import { getFeeAllocationLabel, normalizeFeeAllocationType } from '../../lib/invoiceFormatter';
+import { normalizeFeeAllocationType } from '../../lib/invoiceFormatter';
 import { isOrderLocked } from '../../lib/orderLifecycle';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import { Icon } from '../ui/Icon';
 
 function genId() {
   return typeof crypto !== 'undefined' && crypto.randomUUID
@@ -99,7 +100,6 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
   }
 
   function openNewFee() {
-    if (isLocked) return;
     setFeeLabel('');
     setFeeAmount('');
     setFeeType('equal_per_person');
@@ -109,41 +109,45 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
   }
 
   function openEditFee(fee: Fee) {
-    if (isLocked) return;
     setFeeLabel(fee.label);
     setFeeAmount(String(fee.amountZar));
     setFeeType(normalizeFeeAllocationType(fee.allocationType));
-    setFeePersonId(fee.personId ?? '');
+    setFeePersonId(fee.personId || '');
     setFeeError('');
     setEditingFeeId(fee.id);
   }
 
   function saveFee() {
     if (isLocked) return;
-    if (!feeLabel.trim()) return setFeeError('Fee label is required.');
-    const amt = parseMoneyInput(feeAmount);
-    if (amt <= 0) return setFeeError('Amount must be greater than zero.');
-    if (normalizeFeeAllocationType(feeType) === 'specific_person' && !feePersonId) {
-      return setFeeError('Please select who should pay this fee.');
-    }
     setFeeError('');
+    const trimmedLabel = feeLabel.trim();
+    if (!trimmedLabel) {
+      setFeeError('Fee name is required.');
+      return;
+    }
+    const parsedAmount = parseMoneyInput(feeAmount);
+    if (parsedAmount <= 0) {
+      setFeeError('Fee amount must be greater than zero.');
+      return;
+    }
+    if (feeType === 'specific_person' && !feePersonId) {
+      setFeeError('Please select a person to pay this fee.');
+      return;
+    }
 
-    let updatedFees: Fee[];
-    const normalizedType = normalizeFeeAllocationType(feeType);
-    const nextFee = {
-      label: feeLabel.trim(),
-      amountZar: amt,
-      allocationType: normalizedType,
-      personId: normalizedType === 'specific_person' ? feePersonId : null,
+    const newFee: Fee = {
+      id: editingFeeId === 'new' ? genId() : (editingFeeId as string),
+      label: trimmedLabel,
+      amountZar: parsedAmount,
+      allocationType: feeType,
+      personId: feeType === 'specific_person' ? feePersonId : undefined,
     };
 
+    let updatedFees: Fee[];
     if (editingFeeId === 'new') {
-      updatedFees = [
-        ...order.fees,
-        { id: genId(), ...nextFee },
-      ];
+      updatedFees = [...order.fees, newFee];
     } else {
-      updatedFees = order.fees.map((f) => (f.id === editingFeeId ? { ...f, ...nextFee } : f));
+      updatedFees = order.fees.map((f) => (f.id === editingFeeId ? newFee : f));
     }
 
     void patchOrder({ fees: updatedFees });
@@ -158,48 +162,30 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
 
   return (
     <div className="wizard-step-stack">
-      {/* Goods Total Card */}
+      {/* Goods Total Section */}
       <section className="wizard-panel">
         <div className="wizard-card-header">
           <div>
-            <h2 className="wizard-card-title">Order Goods Total (ZAR)</h2>
+            <h2 className="wizard-card-title">Order goods total (ZAR)</h2>
             <p className="wizard-card-copy">
               The final converted amount charged to your card for the coffee goods.
             </p>
           </div>
         </div>
 
-        <div className="field" style={{ maxWidth: 420 }}>
+        <div className="field goods-input-field">
           <label className="field-label" htmlFor="order-goods-total-zar">
-            Total Coffee Goods (ZAR) *
+            Total coffee goods (ZAR) *
           </label>
-          <div style={{ position: 'relative' }}>
-            <span
-              style={{
-                position: 'absolute',
-                left: 14,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: 'var(--color-accent)',
-                fontWeight: 700,
-                fontSize: '1.125rem',
-                pointerEvents: 'none',
-              }}
-            >
+          <div className="goods-input-container">
+            <span className="goods-zar-prefix" aria-hidden="true">
               R
             </span>
             <input
               id="order-goods-total-zar"
-              className="input goods-total-prominent-input"
+              className="input goods-total-prominent-input num-cell"
               type="text"
               inputMode="decimal"
-              style={{
-                paddingLeft: 36,
-                fontSize: '1.25rem',
-                fontWeight: 700,
-                fontVariantNumeric: 'tabular-nums',
-                height: 48,
-              }}
               value={goodsInput}
               onChange={(e) => setGoodsInput(e.target.value)}
               onBlur={saveGoods}
@@ -207,34 +193,35 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
               disabled={isLocked}
             />
           </div>
-          <div className="field-hint" style={{ marginTop: 'var(--space-2)', fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
-            ℹ This is the final converted total paid to the foreign roaster in ZAR. Each coffee lot and member share is proportionally calculated from this amount.
+          <div className="field-hint goods-field-hint">
+            <Icon name="info" size={14} className="goods-hint-icon" />
+            <span>This is the final converted total paid to the foreign roaster in ZAR. Each coffee and member share is calculated from this amount.</span>
           </div>
         </div>
       </section>
 
-      {/* Fees List Card */}
+      {/* Fees List Section */}
       <section className="wizard-panel">
         <div className="wizard-card-header">
           <div>
-            <h2 className="wizard-card-title">Additional Fees</h2>
+            <h2 className="wizard-card-title">Additional fees</h2>
             <p className="wizard-card-copy">
               Shipping, foreign transaction fees, customs duties, or handling charges.
             </p>
           </div>
           {editingFeeId === null && !isLocked && (
             <button className="btn btn-secondary btn-sm" type="button" onClick={openNewFee}>
-              + Add Fee
+              <Icon name="plus" size={14} /> Add fee
             </button>
           )}
         </div>
 
         {/* Inline Add / Edit Fee Form */}
         {editingFeeId !== null && (
-          <div className="wizard-subsection" style={{ marginBottom: 'var(--space-4)' }}>
+          <div className="wizard-subsection">
             <div className="wizard-subsection-header">
               <div className="wizard-card-title">
-                {editingFeeId === 'new' ? 'Add Fee' : 'Edit Fee'}
+                {editingFeeId === 'new' ? 'Add fee' : 'Edit fee'}
               </div>
             </div>
 
@@ -248,45 +235,31 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
                   placeholder="e.g. DHL Express Shipping"
                   value={feeLabel}
                   onChange={(e) => setFeeLabel(e.target.value)}
-                  autoFocus
                 />
               </div>
 
               <div className="field">
                 <label className="field-label" htmlFor="fee-amount-input">Amount (ZAR) *</label>
-                <div style={{ position: 'relative' }}>
-                  <span style={{
-                    position: 'absolute',
-                    left: 14,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: 'var(--color-text-muted)',
-                    fontWeight: 700,
-                    pointerEvents: 'none',
-                  }}>
-                    R
-                  </span>
+                <div className="goods-input-container">
+                  <span className="fee-input-prefix" aria-hidden="true">R</span>
                   <input
                     id="fee-amount-input"
-                    className="input"
+                    className="input fee-input-with-prefix num-cell"
                     type="text"
                     inputMode="decimal"
-                    style={{ paddingLeft: 34 }}
-                    placeholder="0.00"
+                    placeholder="e.g. 240.00"
                     value={feeAmount}
                     onChange={(e) => setFeeAmount(e.target.value)}
                   />
                 </div>
               </div>
 
-              {/* Fee Division Options */}
-              <div className="field" style={{ gridColumn: '1 / -1' }}>
-                <span className="field-label" style={{ marginBottom: 'var(--space-2)', display: 'block' }}>
-                  How should this fee be divided? *
-                </span>
-                <div role="radiogroup" aria-label="Fee allocation method" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+              {/* Fee Allocation Options */}
+              <div className="field fee-options-span">
+                <label className="field-label">How to split this fee</label>
+                <div className="fee-options-stack">
                   {HUMAN_FEE_OPTIONS.map((opt) => {
-                    const isSelected = normalizeFeeAllocationType(feeType) === opt.value;
+                    const isSelected = feeType === opt.value;
                     return (
                       <label
                         key={opt.value}
@@ -298,13 +271,13 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
                           value={opt.value}
                           checked={isSelected}
                           onChange={() => setFeeType(opt.value)}
-                          style={{ marginTop: 3 }}
+                          className="fee-radio-input"
                         />
                         <div>
-                          <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--color-text-primary)' }}>
+                          <div className="fee-option-title">
                             {opt.title}
                           </div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
+                          <div className="fee-option-subtitle">
                             {opt.subtitle}
                           </div>
                         </div>
@@ -335,9 +308,9 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
 
               {feeError && <div className="alert alert-error">{feeError}</div>}
 
-              <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+              <div className="fee-form-actions">
                 <button type="button" className="btn btn-primary" onClick={saveFee}>
-                  {editingFeeId === 'new' ? 'Add Fee' : 'Save Fee'}
+                  {editingFeeId === 'new' ? 'Add fee' : 'Save fee'}
                 </button>
                 <button type="button" className="btn btn-ghost" onClick={() => setEditingFeeId(null)}>
                   Cancel
@@ -349,18 +322,18 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
 
         {/* Existing Fees List */}
         {order.fees.length === 0 ? (
-          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-            No additional fees added yet. If there are customs, shipping, or courier costs, click "+ Add Fee".
+          <p className="fees-empty-text">
+            No additional fees added yet. If there are customs, shipping, or courier costs, click "+ Add fee".
           </p>
         ) : (
-          <div className="table-responsive" style={{ overflowX: 'auto' }}>
+          <div className="table-responsive">
             <table className="fees-table">
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left' }}>Fee Description</th>
-                  <th style={{ textAlign: 'left', width: '220px' }}>Allocation Method</th>
-                  <th style={{ textAlign: 'right', width: '140px' }}>Amount (ZAR)</th>
-                  {!isLocked && <th style={{ textAlign: 'right', width: '130px' }}>Actions</th>}
+                  <th className="cell-left">Fee description</th>
+                  <th className="fee-col-method">Split type</th>
+                  <th className="fee-col-amount">Amount (ZAR)</th>
+                  {!isLocked && <th className="fee-col-actions">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -387,12 +360,12 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
                           {badgeLabel}
                         </span>
                       </td>
-                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+                      <td className="fee-col-amount num-cell fee-amount-cell">
                         {formatZAR(fee.amountZar)}
                       </td>
                       {!isLocked && (
-                        <td style={{ textAlign: 'right' }}>
-                          <div style={{ display: 'inline-flex', gap: 'var(--space-1)', justifyContent: 'flex-end' }}>
+                        <td className="fee-col-actions">
+                          <div className="fee-row-actions">
                             <button
                               type="button"
                               className="btn btn-ghost btn-xs"
@@ -419,29 +392,29 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
         )}
       </section>
 
-      {/* Running Totals Ledger Card */}
+      {/* Running Totals Ledger Section */}
       <section className="wizard-panel goods-ledger-card">
-        <div className="section-label" style={{ marginBottom: 'var(--space-3)' }}>Order Financial Ledger</div>
+        <div className="section-label ledger-header-label">Order financial ledger</div>
         <div className="ledger-table-wrap">
           <table className="ledger-table">
             <tbody>
               <tr>
-                <td className="ledger-label">Goods Subtotal (Foreign Coffee Converted)</td>
-                <td className="ledger-value" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                <td className="ledger-label">Goods subtotal (foreign coffee converted)</td>
+                <td className="ledger-value num-cell">
                   {formatZAR(order.goodsTotalZar || 0)}
                 </td>
               </tr>
               <tr>
                 <td className="ledger-label">
-                  Additional Fees Subtotal ({order.fees.length} {order.fees.length === 1 ? 'fee' : 'fees'})
+                  Additional fees subtotal ({order.fees.length} {order.fees.length === 1 ? 'fee' : 'fees'})
                 </td>
-                <td className="ledger-value" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                <td className="ledger-value num-cell">
                   {formatZAR(totalFees)}
                 </td>
               </tr>
               <tr className="ledger-grand-total-row">
-                <td className="ledger-label-total">Grand Total (ZAR)</td>
-                <td className="ledger-value-total" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                <td className="ledger-label-total">Grand total (ZAR)</td>
+                <td className="ledger-value-total num-cell">
                   {formatZAR(grandTotal)}
                 </td>
               </tr>
@@ -456,7 +429,7 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
           isOpen={true}
           title={`Remove "${deleteFeeTarget.label}"?`}
           description={`Are you sure you want to remove this ${formatZAR(deleteFeeTarget.amountZar)} fee from the order?`}
-          confirmText="Remove Fee"
+          confirmText="Remove fee"
           cancelText="Cancel"
           variant="danger"
           onConfirm={confirmDeleteFee}
@@ -465,6 +438,94 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
       )}
 
       <style>{`
+        .goods-input-field {
+          max-width: 420px;
+        }
+
+        .goods-input-container {
+          position: relative;
+        }
+
+        .goods-zar-prefix {
+          position: absolute;
+          left: 14px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: var(--color-accent);
+          font-weight: 700;
+          font-size: 1.125rem;
+          pointer-events: none;
+        }
+
+        .goods-total-prominent-input {
+          padding-left: 36px;
+          font-size: 1.25rem;
+          font-weight: 700;
+          height: 48px;
+        }
+
+        .goods-field-hint {
+          display: flex;
+          align-items: flex-start;
+          gap: var(--space-2);
+          margin-top: var(--space-2);
+          font-size: var(--text-sm);
+          color: var(--color-text-secondary);
+        }
+
+        .goods-hint-icon {
+          flex-shrink: 0;
+          margin-top: 2px;
+          color: var(--color-text-muted);
+        }
+
+        .fee-input-prefix {
+          position: absolute;
+          left: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: var(--color-text-muted);
+          font-weight: 700;
+          pointer-events: none;
+        }
+
+        .fee-input-with-prefix {
+          padding-left: 28px;
+        }
+
+        .fee-options-span {
+          grid-column: 1 / -1;
+        }
+
+        .fee-options-stack {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-2);
+        }
+
+        .fee-radio-input {
+          margin-top: 3px;
+        }
+
+        .fee-option-title {
+          font-weight: 600;
+          font-size: var(--text-md);
+          color: var(--color-text-primary);
+        }
+
+        .fee-option-subtitle {
+          font-size: var(--text-xs);
+          color: var(--color-text-muted);
+          margin-top: 2px;
+        }
+
+        .fee-form-actions {
+          display: flex;
+          gap: var(--space-3);
+          flex-wrap: wrap;
+          grid-column: 1 / -1;
+        }
+
         .fee-option-card {
           display: flex;
           align-items: flex-start;
@@ -474,7 +535,7 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
           border: 1px solid var(--color-border);
           background: var(--color-surface);
           cursor: pointer;
-          transition: all var(--transition-fast);
+          transition: background-color 120ms ease-out, border-color 120ms ease-out;
         }
 
         .fee-option-card:hover {
@@ -487,21 +548,53 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
           background: var(--color-accent-light);
         }
 
+        .fees-empty-text {
+          color: var(--color-text-muted);
+          font-size: var(--text-md);
+        }
+
         /* Fees table styles */
         .fees-table {
           width: 100%;
           border-collapse: collapse;
-          font-size: 0.875rem;
+          font-size: var(--text-md);
         }
 
         .fees-table th {
           padding: 8px 12px;
           border-bottom: 2px solid var(--color-border);
           color: var(--color-text-muted);
-          font-size: 0.75rem;
+          font-size: var(--text-xs);
+          font-weight: 600;
+        }
+
+        .cell-left {
+          text-align: left;
+        }
+
+        .fee-col-method {
+          text-align: left;
+          width: 220px;
+        }
+
+        .fee-col-amount {
+          text-align: right;
+          width: 140px;
+        }
+
+        .fee-col-actions {
+          text-align: right;
+          width: 130px;
+        }
+
+        .fee-amount-cell {
           font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
+        }
+
+        .fee-row-actions {
+          display: inline-flex;
+          gap: var(--space-1);
+          justify-content: flex-end;
         }
 
         .fees-table td {
@@ -518,8 +611,8 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
           display: inline-flex;
           align-items: center;
           padding: 2px 8px;
-          border-radius: 999px;
-          font-size: 0.75rem;
+          border-radius: var(--radius-sm);
+          font-size: var(--text-xs);
           font-weight: 600;
         }
 
@@ -547,6 +640,10 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
           border: 1px solid var(--color-border);
         }
 
+        .ledger-header-label {
+          margin-bottom: var(--space-3);
+        }
+
         .ledger-table-wrap {
           overflow-x: auto;
         }
@@ -554,7 +651,7 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
         .ledger-table {
           width: 100%;
           border-collapse: collapse;
-          font-size: 0.875rem;
+          font-size: var(--text-md);
         }
 
         .ledger-table td {
@@ -590,8 +687,6 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
           font-weight: 700;
           color: var(--color-accent);
           font-family: var(--font-body);
-          font-variant-numeric: tabular-nums;
-          letter-spacing: normal;
         }
       `}</style>
     </div>

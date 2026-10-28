@@ -24,6 +24,7 @@ import {
 } from '../../lib/allocationInference';
 import { PersonEditor, type PersonFormValues } from '../people/PersonEditor';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import { Icon } from '../ui/Icon';
 import { LotEditorForm, type LotFormState } from './LotEditorForm';
 import { BagAdjusterRow } from './BagAdjusterRow';
 import { CustomSplitModal } from './CustomSplitModal';
@@ -191,7 +192,7 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
 
     const existingLot = order.lots.find((lot) => lot.id === editingLotId);
     if (!existingLot) {
-      setFormError('Could not find the coffee lot you are editing.');
+      setFormError('Could not find the coffee you are editing.');
       return;
     }
 
@@ -326,12 +327,12 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
           <div>
             <h2 className="wizard-card-title">Coffees</h2>
             <p className="wizard-card-copy">
-              Enter each coffee lot, bag size, and count. Buyer allocations are assigned automatically.
+              Enter each coffee, bag size, and count. Bags are assigned automatically.
             </p>
           </div>
           {editingLotId !== 'new' && !isLocked && (
             <button className="btn btn-primary btn-sm" onClick={openNew}>
-              + Add Coffee
+              <Icon name="plus" size={14} /> Add coffee
             </button>
           )}
         </div>
@@ -340,13 +341,15 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
       {/* Empty State */}
       {order.lots.length === 0 && editingLotId !== 'new' && (
         <section className="wizard-panel">
-          <div className="empty-state" style={{ padding: 'var(--space-8)' }}>
-            <div className="empty-state-icon">☕</div>
+          <div className="empty-state empty-state-padded">
+            <div className="empty-state-icon">
+              <Icon name="cup" size={32} />
+            </div>
             <h3>No coffees added yet</h3>
             <p>Add your first coffee to automatically assign bags and calculate shares.</p>
             {!isLocked && (
               <button className="btn btn-primary" onClick={openNew}>
-                Add Coffee
+                <Icon name="plus" size={14} /> Add coffee
               </button>
             )}
           </div>
@@ -447,10 +450,12 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
                       {compactAllocation}
                     </span>
                     {lotSummary.isComplete ? (
-                      <span className="allocation-status-chip is-complete">✓ Allocated</span>
+                      <span className="allocation-status-chip is-complete">
+                        <Icon name="check" size={12} /> Ready
+                      </span>
                     ) : (
                       <span className="allocation-status-chip is-pending" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                        <span aria-hidden="true">⚠</span> {lotSummary.unassignedCount} needed
+                        <Icon name="warning" size={12} /> {lotSummary.unassignedCount} needed
                       </span>
                     )}
                   </div>
@@ -463,7 +468,17 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
                     onClick={() => setAdjustingLotId(isAdjusting ? null : lot.id)}
                     title="Fine-tune individual bags or custom splits"
                   >
-                    {isAdjusting ? 'Close adjustment ▲' : 'Adjust allocation ⚙'}
+                    {isAdjusting ? (
+                      <>
+                        <Icon name="chevron-up" size={12} />
+                        <span>Close adjustment</span>
+                      </>
+                    ) : (
+                      <>
+                        <Icon name="gear" size={12} />
+                        <span>Adjust bags</span>
+                      </>
+                    )}
                   </button>
                 )}
               </div>
@@ -488,8 +503,8 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
                             updateLotBags(lot.id, nextBags);
                           }}
                         >
-                          {isSelected ? '✓ ' : '+ '}
-                          {p.name}
+                          <Icon name={isSelected ? 'check' : 'plus'} size={12} />
+                          <span>{p.name}</span>
                         </button>
                       );
                     })}
@@ -502,13 +517,13 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
             {isAdjusting && (
               <div className="lot-adjuster-panel">
                 <div className="adjuster-header">
-                  <span className="adjuster-title">Bag-by-Bag Allocation</span>
+                  <span className="adjuster-title">Bag-by-bag assignment</span>
                   <button
                     type="button"
                     className="btn btn-ghost btn-xs"
                     onClick={() => updateLotBags(lot.id, addBagToBags(bags))}
                   >
-                    + Add Bag
+                    <Icon name="plus" size={12} /> Add bag
                   </button>
                 </div>
 
@@ -558,7 +573,7 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
               <span className="lot-section-footer-hint">
                 · {allocationStats.unassignedBags > 0
                   ? `${allocationStats.unassignedBags} ${allocationStats.unassignedBags === 1 ? 'bag needs' : 'bags need'} a buyer`
-                  : 'Complete bag allocations to continue'}
+                  : 'Complete bag assignments to continue'}
               </span>
             )}
           </div>
@@ -568,8 +583,8 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
             onClick={onContinue}
             disabled={!isAllocationComplete}
           >
-            <span>Next: Goods & Fees</span>
-            <span aria-hidden="true">→</span>
+            <span>Next: Goods & fees</span>
+            <Icon name="arrow-right" size={14} />
           </button>
         </div>
       )}
@@ -579,11 +594,11 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
         <div className="fb-modal-backdrop" onClick={() => setPersonEditorTarget(null)}>
           <div className="fb-modal-card" onClick={(e) => e.stopPropagation()}>
             <PersonEditor
-              title="Add Person"
+              title="Add person"
               description="Add a member to the workspace directory to assign bags or shares."
               error={personEditorError}
               saving={personEditorSaving}
-              submitLabel="Add Person"
+              submitLabel="Add person"
               onSave={handleCreatePerson}
               onCancel={() => setPersonEditorTarget(null)}
             />
@@ -615,8 +630,8 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
         <ConfirmModal
           isOpen={true}
           title={`Delete "${deleteLotTarget.name}"?`}
-          description="Are you sure you want to remove this coffee and its bag allocations? This action cannot be undone."
-          confirmText="Delete Coffee"
+          description="Are you sure you want to remove this coffee and its bags? This action cannot be undone."
+          confirmText="Delete coffee"
           cancelText="Cancel"
           variant="danger"
           onConfirm={() => deleteLot(deleteLotTarget.id)}
@@ -628,10 +643,10 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
       {bagSizeConfirmTarget && (
         <ConfirmModal
           isOpen={true}
-          title="Reset Custom Split Allocations?"
-          description={`Changing the bag size to ${bagSizeConfirmTarget.newGrams}g will reset custom split allocations for "${bagSizeConfirmTarget.lot.name}". Whole and equal splits will automatically scale.`}
-          confirmText="Update Bag Size"
-          cancelText="Keep Existing Size"
+          title="Reset custom splits?"
+          description={`Changing the bag size to ${bagSizeConfirmTarget.newGrams}g will reset custom splits for "${bagSizeConfirmTarget.lot.name}". Whole and equal splits will automatically scale.`}
+          confirmText="Update bag size"
+          cancelText="Keep existing size"
           variant="warning"
           onConfirm={commitBagSizeChange}
           onCancel={() => setBagSizeConfirmTarget(null)}
@@ -646,6 +661,10 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
           gap: var(--space-4);
           max-width: 920px;
           margin: 0 auto;
+        }
+
+        .empty-state-padded {
+          padding: var(--space-8);
         }
 
         .lot-card-panel {
@@ -774,7 +793,7 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
 
         .allocation-status-chip.is-pending {
           background: var(--color-warning-bg);
-          color: var(--color-warning);
+          color: var(--color-warning-text, var(--color-warning));
           border: 1px solid color-mix(in srgb, var(--color-warning) 30%, transparent);
         }
 
@@ -952,7 +971,7 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
 
         .lot-section-footer-hint {
           font-size: 0.8125rem;
-          color: var(--color-warning);
+          color: var(--color-warning-text, var(--color-warning));
           font-weight: 600;
         }
 
