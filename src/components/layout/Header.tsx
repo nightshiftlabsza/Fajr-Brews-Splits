@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../../store/appStore';
 import type { AppTab } from '../../types';
+import { SplitsLockup } from '../brand/SplitsLockup';
 
 interface HeaderProps {
   currentTab: AppTab;
@@ -60,13 +61,7 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
     <>
       <header className="nav-top">
         <div className="nav-top-inner">
-          <div className="nav-brand">
-            <span className="nav-brand-icon">☕</span>
-            <div>
-              <div className="nav-brand-name">Fajr Brews</div>
-              <div className="nav-brand-sub">Coffee Splitter</div>
-            </div>
-          </div>
+          <SplitsLockup />
 
           <nav className="nav-desktop-tabs">
             {tabs.map((tab) => (
@@ -161,41 +156,9 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
             padding: 6px 10px;
             font-size: 0.8125rem;
           }
-          .nav-brand-name {
-            font-size: 1rem;
-          }
           .nav-user-email {
             max-width: 110px;
           }
-        }
-
-        .nav-brand {
-          display: flex;
-          align-items: center;
-          gap: var(--space-3);
-          flex-shrink: 0;
-        }
-
-        .nav-brand-icon {
-          font-size: 1.375rem;
-          line-height: 1;
-        }
-
-        .nav-brand-name {
-          font-family: var(--font-display);
-          font-size: 1.125rem;
-          font-weight: 700;
-          color: var(--color-text-primary);
-          line-height: 1.1;
-          letter-spacing: -0.01em;
-        }
-
-        .nav-brand-sub {
-          font-size: 0.625rem;
-          font-weight: 700;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          color: var(--color-text-muted);
         }
 
         .nav-desktop-tabs {

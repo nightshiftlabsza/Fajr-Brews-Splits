@@ -114,11 +114,14 @@ describe('Header navigation', () => {
     expect(syncDot).toBeTruthy();
     expect(syncDot?.getAttribute('title')).toBe('Realtime sync active');
 
-    const brandName = container.querySelector('.nav-brand-name');
-    expect(brandName?.textContent).toBe('Fajr Brews');
+    const lockup = container.querySelector('.splits-lockup');
+    expect(lockup).toBeTruthy();
 
-    const brandSub = container.querySelector('.nav-brand-sub');
-    expect(brandSub?.textContent).toBe('Coffee Splitter');
+    const brandName = container.querySelector('.splits-brand-name');
+    expect(brandName?.textContent).toBe('Splits.');
+
+    const attribution = container.querySelector('.splits-attribution');
+    expect(attribution?.textContent).toBe('by Fajr Brews');
   });
 
   it('maintains accessible aria-expanded and aria-haspopup on user profile trigger', () => {

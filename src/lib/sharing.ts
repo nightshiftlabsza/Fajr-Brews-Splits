@@ -42,11 +42,15 @@ export function openWhatsApp(payload: SharePayload): void {
   }
 }
 
+export function buildEmailSubject(roasterName: string, ref: string): string {
+  return `Splits invoice — ${roasterName} — ${ref}`;
+}
+
 export function openEmail(payload: SharePayload): void {
   const email = payload.person.email;
   const ref = buildInvoiceModel(payload).reference;
   const roasterName = payload.order.roasterSnapshot?.name || payload.order.name || 'Coffee';
-  const subject = encodeURIComponent(`Fajr Brews Invoice — ${roasterName} — ${ref}`);
+  const subject = encodeURIComponent(buildEmailSubject(roasterName, ref));
   const body = encodeURIComponent(buildEmailMessageText(payload));
 
   if (email) {

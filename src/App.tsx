@@ -11,6 +11,7 @@ import { MyStatsPage } from './components/pages/MyStatsPage';
 import { HistoryPage } from './components/pages/HistoryPage';
 import { ResetPasswordPage } from './components/auth/ResetPasswordPage';
 import { SettingsPage } from './components/pages/SettingsPage';
+import { SplitsLockup } from './components/brand/SplitsLockup';
 import type { AppTab } from './types';
 import { HOME_PATH, RESET_PASSWORD_PATH } from './lib/appConfig';
 import { supabase } from './lib/supabase';
@@ -312,14 +313,8 @@ export default function App() {
         padding: 'var(--space-4)',
         textAlign: 'center',
       }}>
-        <div style={{ fontSize: '2.5rem' }}>☕</div>
-        <div style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '1.5rem',
-          fontWeight: 700,
-          color: 'var(--color-text-primary)',
-        }}>
-          Fajr Brews
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <SplitsLockup size="large" />
         </div>
         <div className="spinner" />
         {initTimeout && (

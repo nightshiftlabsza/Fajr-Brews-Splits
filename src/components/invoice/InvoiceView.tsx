@@ -22,9 +22,9 @@ export function InvoiceView({ order, person, payer, calc }: Props) {
       <div className="invoice-header">
         <div className="invoice-header-row">
           <div>
-            <h2>Fajr Brews</h2>
+            <h2>Splits</h2>
             <div className="invoice-subtitle">
-              Coffee Splitter · Invoice
+              by Fajr Brews · Invoice
             </div>
           </div>
           <div className="text-right">

@@ -1,4 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="#3D5A3E"/>
-  <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-size="36">☕</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="14" fill="#F4F7F2"/>
+  <g transform="translate(4, 6.4) scale(1.6)">
+    <path d="M15 3.1C8.4 3.6 3.5 9.2 3.5 16S8.4 28.4 15 28.9V3.1Z" fill="#1B5E40"/>
+  </g>
+  <g transform="translate(8.8, 6.4) scale(1.6)">
+    <path d="M17 3.1v25.8c6.6-.5 11.5-6.1 11.5-12.9S23.6 3.6 17 3.1Z" fill="#1B5E40" fill-opacity="0.42"/>
+  </g>
 </svg>
