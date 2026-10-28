@@ -1,5 +1,6 @@
 import type { Bag, BagSplitMode, Person } from '../../types';
 import { formatGrams } from '../../lib/formatters';
+import { Icon } from '../ui/Icon';
 
 export interface BagAdjusterRowProps {
   bag: Bag;
@@ -67,8 +68,8 @@ export function BagAdjusterRow({
   return (
     <div className="bag-adjuster-card">
       <div className="bag-adjuster-top">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span className="bag-index-badge" style={{ fontVariantNumeric: 'tabular-nums' }}>
+        <div className="bag-adjuster-title-group">
+          <span className="bag-index-badge num-cell">
             Bag {bagIndex + 1} ({formatGrams(gramsPerBag)})
           </span>
           <div className="bag-mode-pills" role="radiogroup" aria-label={`Bag ${bagIndex + 1} split mode`}>
@@ -96,7 +97,7 @@ export function BagAdjusterRow({
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div className="bag-adjuster-actions">
           {bag.splitMode === 'custom' && (
             <button
               type="button"
@@ -114,7 +115,7 @@ export function BagAdjusterRow({
               aria-label={`Remove Bag ${bagIndex + 1}`}
               title="Remove this bag"
             >
-              ✕
+              <Icon name="close" size={12} />
             </button>
           )}
         </div>
@@ -131,10 +132,10 @@ export function BagAdjusterRow({
               className={`buyer-chip ${isSelected ? 'is-selected' : ''}`}
               onClick={() => handleTogglePerson(p.id)}
             >
-              {isSelected ? '✓ ' : '+ '}
-              {p.name}
+              <Icon name={isSelected ? 'check' : 'plus'} size={12} />
+              <span>{p.name}</span>
               {isSelected && bag.splitMode === 'custom' && customGrams !== undefined && (
-                <span style={{ fontSize: '0.6875rem', opacity: 0.85, fontVariantNumeric: 'tabular-nums' }}>
+                <span className="buyer-chip-grams num-cell">
                   ({customGrams}g)
                 </span>
               )}
@@ -146,9 +147,30 @@ export function BagAdjusterRow({
           className="buyer-chip buyer-chip-add"
           onClick={onAddNewPerson}
         >
-          + Add Person
+          <Icon name="plus" size={12} />
+          <span>Add person</span>
         </button>
       </div>
+
+      <style>{`
+        .bag-adjuster-title-group {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .bag-adjuster-actions {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .buyer-chip-grams {
+          font-size: 0.6875rem;
+          opacity: 0.85;
+        }
+      `}</style>
     </div>
   );
 }

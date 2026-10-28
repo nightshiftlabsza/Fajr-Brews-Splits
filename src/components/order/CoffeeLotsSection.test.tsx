@@ -155,7 +155,7 @@ describe('CoffeeLotsSection', () => {
 
     expect(container.textContent).toContain('Kenya AA');
     expect(container.textContent).toContain('Alice (250g)');
-    expect(container.textContent).toContain('✓ Allocated');
+    expect(container.textContent).toContain('Ready');
   });
 
   it('assigns unassigned coffee with quick buyer chip', () => {
@@ -170,9 +170,9 @@ describe('CoffeeLotsSection', () => {
     });
 
     expect(container.textContent).toContain('Unassigned');
-    expect(container.textContent).toContain('+ Bilal');
+    expect(container.textContent).toContain('Bilal');
 
-    clickButtonByText(container, '+ Bilal');
+    clickButtonByText(container, 'Bilal');
 
     expect(mockStoreState.updateOrder).toHaveBeenCalled();
   });
@@ -183,7 +183,7 @@ describe('CoffeeLotsSection', () => {
     });
 
     expect(container.textContent).toContain('No coffees added yet');
-    clickButtonByText(container, 'Add Coffee');
+    clickButtonByText(container, 'Add coffee');
 
     expect(container.textContent).toContain('New Coffee');
   });
@@ -207,7 +207,7 @@ describe('CoffeeLotsSection', () => {
 
     expect(container.textContent).toContain('1 bag needs a buyer');
     const nextBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
-      btn.textContent?.includes('Next: Goods & Fees')
+      btn.textContent?.includes('Next: Goods & fees')
     );
     expect(nextBtn).toBeTruthy();
     expect(nextBtn?.disabled).toBe(true);
@@ -252,7 +252,7 @@ describe('CoffeeLotsSection', () => {
     });
 
     const nextBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
-      btn.textContent?.includes('Next: Goods & Fees')
+      btn.textContent?.includes('Next: Goods & fees')
     );
     expect(nextBtn).toBeTruthy();
     expect(nextBtn?.disabled).toBe(false);
@@ -277,7 +277,7 @@ describe('CoffeeLotsSection', () => {
     });
 
     const nextBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
-      btn.textContent?.includes('Next: Goods & Fees')
+      btn.textContent?.includes('Next: Goods & fees')
     );
     expect(nextBtn).toBeUndefined();
   });

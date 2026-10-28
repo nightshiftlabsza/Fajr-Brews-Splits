@@ -13,6 +13,8 @@ import { formatDateShort, formatZAR, todayISO } from '../../lib/formatters';
 import { resolveOrderRoaster } from '../../lib/roasters';
 import { RoasterAvatar } from '../roaster/RoasterAvatar';
 import { createDuplicatedOrderPayload } from '../../lib/orderWizard';
+import { Icon } from '../ui/Icon';
+import { StepTabs } from '../order/StepTabs';
 import type { Order, OrderStatus } from '../../types';
 
 export type OrderSection = 'setup' | 'coffees' | 'goods' | 'summary' | 'invoices';
@@ -283,7 +285,9 @@ export function OrderPage({ onNavigateToHistory }: Props) {
     return (
       <div className="page-container">
         <div className="empty-state" style={{ margin: 'var(--space-8) 0', padding: 'var(--space-8)' }}>
-          <div className="empty-state-icon">☕</div>
+          <div className="empty-state-icon" aria-hidden="true">
+            <Icon name="cup" size={36} />
+          </div>
           <h2 style={{ marginBottom: 'var(--space-2)' }}>No Active Orders</h2>
           <p style={{ maxWidth: 460, margin: '0 auto var(--space-6)', color: 'var(--color-text-secondary)' }}>
             Start a new coffee drop to plan coffees, assign bags among friends, and automatically calculate shares.
@@ -330,7 +334,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
                     )}
                   </span>
                 ) : (
-                  <span className="order-tab-dot" aria-hidden="true">☕</span>
+                  <span className="order-tab-dot" aria-hidden="true"><Icon name="cup" size={13} /></span>
                 )}
                 {isActive && <span className="order-tab-active-dot" aria-hidden="true" />}
                 <span className="order-tab-title">{order.name || 'Untitled Order'}</span>
@@ -357,7 +361,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
       {createError && <div className="alert alert-warning" style={{ marginBottom: 'var(--space-4)' }}>{createError}</div>}
       {shareCopySuccess && (
         <div className="alert alert-success" style={{ marginBottom: 'var(--space-4)' }}>
-          ✓ Join link copied to clipboard! Share it with anyone who wants to view or join this order.
+          Join link copied to clipboard! Share it with anyone who wants to view or join this order.
         </div>
       )}
 
@@ -379,7 +383,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
               <span>·</span>
               <span>{resolvedRoaster?.name || 'Roaster unspecified'}</span>
               <span>·</span>
-              <span>{currentOrder.lots.length} {currentOrder.lots.length === 1 ? 'coffee lot' : 'coffee lots'}</span>
+              <span>{currentOrder.lots.length} {currentOrder.lots.length === 1 ? 'coffee' : 'coffees'}</span>
             </div>
           </div>
         </div>
@@ -392,15 +396,16 @@ export function OrderPage({ onNavigateToHistory }: Props) {
             aria-haspopup="true"
             aria-expanded={actionsMenuOpen}
           >
-            <span>Order Actions</span>
-            <span aria-hidden="true">▾</span>
+            <Icon name="gear" size={14} />
+            <span>Order actions</span>
+            <Icon name={actionsMenuOpen ? 'chevron-up' : 'chevron-down'} size={12} />
           </button>
 
           {actionsMenuOpen && (
             <div className="order-actions-dropdown">
               {isOwner && (
                 <>
-                  <div className="dropdown-label">Order Status</div>
+                  <div className="dropdown-label">Order status</div>
                   <button
                     type="button"
                     className={`dropdown-item ${currentStatus === 'planning' ? 'is-selected' : ''}`}
@@ -409,7 +414,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
                       setActionsMenuOpen(false);
                     }}
                   >
-                    ● Planning (Accepting changes)
+                    <Icon name="clock" size={14} /> Planning (accepting changes)
                   </button>
                   <button
                     type="button"
@@ -419,7 +424,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
                       setActionsMenuOpen(false);
                     }}
                   >
-                    ● Locked (Finalizing)
+                    <Icon name="lock" size={14} /> Locked (finalizing)
                   </button>
                   <button
                     type="button"
@@ -429,7 +434,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
                       setActionsMenuOpen(false);
                     }}
                   >
-                    ● Completed
+                    <Icon name="check" size={14} /> Completed
                   </button>
 
                   <div className="dropdown-divider" />
@@ -441,7 +446,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
                 className="dropdown-item"
                 onClick={() => handleShareLink(currentOrder)}
               >
-                🔗 Copy Join Link
+                <Icon name="copy" size={14} /> Copy join link
               </button>
 
               <button
@@ -449,7 +454,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
                 className="dropdown-item"
                 onClick={() => void handleDuplicate(currentOrder)}
               >
-                📋 Duplicate Order
+                <Icon name="duplicate" size={14} /> Duplicate order
               </button>
 
               {isOwner && (
@@ -464,7 +469,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
                       setArchiveTargetOrder(currentOrder);
                     }}
                   >
-                    📦 Archive Order
+                    <Icon name="archive" size={14} /> Archive order
                   </button>
 
                   <button
@@ -475,7 +480,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
                       setDeleteTargetOrder(currentOrder);
                     }}
                   >
-                    🗑 Delete Order
+                    <Icon name="trash" size={14} /> Delete order
                   </button>
                 </>
               )}
@@ -484,66 +489,13 @@ export function OrderPage({ onNavigateToHistory }: Props) {
         </div>
       </div>
 
-      {/* ── 3. NON-RIGID SECTION NAVIGATION TABS ── */}
-      <nav
+      {/* ── 3. STEP TABS COMPONENT ── */}
+      <StepTabs
         ref={sectionNavRef}
-        className="order-section-nav"
-        role="tablist"
-        aria-label="Order sections"
-      >
-        <button
-          type="button"
-          role="tab"
-          data-section="setup"
-          aria-selected={activeSection === 'setup'}
-          className={`order-section-tab ${activeSection === 'setup' ? 'is-active' : ''}`}
-          onClick={() => void handleSectionChange('setup')}
-        >
-          1. Setup
-        </button>
-        <button
-          type="button"
-          role="tab"
-          data-section="coffees"
-          aria-selected={activeSection === 'coffees'}
-          className={`order-section-tab ${activeSection === 'coffees' ? 'is-active' : ''}`}
-          onClick={() => void handleSectionChange('coffees')}
-        >
-          2. Coffees & Bags
-          {currentOrder.lots.length > 0 && <span className="nav-counter">{currentOrder.lots.length}</span>}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          data-section="goods"
-          aria-selected={activeSection === 'goods'}
-          className={`order-section-tab ${activeSection === 'goods' ? 'is-active' : ''}`}
-          onClick={() => void handleSectionChange('goods')}
-        >
-          3. Goods & Fees
-          {currentOrder.fees.length > 0 && <span className="nav-counter">{currentOrder.fees.length}</span>}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          data-section="summary"
-          aria-selected={activeSection === 'summary'}
-          className={`order-section-tab ${activeSection === 'summary' ? 'is-active' : ''}`}
-          onClick={() => void handleSectionChange('summary')}
-        >
-          4. Summary
-        </button>
-        <button
-          type="button"
-          role="tab"
-          data-section="invoices"
-          aria-selected={activeSection === 'invoices'}
-          className={`order-section-tab ${activeSection === 'invoices' ? 'is-active' : ''}`}
-          onClick={() => void handleSectionChange('invoices')}
-        >
-          Invoices
-        </button>
-      </nav>
+        currentStep={activeSection}
+        order={currentOrder}
+        onSelectStep={(step) => void handleSectionChange(step)}
+      />
 
       {/* ── 4. ACTIVE SECTION VIEW ── */}
       <div className="order-section-stage">
@@ -599,7 +551,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
               />
             ) : (
               <div className="alert alert-warning">
-                Complete coffee bag allocation and goods total to view settlement invoices.
+                Complete coffee bags and goods total to view invoices.
               </div>
             )}
           </div>
@@ -626,7 +578,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
           isOpen={true}
           title={`Delete "${deleteTargetOrder.name}"?`}
           description={getDeleteDescription(deleteTargetOrder)}
-          confirmText="Delete Order"
+          confirmText="Delete order"
           cancelText="Cancel"
           variant="danger"
           isLoading={deleting}

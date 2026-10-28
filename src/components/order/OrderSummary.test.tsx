@@ -138,9 +138,9 @@ describe('OrderSummary', () => {
     expect(container.textContent).toContain('Order overview');
 
 
-    expect(container.textContent).toContain('Participants & Invoices');
+    expect(container.textContent).toContain('Participants & invoices');
     expect(container.textContent).toContain('Finalize order');
-    expect(container.textContent).toContain('Save to Past Orders');
+    expect(container.textContent).toContain('Save to past orders');
     expect(container.textContent).toContain('Delete order');
     expect(container.textContent).not.toContain('Payment state');
     expect(container.textContent).not.toContain('Invoices and sharing');
@@ -179,6 +179,7 @@ describe('OrderSummary', () => {
       );
     });
 
+    clickButtonByText(container, 'Unpaid');
     clickButtonByText(container, 'Paid');
 
     await act(async () => {
@@ -207,7 +208,8 @@ describe('OrderSummary', () => {
       );
     });
 
-    clickButtonByText(container, 'Partial');
+    clickButtonByText(container, 'Unpaid');
+    clickButtonByText(container, 'Partly paid');
 
     await act(async () => {
       await Promise.resolve();
@@ -261,7 +263,7 @@ describe('OrderSummary', () => {
       );
     });
 
-    clickButtonByText(container, 'Save to Past Orders');
+    clickButtonByText(container, 'Save to past orders');
     await act(async () => {
       await Promise.resolve();
     });
@@ -290,7 +292,13 @@ describe('OrderSummary', () => {
     });
 
     expect(container.textContent).toContain('Delete "March Drop"?');
-    clickButtonByText(container, 'Delete Order');
+    const modalConfirmBtn = Array.from(container.querySelectorAll<HTMLButtonElement>('.fb-modal-actions button')).find((b) =>
+      b.textContent?.includes('Delete order')
+    );
+    expect(modalConfirmBtn).toBeTruthy();
+    act(() => {
+      modalConfirmBtn?.click();
+    });
 
     await act(async () => {
       await Promise.resolve();
@@ -352,7 +360,7 @@ describe('OrderSummary', () => {
     expect(sidebarCol).toBeTruthy();
 
     const heroLabel = sidebarCol?.querySelector('.cockpit-hero-total-label');
-    expect(heroLabel?.textContent).toBe('Grand Total');
+    expect(heroLabel?.textContent).toBe('Grand total');
 
     const heroAmount = sidebarCol?.querySelector('.cockpit-hero-total-amount');
     expect(heroAmount?.textContent).toBe('R250.00');
@@ -395,7 +403,7 @@ describe('OrderSummary', () => {
       );
     });
 
-    clickButtonByText(container, 'Save to Past Orders');
+    clickButtonByText(container, 'Save to past orders');
     await act(async () => {
       await Promise.resolve();
     });
@@ -426,7 +434,19 @@ describe('OrderSummary', () => {
       await Promise.resolve();
     });
 
-    clickButtonByText(container, 'Delete Order');
+    clickButtonByText(container, 'Delete order');
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // In ConfirmModal
+    const modalConfirmBtn = Array.from(container.querySelectorAll<HTMLButtonElement>('.fb-modal-actions button')).find((b) =>
+      b.textContent?.includes('Delete order')
+    );
+    expect(modalConfirmBtn).toBeTruthy();
+    act(() => {
+      modalConfirmBtn?.click();
+    });
     await act(async () => {
       await Promise.resolve();
     });

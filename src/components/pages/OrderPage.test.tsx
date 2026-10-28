@@ -255,11 +255,11 @@ describe('OrderPage component tests', () => {
       trigger.click();
     });
 
-    // Non-owner member should see Copy Join Link and Duplicate, but NOT status change or Archive
-    expect(container.textContent).toContain('Copy Join Link');
-    expect(container.textContent).toContain('Duplicate Order');
-    expect(container.textContent).not.toContain('Planning (Accepting changes)');
-    expect(container.textContent).not.toContain('Archive Order');
+    // Non-owner member should see Copy join link and Duplicate order, but NOT status change or Archive
+    expect(container.textContent).toContain('Copy join link');
+    expect(container.textContent).toContain('Duplicate order');
+    expect(container.textContent).not.toContain('Planning (accepting changes)');
+    expect(container.textContent).not.toContain('Archive order');
   });
 
   it('BUG-AUTH-06 & 07: owner can see status changes and archive in actions dropdown', async () => {
@@ -283,10 +283,10 @@ describe('OrderPage component tests', () => {
       trigger.click();
     });
 
-    // Owner should see status options and Archive Order
-    expect(container.textContent).toContain('Planning (Accepting changes)');
-    expect(container.textContent).toContain('Locked (Finalizing)');
-    expect(container.textContent).toContain('Archive Order');
+    // Owner should see status options and Archive order
+    expect(container.textContent).toContain('Planning (accepting changes)');
+    expect(container.textContent).toContain('Locked (finalizing)');
+    expect(container.textContent).toContain('Archive order');
   });
 
   it('renders active orders switcher strip with tablist semantics, badges, and quick new order button', async () => {
@@ -427,7 +427,7 @@ describe('OrderPage component tests', () => {
     expect(settlementSection).toBeTruthy();
     expect(settlementSection?.textContent).toContain('Participant Invoices & Payments');
     expect(settlementSection?.textContent).toContain('Viewing all participant invoices for this order.');
-    expect(settlementSection?.textContent).toContain('Total Amount Due');
+    expect(settlementSection?.textContent).toContain('Total amount due');
     expect(settlementSection?.textContent).toContain('R450.00');
   });
 
@@ -448,19 +448,17 @@ describe('OrderPage component tests', () => {
       (t) => t.textContent?.includes('Invoices'),
     ) as HTMLButtonElement;
     expect(invoiceTab).toBeTruthy();
+    expect(invoiceTab.getAttribute('aria-disabled')).toBe('true');
+    expect(invoiceTab.querySelector('.is-lock')).toBeTruthy();
 
     await act(async () => {
       invoiceTab.click();
     });
 
-    expect(invoiceTab.classList.contains('is-active')).toBe(true);
-    expect(invoiceTab.getAttribute('aria-selected')).toBe('true');
-
-    // Warning alert displayed instead of SettlementPacks
-    expect(container.querySelector('.settlement-packs-section')).toBeNull();
-    const alert = container.querySelector('.alert-warning');
-    expect(alert).toBeTruthy();
-    expect(alert?.textContent).toContain('Complete coffee bag allocation and goods total to view settlement invoices.');
+    // Locked steps never silently ignore a click: shows reason
+    const reasonId = invoiceTab.getAttribute('aria-describedby');
+    expect(reasonId).toBeTruthy();
+    expect(container.querySelector(`#${reasonId}`)?.textContent).toContain('Enter goods total first');
   });
 
   it('F4: automatically scrolls active section tab into view on section change', async () => {
@@ -509,7 +507,7 @@ describe('OrderPage component tests', () => {
         (container.querySelector('.order-actions-trigger') as HTMLButtonElement).click();
       });
       const item = Array.from(container.querySelectorAll('.dropdown-item')).find(
-        (el) => el.textContent?.includes('Delete Order'),
+        (el) => el.textContent?.toLowerCase().includes('delete order'),
       ) as HTMLButtonElement | undefined;
       expect(item).toBeTruthy();
       await act(async () => {
@@ -519,7 +517,7 @@ describe('OrderPage component tests', () => {
 
     function modalButton(label: string): HTMLButtonElement {
       const button = Array.from(document.querySelectorAll('button')).find(
-        (el) => el.textContent?.trim() === label && !el.classList.contains('dropdown-item'),
+        (el) => el.textContent?.trim().toLowerCase() === label.toLowerCase() && !el.classList.contains('dropdown-item'),
       );
       expect(button).toBeTruthy();
       return button as HTMLButtonElement;
@@ -537,13 +535,13 @@ describe('OrderPage component tests', () => {
       await act(async () => {
         (container.querySelector('.order-actions-trigger') as HTMLButtonElement).click();
       });
-      expect(container.textContent).not.toContain('Delete Order');
+      expect(container.textContent).not.toContain('Delete order');
 
       mockStoreState.memberRole = 'admin';
       await act(async () => {
         root.render(<OrderPage onNavigateToHistory={vi.fn()} />);
       });
-      expect(container.textContent).toContain('Delete Order');
+      expect(container.textContent).toContain('Delete order');
     });
 
     it('cancel leaves the order alone and confirm deletes it, selecting the next order', async () => {
@@ -566,7 +564,7 @@ describe('OrderPage component tests', () => {
 
       await openDeleteModal();
       await act(async () => {
-        modalButton('Delete Order').click();
+        modalButton('Delete order').click();
       });
       expect(mockStoreState.deleteOrder).toHaveBeenCalledWith('order-1');
       expect(container.querySelector('.order-header-title')?.textContent).toBe('Order 2');
@@ -610,7 +608,7 @@ describe('OrderPage component tests', () => {
       });
       await openDeleteModal();
       await act(async () => {
-        modalButton('Delete Order').click();
+        modalButton('Delete order').click();
       });
       expect(container.querySelector('.alert-error')?.textContent).toBe('permission denied');
       expect(container.querySelector('.order-header-title')?.textContent).toBe('Order 1');

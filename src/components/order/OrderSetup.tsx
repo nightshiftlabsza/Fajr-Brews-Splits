@@ -8,6 +8,7 @@ import { createRoasterSnapshot } from '../../lib/roasters';
 import { normalizeFeeAllocationType } from '../../lib/invoiceFormatter';
 import { isOrderLocked } from '../../lib/orderLifecycle';
 import { RoasterPicker } from '../roaster/RoasterPicker';
+import { Icon } from '../ui/Icon';
 
 
 interface Props {
@@ -332,7 +333,6 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
       <section className="wizard-panel">
         <div className="wizard-card-header">
           <div>
-            <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Step 1</div>
             <h3 className="wizard-card-title">Setup details</h3>
           </div>
         </div>
@@ -415,7 +415,7 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
         open={bankOpen}
         onToggle={() => setBankOpen((current) => !current)}
         title="Bank details"
-        summary={bankOpen ? 'Optional payment details for settlement requests' : 'Optional'}
+        summary={bankOpen ? 'Optional payment details for payment requests' : 'Optional'}
       >
         <div className="wizard-card-grid">
           <div className="field">
@@ -474,7 +474,6 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
       <section className="wizard-panel">
         <div className="wizard-card-header">
           <div>
-            <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Privacy</div>
             <div className="wizard-card-title">Finalized order visibility</div>
           </div>
         </div>
@@ -525,7 +524,9 @@ function CollapsiblePanel({ open, onToggle, title, summary, children }: Collapsi
           <div className="wizard-card-title">{title}</div>
           <div className="wizard-collapsible-summary">{summary}</div>
         </div>
-        <span className={`wizard-chevron ${open ? 'open' : ''}`}>⌄</span>
+        <span className="wizard-chevron">
+          <Icon name={open ? 'chevron-up' : 'chevron-down'} size={14} />
+        </span>
       </button>
       {open && <div className="wizard-collapsible-body">{children}</div>}
     </section>

@@ -11,6 +11,7 @@ import { SettlementPacks } from './SettlementPacks';
 import { CoffeeCostSummary } from './CoffeeCostSummary';
 import { RoasterAvatar } from '../roaster/RoasterAvatar';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import { Icon } from '../ui/Icon';
 
 interface Props {
   order: Order;
@@ -46,8 +47,8 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
       <div className="wizard-step-stack">
         <section className="wizard-panel">
           <div className="wizard-card-title">Summary is waiting for earlier details</div>
-          <p className="wizard-card-copy" style={{ marginTop: 'var(--space-2)' }}>
-            Fix the highlighted issues below to review the final order totals and settlements.
+          <p className="wizard-card-copy summary-card-copy">
+            Fix the highlighted issues below to review the final order totals and payments.
           </p>
         </section>
         {result.validationErrors.map((error, index) => (
@@ -126,7 +127,7 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
           <section className="wizard-panel order-summary-overview">
             <div className="order-summary-overview-top">
               <div>
-                <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Order overview</div>
+                <div className="section-label overview-section-label">Order overview</div>
                 <div className="order-summary-title-row">
                   {orderRoaster && (
                     <RoasterAvatar
@@ -139,7 +140,7 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
                   <span className={`summary-status-pill is-${orderStatus.tone}`}>{orderStatus.label}</span>
                 </div>
                 {orderRoaster && (
-                  <div className="field-hint" style={{ marginTop: 'var(--space-2)' }}>
+                  <div className="field-hint roaster-hint">
                     Roaster: {orderRoaster.name}
                   </div>
                 )}
@@ -157,27 +158,29 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
           <section className="wizard-panel cockpit-mobile-summary-card">
             <div className="cockpit-hero-total">
               <span className="cockpit-hero-total-label">Grand Total</span>
-              <span className="cockpit-hero-total-amount">{formatZAR(result.totalOrderZar)}</span>
+              <span className="cockpit-hero-total-amount num-cell">{formatZAR(result.totalOrderZar)}</span>
             </div>
             <div className="cockpit-line-items">
               <div className="cockpit-line-item">
                 <span>Goods subtotal</span>
-                <strong>{formatZAR(result.totalGoodsZar)}</strong>
+                <strong className="num-cell">{formatZAR(result.totalGoodsZar)}</strong>
               </div>
               <div className="cockpit-line-item">
                 <span>Fees subtotal</span>
-                <strong>{formatZAR(result.totalFeesZar)}</strong>
+                <strong className="num-cell">{formatZAR(result.totalFeesZar)}</strong>
               </div>
               <div className="cockpit-line-item">
                 <span>People charged</span>
-                <strong>{result.personIds.length}</strong>
+                <strong className="num-cell">{result.personIds.length}</strong>
               </div>
             </div>
             {Math.abs(result.roundingAbsorbed) > 0.001 && (
               <div className="rounding-absorption-badge">
-                <span className="rounding-badge-icon" aria-hidden="true">ℹ</span>
+                <span className="rounding-badge-icon" aria-hidden="true">
+                  <Icon name="info" size={14} />
+                </span>
                 <span>
-                  Rounding absorbed by <strong>{payer?.name || 'payer'}</strong>: <strong>{formatZAR(Math.abs(result.roundingAbsorbed))}</strong>
+                  Rounding absorbed by <strong>{payer?.name || 'payer'}</strong>: <strong className="num-cell">{formatZAR(Math.abs(result.roundingAbsorbed))}</strong>
                   {result.roundingAbsorbed > 0 ? ' (payer pays more)' : ' (payer pays less)'}
                 </span>
               </div>
@@ -190,7 +193,7 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
             order={order}
             people={people}
             result={result}
-            title="Participants & Invoices"
+            title="Participants & invoices"
             onPaymentChange={updatePayment}
             paymentEditingEnabled={isOwner}
           />
@@ -199,36 +202,38 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
         {/* Desktop Sticky Financial & Action Cockpit Sidebar */}
         <aside className="cockpit-sidebar-column">
           <section className="cockpit-card">
-            <div className="section-label" style={{ marginBottom: 'var(--space-3)' }}>Order Total & Finalization</div>
+            <div className="section-label cockpit-section-label">Order total</div>
             <div className="cockpit-hero-total">
-              <span className="cockpit-hero-total-label">Grand Total</span>
-              <span className="cockpit-hero-total-amount">{formatZAR(result.totalOrderZar)}</span>
+              <span className="cockpit-hero-total-label">Grand total</span>
+              <span className="cockpit-hero-total-amount num-cell">{formatZAR(result.totalOrderZar)}</span>
             </div>
             <div className="cockpit-line-items">
               <div className="cockpit-line-item">
                 <span>Goods subtotal</span>
-                <strong>{formatZAR(result.totalGoodsZar)}</strong>
+                <strong className="num-cell">{formatZAR(result.totalGoodsZar)}</strong>
               </div>
               <div className="cockpit-line-item">
                 <span>Fees subtotal</span>
-                <strong>{formatZAR(result.totalFeesZar)}</strong>
+                <strong className="num-cell">{formatZAR(result.totalFeesZar)}</strong>
               </div>
               <div className="cockpit-line-item">
                 <span>People charged</span>
-                <strong>{result.personIds.length}</strong>
+                <strong className="num-cell">{result.personIds.length}</strong>
               </div>
             </div>
 
             {Math.abs(result.roundingAbsorbed) > 0.001 && (
-              <div className="rounding-absorption-badge" style={{ marginBottom: 'var(--space-4)' }}>
-                <span className="rounding-badge-icon" aria-hidden="true">ℹ</span>
+              <div className="rounding-absorption-badge cockpit-badge-margin">
+                <span className="rounding-badge-icon" aria-hidden="true">
+                  <Icon name="info" size={14} />
+                </span>
                 <span>
-                  Rounding absorbed by <strong>{payer?.name || 'payer'}</strong>: <strong>{formatZAR(Math.abs(result.roundingAbsorbed))}</strong>
+                  Rounding absorbed by <strong>{payer?.name || 'payer'}</strong>: <strong className="num-cell">{formatZAR(Math.abs(result.roundingAbsorbed))}</strong>
                 </span>
               </div>
             )}
 
-            <div className="divider" style={{ margin: 'var(--space-4) 0' }} />
+            <div className="divider cockpit-divider" />
 
             <div className="cockpit-actions">
               <button
@@ -238,34 +243,33 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
                 disabled={finalizing || deleting}
               >
                 {finalizing ? (
-                  <span className="spinner" style={{ width: 16, height: 16 }} />
+                  <span className="spinner spinner-btn-primary" />
                 ) : savingPastOrder ? (
                   'Save changes'
                 ) : (
-                  'Save to Past Orders'
+                  'Save to past orders'
                 )}
               </button>
               {!savingPastOrder && (
                 <button
                   type="button"
-                  className="btn btn-ghost btn-sm w-full"
-                  style={{ color: 'var(--color-unpaid)' }}
+                  className="btn btn-ghost btn-sm w-full btn-danger-ghost"
                   onClick={() => setConfirmDeleteOpen(true)}
                   disabled={deleting || finalizing}
                 >
-                  {deleting ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Delete order'}
+                  {deleting ? <span className="spinner spinner-btn-sm" /> : 'Delete order'}
                 </button>
               )}
             </div>
 
             {finalizeError && (
-              <div className="alert alert-error" role="alert" style={{ marginTop: 'var(--space-3)' }}>
+              <div className="alert alert-error alert-error-margin" role="alert">
                 {finalizeError}
               </div>
             )}
 
             {deleteError && (
-              <div className="alert alert-error" role="alert" style={{ marginTop: 'var(--space-3)' }}>
+              <div className="alert alert-error alert-error-margin" role="alert">
                 {deleteError}
               </div>
             )}
@@ -277,19 +281,19 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
       <div className="summary-sticky-bar" role="region" aria-label="Finalize order">
         <span className="sr-only">Finalize order</span>
         {finalizeError && (
-          <div className="alert alert-error" role="alert" style={{ width: '100%', marginBottom: 'var(--space-2)' }}>
+          <div className="alert alert-error summary-sticky-alert" role="alert">
             {finalizeError}
           </div>
         )}
         {deleteError && (
-          <div className="alert alert-error" role="alert" style={{ width: '100%', marginBottom: 'var(--space-2)' }}>
+          <div className="alert alert-error summary-sticky-alert" role="alert">
             {deleteError}
           </div>
         )}
         <div className="summary-sticky-status-group">
-          <span className="summary-sticky-status-label">{savingPastOrder ? 'Past Order' : 'Finalize order'}</span>
+          <span className="summary-sticky-status-label">{savingPastOrder ? 'Past order' : 'Finalize order'}</span>
           <span className="summary-sticky-status-dot">·</span>
-          <strong className="summary-sticky-status-total">{formatZAR(result.totalOrderZar)}</strong>
+          <strong className="summary-sticky-status-total num-cell">{formatZAR(result.totalOrderZar)}</strong>
         </div>
 
         <div className="summary-sticky-actions">
@@ -300,7 +304,7 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
               onClick={() => setConfirmDeleteOpen(true)}
               disabled={deleting || finalizing}
             >
-              {deleting ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Delete order'}
+              {deleting ? <span className="spinner spinner-btn-primary" /> : 'Delete order'}
             </button>
           )}
           <button
@@ -310,11 +314,11 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
             disabled={finalizing || deleting}
           >
             {finalizing ? (
-              <span className="spinner" style={{ width: 16, height: 16 }} />
+              <span className="spinner spinner-btn-primary" />
             ) : savingPastOrder ? (
               'Save changes'
             ) : (
-              'Save to Past Orders'
+              'Save to past orders'
             )}
           </button>
         </div>
@@ -325,8 +329,8 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
         <ConfirmModal
           isOpen={true}
           title={`Delete "${order.name}"?`}
-          description="This action cannot be undone. This order and all of its allocations will be permanently removed."
-          confirmText="Delete Order"
+          description="This action cannot be undone. This order and all of its bags will be permanently removed."
+          confirmText="Delete order"
           cancelText="Cancel"
           variant="danger"
           isLoading={deleting}
@@ -336,6 +340,53 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
       )}
 
       <style>{`
+        .summary-card-copy {
+          margin-top: var(--space-2);
+        }
+
+        .overview-section-label {
+          margin-bottom: var(--space-2);
+        }
+
+        .roaster-hint {
+          margin-top: var(--space-2);
+        }
+
+        .cockpit-section-label {
+          margin-bottom: var(--space-3);
+        }
+
+        .cockpit-badge-margin {
+          margin-bottom: var(--space-4);
+        }
+
+        .cockpit-divider {
+          margin: var(--space-4) 0;
+        }
+
+        .spinner-btn-primary {
+          width: 16px;
+          height: 16px;
+        }
+
+        .spinner-btn-sm {
+          width: 14px;
+          height: 14px;
+        }
+
+        .btn-danger-ghost {
+          color: var(--color-unpaid);
+        }
+
+        .alert-error-margin {
+          margin-top: var(--space-3);
+        }
+
+        .summary-sticky-alert {
+          width: 100%;
+          margin-bottom: var(--space-2);
+        }
+
         .rounding-absorption-badge {
           display: flex;
           align-items: center;
