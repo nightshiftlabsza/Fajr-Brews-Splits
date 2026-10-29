@@ -46,16 +46,29 @@ export function buildEmailSubject(roasterName: string, ref: string): string {
   return `Splits invoice — ${roasterName} — ${ref}`;
 }
 
+export function isValidMailtoRecipient(email: unknown): email is string {
+  if (typeof email !== 'string') return false;
+  if (/[\s\x00-\x1F\x7F?&<>,;%]/.test(email)) return false;
+  const parts = email.split('@');
+  if (parts.length !== 2) return false;
+  const [local, domain] = parts;
+  return Boolean(local && domain);
+}
+
+export function buildMailtoUrl(email: string | undefined | null, subject: string, body: string): string {
+  const recipient = email && isValidMailtoRecipient(email) ? email : '';
+  const encodedSubject = encodeURIComponent(subject);
+  const encodedBody = encodeURIComponent(body);
+  return `mailto:${recipient}?subject=${encodedSubject}&body=${encodedBody}`;
+}
+
 export function openEmail(payload: SharePayload): void {
   const email = payload.person.email;
   const ref = buildInvoiceModel(payload).reference;
   const roasterName = payload.order.roasterSnapshot?.name || payload.order.name || 'Coffee';
-  const subject = encodeURIComponent(buildEmailSubject(roasterName, ref));
-  const body = encodeURIComponent(buildEmailMessageText(payload));
+  const subject = buildEmailSubject(roasterName, ref);
+  const body = buildEmailMessageText(payload);
+  const url = buildMailtoUrl(email, subject, body);
 
-  if (email) {
-    window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_self');
-  } else {
-    window.open(`mailto:?subject=${subject}&body=${body}`, '_self');
-  }
+  window.open(url, '_self');
 }

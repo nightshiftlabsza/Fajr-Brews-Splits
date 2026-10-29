@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Order, Roaster } from '../types';
-import { createRoasterSnapshot, getRoasterInitials, normalizeRoasterName, resolveOrderRoaster } from './roasters';
+import {
+  createRoasterSnapshot,
+  getRoasterInitials,
+  isValidRoasterLogoFile,
+  normalizeRoasterName,
+  resolveOrderRoaster,
+} from './roasters';
 
 const roasters: Roaster[] = [
   {
@@ -43,6 +49,25 @@ describe('roaster helpers', () => {
       id: 'roaster-1',
       name: 'Older Name',
       logoUrl: 'https://example.com/old.png',
+    });
+  });
+
+  describe('isValidRoasterLogoFile', () => {
+    it('accepts PNG, JPEG, and WebP images', () => {
+      expect(isValidRoasterLogoFile({ type: 'image/png' } as File)).toBe(true);
+      expect(isValidRoasterLogoFile({ type: 'image/jpeg' } as File)).toBe(true);
+      expect(isValidRoasterLogoFile({ type: 'image/webp' } as File)).toBe(true);
+    });
+
+    it('rejects SVG images per storage security policy', () => {
+      expect(isValidRoasterLogoFile({ type: 'image/svg+xml' } as File)).toBe(false);
+    });
+
+    it('rejects other file types', () => {
+      expect(isValidRoasterLogoFile({ type: 'image/gif' } as File)).toBe(false);
+      expect(isValidRoasterLogoFile({ type: 'text/html' } as File)).toBe(false);
+      expect(isValidRoasterLogoFile({ type: 'application/pdf' } as File)).toBe(false);
+      expect(isValidRoasterLogoFile({ type: '' } as File)).toBe(false);
     });
   });
 });

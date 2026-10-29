@@ -13,6 +13,7 @@ import { GoodsAndFees } from '../order/GoodsAndFees';
 import { CoffeeCostSummary } from '../order/CoffeeCostSummary';
 import { getParticipantScopedOrders, orderIncludesPerson } from '../../lib/myStats';
 import { resolveOrderRoaster } from '../../lib/roasters';
+import { MAX_IMPORT_FILE_BYTES } from '../../lib/importValidation';
 import { RoasterAvatar } from '../roaster/RoasterAvatar';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import {
@@ -204,13 +205,24 @@ export function HistoryPage({ participantOnly = false }: Props) {
     input.onchange = async (event) => {
       const file = (event.target as HTMLInputElement).files?.[0];
       if (!file) return;
-      const text = await file.text();
+      if (file.size > MAX_IMPORT_FILE_BYTES) {
+        setImportStatus({ text: 'File is too large. Choose a backup file under 5 MB.', tone: 'error' });
+        setTimeout(() => setImportStatus(null), 5000);
+        return;
+      }
       try {
-        await importJSON(text);
-        setImportStatus({ text: 'Import completed successfully.', tone: 'success' });
-        setTimeout(() => setImportStatus(null), 4000);
-      } catch {
-        setImportStatus({ text: 'Failed to import — the JSON file format was invalid.', tone: 'error' });
+        const text = await file.text();
+        const result = await importJSON(text);
+        setImportStatus({
+          text: result?.summary ?? 'Import completed successfully.',
+          tone: result && result.skippedCount > 0 && result.importedCount === 0 ? 'error' : 'success',
+        });
+        setTimeout(() => setImportStatus(null), 5000);
+      } catch (err) {
+        setImportStatus({
+          text: err instanceof Error ? err.message : 'Failed to import — the JSON file format was invalid.',
+          tone: 'error',
+        });
         setTimeout(() => setImportStatus(null), 5000);
       }
     };

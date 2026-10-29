@@ -59,6 +59,8 @@ export function resolveOrderRoaster(order: Pick<Order, 'roasterId' | 'roasterSna
   return null;
 }
 
+export const ALLOWED_LOGO_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
+
 export function isValidRoasterLogoFile(file: File): boolean {
-  return ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'].includes(file.type);
+  return (ALLOWED_LOGO_MIME_TYPES as readonly string[]).includes(file.type);
 }

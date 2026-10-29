@@ -16,6 +16,15 @@ import { assertCanPersistOrder } from '../lib/orderIntegrity';
 import { getNextActiveOrderId, getPreferredActiveOrderId, normalizeOrderStatus, syncOrderStatusFlags } from '../lib/orderLifecycle';
 import { createRoasterSnapshot, normalizeRoasterName } from '../lib/roasters';
 import {
+  capString,
+  formatImportSummary,
+  isValidDatabaseId,
+  sanitizeListCurrency,
+  validateBackupFileStructure,
+  STRING_LIMITS,
+  type ImportSummary,
+} from '../lib/importValidation';
+import {
   clearStartupSnapshot,
   readStartupSnapshot,
   saveStartupSnapshot,
@@ -228,7 +237,7 @@ interface AppStore {
 
   // ── Import/Export ─────────────────────────────────────────
   exportJSON: () => string;
-  importJSON: (json: string) => Promise<void>;
+  importJSON: (json: string) => Promise<ImportSummary>;
   saveSnapshot: () => void;
 
   // ── Internal ──────────────────────────────────────────────
@@ -1627,21 +1636,29 @@ export const useAppStore = create<AppStore>((set, get) => ({
   importJSON: async (json) => {
     const pendingRefresh = maybeWaitForFreshData();
     if (pendingRefresh) await pendingRefresh;
-    const parsed = JSON.parse(json);
 
-    if (parsed.version !== '1' && parsed.version !== '2') {
-      throw new Error('Unsupported export format. Expected version 1 or 2.');
+    let raw: unknown;
+    try {
+      raw = JSON.parse(json);
+    } catch {
+      throw new Error('Invalid backup file. Expected a valid JSON object.');
     }
+
+    const parsed = validateBackupFileStructure(raw);
+
+    let importedCount = 0;
+    let skippedCount = 0;
+    const skipReasons: string[] = [];
 
     const previousCurrentOrderId = get().currentOrderId;
 
     if (parsed.settings && typeof parsed.settings === 'object') {
       try {
-        if (parsed.settings.theme) {
-          await get().setTheme(parsed.settings.theme);
+        if (parsed.settings.theme && typeof parsed.settings.theme === 'string') {
+          await get().setTheme(parsed.settings.theme as Theme);
         }
-        if (parsed.settings.themeMode) {
-          await get().setThemeMode(parsed.settings.themeMode);
+        if (parsed.settings.themeMode && typeof parsed.settings.themeMode === 'string') {
+          await get().setThemeMode(parsed.settings.themeMode as ThemeMode);
         }
       } catch (err) {
         console.error('importJSON: skipping settings restore due to error', err);
@@ -1652,20 +1669,34 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (parsed.people && Array.isArray(parsed.people)) {
       // Import people — insert any that don't exist by name
       for (const p of parsed.people) {
-        if (!p || typeof p.name !== 'string') continue;
+        if (!p || typeof p !== 'object') {
+          skippedCount++;
+          skipReasons.push('invalid person record');
+          continue;
+        }
+        const rawPerson = p as Record<string, unknown>;
+        const personName = capString(rawPerson.name, STRING_LIMITS.shortName);
+        if (!personName) {
+          skippedCount++;
+          skipReasons.push('person missing name');
+          continue;
+        }
         try {
-          const existing = get().people.find((ex) => ex.name.trim().toLowerCase() === p.name.trim().toLowerCase());
+          const existing = get().people.find((ex) => ex.name.trim().toLowerCase() === personName.toLowerCase());
           const person = existing ?? await get().addPerson({
-            name: String(p.name).trim(),
-            phone: p.phone ? String(p.phone) : undefined,
-            email: p.email ? String(p.email) : undefined,
-            note: p.note ? String(p.note) : undefined,
+            name: personName,
+            phone: capString(rawPerson.phone, STRING_LIMITS.phone),
+            email: capString(rawPerson.email, STRING_LIMITS.email),
+            note: capString(rawPerson.note, STRING_LIMITS.note),
           });
-          if (p.id && person) {
-            importedPersonIdMap.set(String(p.id), person.id);
+          if (rawPerson.id && person) {
+            importedPersonIdMap.set(String(rawPerson.id), person.id);
           }
+          importedCount++;
         } catch (err) {
-          console.error('importJSON: skipping person due to error', p.name, err);
+          console.error('importJSON: skipping person due to error', personName, err);
+          skippedCount++;
+          skipReasons.push('failed to save person');
         }
       }
     }
@@ -1678,103 +1709,148 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const importedRoasterIdMap = new Map<string, Roaster>();
     if (parsed.version === '2' && parsed.roasters && Array.isArray(parsed.roasters)) {
       for (const r of parsed.roasters) {
-        if (!r || typeof r.name !== 'string') continue;
+        if (!r || typeof r !== 'object') {
+          skippedCount++;
+          skipReasons.push('invalid roaster record');
+          continue;
+        }
+        const rawRoaster = r as Record<string, unknown>;
+        const roasterName = capString(rawRoaster.name, STRING_LIMITS.shortName);
+        if (!roasterName) {
+          skippedCount++;
+          skipReasons.push('roaster missing name');
+          continue;
+        }
         try {
-          const existing = get().roasters.find((roaster) => normalizeRoasterName(roaster.name) === normalizeRoasterName(String(r.name)));
+          const existing = get().roasters.find((roaster) => normalizeRoasterName(roaster.name) === normalizeRoasterName(roasterName));
           const roaster = existing ?? await get().createRoaster({
-            name: String(r.name),
-            logoUrl: typeof r.logoUrl === 'string' ? r.logoUrl : null,
+            name: roasterName,
+            logoUrl: capString(rawRoaster.logoUrl, STRING_LIMITS.url) ?? null,
           });
-          if (typeof r.id === 'string') {
-            importedRoasterIdMap.set(r.id, roaster);
+          if (typeof rawRoaster.id === 'string') {
+            importedRoasterIdMap.set(rawRoaster.id, roaster);
           }
+          importedCount++;
         } catch (err) {
-          console.error('importJSON: skipping roaster due to error', r.name, err);
+          console.error('importJSON: skipping roaster due to error', roasterName, err);
+          skippedCount++;
+          skipReasons.push('failed to save roaster');
         }
       }
     }
 
     if (parsed.orders && Array.isArray(parsed.orders)) {
       for (const o of parsed.orders) {
-        if (!o || typeof o.id !== 'string') continue;
+        if (!o || typeof o !== 'object') {
+          skippedCount++;
+          skipReasons.push('invalid order record');
+          continue;
+        }
+        const rawOrder = o as Record<string, unknown>;
+        if (typeof rawOrder.id !== 'string' || !isValidDatabaseId(rawOrder.id)) {
+          skippedCount++;
+          skipReasons.push('invalid ID');
+          continue;
+        }
+
+        const orderName = capString(rawOrder.name, STRING_LIMITS.shortName);
+        if (!orderName) {
+          skippedCount++;
+          skipReasons.push('missing order name');
+          continue;
+        }
+
+        const orderDate = capString(rawOrder.orderDate, STRING_LIMITS.date) ?? new Date().toISOString().split('T')[0];
+        const referenceTemplate = capString(rawOrder.referenceTemplate, STRING_LIMITS.template) ?? 'FAJR-{ORDER}-{NAME}';
+        const payerNote = capString(rawOrder.payerNote, STRING_LIMITS.note);
+
         try {
-          const importedRoaster = typeof o.roasterId === 'string' ? importedRoasterIdMap.get(o.roasterId) : undefined;
-          const importedSnapshotName = o.roasterSnapshot && typeof o.roasterSnapshot === 'object'
-            ? String(o.roasterSnapshot.name ?? importedRoaster?.name ?? '').trim()
-            : importedRoaster?.name ?? '';
-          const roasterSnapshot = importedSnapshotName
+          const importedRoaster = typeof rawOrder.roasterId === 'string' ? importedRoasterIdMap.get(rawOrder.roasterId) : undefined;
+          const rawSnapshot = rawOrder.roasterSnapshot && typeof rawOrder.roasterSnapshot === 'object'
+            ? (rawOrder.roasterSnapshot as Record<string, unknown>)
+            : null;
+          const rawSnapshotName = capString(rawSnapshot?.name ?? importedRoaster?.name ?? '', STRING_LIMITS.shortName);
+          const roasterSnapshot = rawSnapshotName
             ? {
-              id: o.roasterSnapshot && typeof o.roasterSnapshot === 'object' && typeof o.roasterSnapshot.id === 'string'
-                ? o.roasterSnapshot.id
+              id: typeof rawSnapshot?.id === 'string'
+                ? rawSnapshot.id
                 : importedRoaster?.id ?? null,
-              name: importedSnapshotName,
-              logoUrl: o.roasterSnapshot && typeof o.roasterSnapshot === 'object' && typeof o.roasterSnapshot.logoUrl === 'string'
-                ? o.roasterSnapshot.logoUrl
-                : importedRoaster?.logoUrl,
+              name: rawSnapshotName,
+              logoUrl: capString(rawSnapshot?.logoUrl, STRING_LIMITS.url) ?? importedRoaster?.logoUrl,
             }
             : null;
 
-          const mappedLots = (Array.isArray(o.lots) ? o.lots : []).map((lot: any) => ({
+          const rawLots = Array.isArray(rawOrder.lots) ? rawOrder.lots : [];
+          const mappedLots = rawLots.map((lot: any) => ({
             ...lot,
-            shares: Array.isArray(lot.shares) ? lot.shares.map((s: any) => ({
+            name: capString(lot?.name, STRING_LIMITS.lotName) ?? 'Coffee',
+            shares: Array.isArray(lot?.shares) ? lot.shares.map((s: any) => ({
               ...s,
-              personId: mapPersonId(s.personId) ?? s.personId,
+              personId: mapPersonId(s?.personId) ?? s?.personId,
             })) : [],
-            bags: Array.isArray(lot.bags) ? lot.bags.map((b: any) => ({
+            bags: Array.isArray(lot?.bags) ? lot.bags.map((b: any) => ({
               ...b,
-              buyers: Array.isArray(b.buyers) ? b.buyers.map((buyer: any) => ({
+              buyers: Array.isArray(b?.buyers) ? b.buyers.map((buyer: any) => ({
                 ...buyer,
-                personId: mapPersonId(buyer.personId) ?? buyer.personId,
+                personId: mapPersonId(buyer?.personId) ?? buyer?.personId,
               })) : [],
             })) : [],
-            bagAllocations: Array.isArray(lot.bagAllocations) ? lot.bagAllocations.map((alloc: any) => ({
+            bagAllocations: Array.isArray(lot?.bagAllocations) ? lot.bagAllocations.map((alloc: any) => ({
               ...alloc,
-              participants: Array.isArray(alloc.participants) ? alloc.participants.map((p: any) => ({
+              participants: Array.isArray(alloc?.participants) ? alloc.participants.map((p: any) => ({
                 ...p,
-                personId: mapPersonId(p.personId) ?? p.personId,
+                personId: mapPersonId(p?.personId) ?? p?.personId,
               })) : [],
-            })) : lot.bagAllocations,
+            })) : lot?.bagAllocations,
           }));
 
-          const mappedFees = (Array.isArray(o.fees) ? o.fees : []).map((fee: any) => ({
+          const rawFees = Array.isArray(rawOrder.fees) ? rawOrder.fees : [];
+          const mappedFees = rawFees.map((fee: any) => ({
             ...fee,
-            personId: mapPersonId(fee.personId),
+            label: capString(fee?.label, STRING_LIMITS.feeLabel) ?? 'Fee',
+            personId: mapPersonId(fee?.personId),
           }));
 
           const mappedPayments: Record<string, any> = {};
-          if (o.payments && typeof o.payments === 'object' && !Array.isArray(o.payments)) {
-            for (const [oldPid, payment] of Object.entries(o.payments)) {
+          if (rawOrder.payments && typeof rawOrder.payments === 'object' && !Array.isArray(rawOrder.payments)) {
+            for (const [oldPid, payment] of Object.entries(rawOrder.payments)) {
               const newPid = mapPersonId(oldPid) ?? oldPid;
               mappedPayments[newPid] = payment;
             }
           }
 
-          const resolvedStatus = o.status
-            ? normalizeOrderStatus(o.status, o.isArchived)
-            : (o.isArchived ? 'archived' : 'planning');
-          const resolvedIsArchived = o.isArchived !== undefined
-            ? Boolean(o.isArchived)
+          const resolvedStatus = rawOrder.status
+            ? normalizeOrderStatus(rawOrder.status as any, rawOrder.isArchived as boolean | undefined)
+            : (rawOrder.isArchived ? 'archived' : 'planning');
+          const resolvedIsArchived = rawOrder.isArchived !== undefined
+            ? Boolean(rawOrder.isArchived)
             : resolvedStatus === 'archived';
 
-          const rawCurrency = (o as any).listCurrency ?? (o as any).list_currency;
-          const importedListCurrency = typeof rawCurrency === 'string' && /^[A-Za-z]{3}$/.test(rawCurrency.trim())
-            ? rawCurrency.trim().toUpperCase()
-            : (rawCurrency === null || rawCurrency === '' ? null : undefined);
+          const importedListCurrency = sanitizeListCurrency(rawOrder.listCurrency ?? rawOrder.list_currency);
 
-          const existing = get().orders.find((ex) => ex.id === o.id || (ex.name === o.name && ex.orderDate === o.orderDate));
+          const rawBank = rawOrder.payerBank && typeof rawOrder.payerBank === 'object'
+            ? (rawOrder.payerBank as Record<string, unknown>)
+            : null;
+          const sanitizedBank: PayerBank = rawBank ? {
+            bankName: capString(rawBank.bankName, STRING_LIMITS.bankField) ?? '',
+            accountNumber: capString(rawBank.accountNumber, STRING_LIMITS.bankField) ?? '',
+            beneficiary: capString(rawBank.beneficiary, STRING_LIMITS.bankField) ?? '',
+          } : { bankName: '', accountNumber: '', beneficiary: '' };
+
+          const existing = get().orders.find((ex) => ex.id === rawOrder.id || (ex.name === orderName && ex.orderDate === orderDate));
           if (existing) {
             await get().updateOrder(existing.id, {
-              name: String(o.name ?? existing.name),
-              orderDate: String(o.orderDate ?? existing.orderDate),
+              name: orderName,
+              orderDate,
               status: resolvedStatus,
               isArchived: resolvedIsArchived,
               roasterId: importedRoaster?.id ?? existing.roasterId,
               roasterSnapshot: roasterSnapshot ?? existing.roasterSnapshot,
-              payerId: mapPersonId(o.payerId) ?? existing.payerId,
-              payerBank: o.payerBank && typeof o.payerBank === 'object' ? o.payerBank : existing.payerBank,
-              referenceTemplate: String(o.referenceTemplate ?? existing.referenceTemplate),
-              payerNote: o.payerNote !== undefined ? String(o.payerNote) : existing.payerNote,
-              goodsTotalZar: o.goodsTotalZar !== undefined ? Number(o.goodsTotalZar) : existing.goodsTotalZar,
+              payerId: mapPersonId(rawOrder.payerId) ?? existing.payerId,
+              payerBank: rawBank ? sanitizedBank : existing.payerBank,
+              referenceTemplate,
+              payerNote: payerNote !== undefined ? payerNote : existing.payerNote,
+              goodsTotalZar: rawOrder.goodsTotalZar !== undefined ? Number(rawOrder.goodsTotalZar) : existing.goodsTotalZar,
               lots: mappedLots,
               fees: mappedFees,
               payments: mappedPayments,
@@ -1782,26 +1858,29 @@ export const useAppStore = create<AppStore>((set, get) => ({
             });
           } else {
             await get().createOrder({
-              id: typeof o.id === 'string' ? o.id : undefined,
-              name: String(o.name ?? 'Imported Order'),
-              orderDate: String(o.orderDate ?? new Date().toISOString().split('T')[0]),
+              id: rawOrder.id,
+              name: orderName,
+              orderDate,
               status: resolvedStatus,
               isArchived: resolvedIsArchived,
               roasterId: importedRoaster?.id ?? null,
               roasterSnapshot,
-              payerId: mapPersonId(o.payerId),
-              payerBank: o.payerBank && typeof o.payerBank === 'object' ? o.payerBank : { bankName: '', accountNumber: '', beneficiary: '' },
-              referenceTemplate: String(o.referenceTemplate ?? 'FAJR-{ORDER}-{NAME}'),
-              payerNote: o.payerNote ? String(o.payerNote) : undefined,
-              goodsTotalZar: Number(o.goodsTotalZar ?? 0),
+              payerId: mapPersonId(rawOrder.payerId),
+              payerBank: sanitizedBank,
+              referenceTemplate,
+              payerNote,
+              goodsTotalZar: Number(rawOrder.goodsTotalZar ?? 0),
               lots: mappedLots,
               fees: mappedFees,
               payments: mappedPayments,
               listCurrency: importedListCurrency ?? null,
             });
           }
+          importedCount++;
         } catch (err) {
-          console.error('importJSON: skipping order due to error', o.id, err);
+          console.error('importJSON: skipping order due to error', rawOrder.id, err);
+          skippedCount++;
+          skipReasons.push('failed to save order');
         }
       }
     }
@@ -1811,6 +1890,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ currentOrderId: preferredId });
     if (preferredId) safeLocalStorage.setItem('fb_current_order_id', preferredId);
     else safeLocalStorage.removeItem('fb_current_order_id');
+
+    return formatImportSummary(importedCount, skippedCount, skipReasons);
   },
 
   saveSnapshot: () => {
