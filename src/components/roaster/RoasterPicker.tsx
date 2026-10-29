@@ -3,7 +3,7 @@ import type { Order, Roaster, RoasterFeatureStatus, RoasterSnapshot } from '../.
 import { isValidRoasterLogoFile, normalizeRoasterName } from '../../lib/roasters';
 import { RoasterAvatar } from './RoasterAvatar';
 
-const MAX_LOGO_SIZE_BYTES = 2 * 1024 * 1024;
+const MAX_LOGO_SIZE_BYTES = 5 * 1024 * 1024;
 
 interface RoasterPickerProps {
   orders: Order[];
@@ -106,12 +106,12 @@ export function RoasterPicker({
     }
 
     if (!isValidRoasterLogoFile(file)) {
-      setCreateError('Logo must be a PNG, JPG, WEBP, or SVG file.');
+      setCreateError('Logo must be a PNG, JPG, or WEBP file.');
       return;
     }
 
     if (file.size > MAX_LOGO_SIZE_BYTES) {
-      setCreateError('Logo must be smaller than 2MB.');
+      setCreateError('Logo must be smaller than 5MB.');
       return;
     }
 
@@ -230,11 +230,11 @@ export function RoasterPicker({
                   id="create-roaster-logo"
                   className="input"
                   type="file"
-                  accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml"
+                  accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
                   onChange={(event) => handleLogoChange(event.target.files?.[0] ?? null)}
                 />
                 <span className="field-hint">
-                  Optional. PNG, JPG, WEBP, or SVG up to 2MB.
+                  Optional. PNG, JPG, or WEBP up to 5MB.
                 </span>
               </div>
             </div>

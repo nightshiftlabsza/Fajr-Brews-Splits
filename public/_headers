@@ -1,0 +1,35 @@
+# Cloudflare Pages security and cache headers
+# Fajr Brews Splits (Client-only React SPA)
+# Note: Content-Security-Policy-Report-Only is non-enforcing (report-only).
+# To switch to enforcing, rename to Content-Security-Policy after reviewing reports.
+# See docs/SECURITY_HEADERS.md for complete details and rollout instructions.
+
+/*
+  # Prevent browsers from MIME-sniffing responses away from the declared content-type
+  X-Content-Type-Options: nosniff
+
+  # Send origin on cross-origin requests, full URL on same-origin requests
+  Referrer-Policy: strict-origin-when-cross-origin
+
+  # Disable camera, microphone, and geolocation sensors
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+  # Frame protection against clickjacking (complementing frame-ancestors 'none' in CSP)
+  X-Frame-Options: DENY
+
+  # Content Security Policy (Report-Only)
+  # - default-src 'self': default to same-origin
+  # - script-src 'self': Vite-bundled scripts from same-origin
+  # - style-src 'self' 'unsafe-inline': stylesheets and React inline style attributes
+  # - img-src 'self' data: blob: https://*.supabase.co: local assets, data URIs, blob URLs, and Supabase storage logos
+  # - font-src 'self': self-hosted fonts under /assets/ only (no external font CDNs)
+  # - connect-src 'self' https://*.supabase.co wss://*.supabase.co: Supabase REST/Auth/Storage over HTTPS and Realtime over WSS
+  #   (Project URL placeholder: the owner may optionally replace https://*.supabase.co with their specific project domain https://<project-ref>.supabase.co)
+  # - frame-ancestors 'none': prevents embedding this application in any frame/iframe
+  # - base-uri 'self': prevents malicious <base> tag injection
+  # - form-action 'self': restricts form submissions to same-origin
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co; font-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self';
+
+# 1-year immutable cache for content-hashed Vite build chunks and assets
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
