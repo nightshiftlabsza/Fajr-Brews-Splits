@@ -149,7 +149,10 @@ export function HistoryPage({ participantOnly = false }: Props) {
   }
 
   async function handleDuplicate(order: Order) {
-    await createOrder(createDuplicatedOrderPayload(order, todayISO()));
+    await createOrder({
+      ...createDuplicatedOrderPayload(order, todayISO()),
+      listCurrency: order.listCurrency ?? null,
+    });
   }
 
   async function handleEdit(order: Order) {
@@ -311,7 +314,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
 
             <div className="wizard-summary-grid">
               <SummaryMetric label="Participants" value={String(selectedOrderSummary.participantCount)} />
-              <SummaryMetric label="Coffee lots" value={String(selectedOrderSummary.lotCount)} />
+              <SummaryMetric label="Coffees" value={String(selectedOrderSummary.lotCount)} />
               <SummaryMetric label="Grand total" value={formatZAR(selectedOrderSummary.totalZar)} emphasize />
               <SummaryMetric
                 label="Payments"
@@ -321,7 +324,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
 
             {!selectedOrderSummary.isValid && (
               <div className="alert alert-warning" style={{ marginTop: 'var(--space-4)' }}>
-                This saved order is missing some finalized detail fields, so the archive is showing the best available snapshot.
+                This saved order is missing some finalized detail fields, so the archive is showing the best available copy.
               </div>
             )}
 
@@ -344,7 +347,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
               people={people}
               result={selectedOrderResult}
               title="Saved order details"
-              description="Review the full settlement, payment state, and invoice/share actions exactly as saved."
+              description="Review the full payment details, payment state, and invoice/share actions exactly as saved."
               visiblePersonIds={participantOnly && linkedPersonId ? [linkedPersonId] : undefined}
             />
           )}
@@ -381,7 +384,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
                         <span className="wizard-badge wizard-badge-info">In progress</span>
                       </div>
                       <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
-                        {formatDateShort(order.orderDate)} · {summary.participantCount} participant{summary.participantCount !== 1 ? 's' : ''} · {summary.lotCount} lot{summary.lotCount !== 1 ? 's' : ''}
+                        {formatDateShort(order.orderDate)} · {summary.participantCount} participant{summary.participantCount !== 1 ? 's' : ''} · {summary.lotCount} coffee{summary.lotCount !== 1 ? 's' : ''}
                       </div>
                       {orderRoaster && (
                         <div className="field-hint" style={{ marginTop: 4 }}>
@@ -403,7 +406,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
           <div className="empty-state-icon">☕</div>
           <h3>Confirm your profile to see orders you joined</h3>
           <p>
-            We could not match this account to a participant record yet. Once your profile is linked, finalized orders you were part of will appear here automatically.
+            We could not match this account to a participant record yet. Once your profile is linked, finalized orders you were part of will appear here.
           </p>
         </div>
       )}
@@ -503,7 +506,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
                       </div>
 
                       <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
-                        {formatDateShort(order.orderDate)} · Payer: {payerName} · {summary.participantCount} participant{summary.participantCount !== 1 ? 's' : ''} · {summary.lotCount} lot{summary.lotCount !== 1 ? 's' : ''}
+                        {formatDateShort(order.orderDate)} · Payer: {payerName} · {summary.participantCount} participant{summary.participantCount !== 1 ? 's' : ''} · {summary.lotCount} coffee{summary.lotCount !== 1 ? 's' : ''}
                       </div>
                       {orderRoaster && (
                         <div className="field-hint" style={{ marginTop: 4 }}>
@@ -755,7 +758,7 @@ function PastOrderEditor({ order, onClose }: { order: Order; onClose: () => void
               </div>
             </div>
             <p className="wizard-page-copy">
-              {formatDateShort(draftOrder.orderDate)} - update setup, coffees, fees, and settlement details while keeping this record finalized.
+              {formatDateShort(draftOrder.orderDate)} - update setup, coffees, fees, and summary details while keeping this record finalized.
             </p>
           </div>
           <span className="wizard-badge wizard-badge-accent">Finalized</span>

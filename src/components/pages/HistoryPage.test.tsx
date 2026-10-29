@@ -316,7 +316,7 @@ describe('HistoryPage', () => {
     });
 
     clickButtonByText(container, 'Edit order');
-    clickButtonByText(container, 'Adjust bags');
+    clickButtonByText(container, 'Change');
     clickExactButtonByText(container, 'Add person');
 
     const nameInput = container.querySelector('input[placeholder="Full name"]') as HTMLInputElement;
@@ -381,10 +381,9 @@ describe('HistoryPage', () => {
     });
 
     clickButtonByText(container, 'Edit order');
-    clickButtonByText(container, 'Adjust bags');
     clickExactButtonByText(container, 'Add bag');
 
-    clickButtonByText(container, 'Alice', 1);
+    clickButtonByText(container, 'Same as Bag 1');
     clickButtonByText(container, 'Save changes');
 
     await act(async () => {

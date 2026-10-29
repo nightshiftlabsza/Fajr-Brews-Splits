@@ -1,0 +1,151 @@
+/* ============================================================
+   Fajr Brews — Phone & Tablet Layout Styles
+   Optimizations for 360px, 390px, 430px, 820px, and landscape
+   ============================================================ */
+
+/* ── Mobile Touch & Tap Hardening ────────────────────────── */
+
+html, body {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, a, input, select, textarea, [role="button"], [role="checkbox"], [role="radio"], [role="tab"] {
+  touch-action: manipulation;
+}
+
+/* ── Responsive Step Tabs & Bar Scrolling ────────────────── */
+
+.step-tabs-track,
+.active-orders-strip {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.step-tabs-track::-webkit-scrollbar,
+.active-orders-strip::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Single Sticky Bottom Bar Discipline ─────────────────── */
+
+@media (max-width: 768px) {
+  /* Hide floating app navigation while inside an active order to maintain single bottom bar discipline */
+  body:has(.active-order-container) .nav-bottom,
+  .app-shell:has(.active-order-container) .nav-bottom {
+    display: none !important;
+  }
+
+  /* Prevent multiple competing sticky bars from stacking */
+  .summary-sticky-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: var(--z-sticky);
+    padding: var(--space-3) var(--space-4);
+    padding-bottom: max(var(--space-3), calc(var(--space-2) + env(safe-area-inset-bottom, 0px)));
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    box-shadow: var(--shadow-md);
+  }
+
+  .lot-section-footer {
+    padding-bottom: max(var(--space-3), calc(var(--space-2) + env(safe-area-inset-bottom, 0px)));
+  }
+
+  /* Compact header on mobile */
+  .fb-order-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .fb-order-header-lead {
+    width: 100%;
+  }
+
+  /* 2-line table row adaptation on small phones */
+  .fees-table tbody tr,
+  .coffee-cost-table tbody tr {
+    transition: background var(--transition-fast);
+  }
+
+  .fees-table th,
+  .fees-table td {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  /* Form inputs touch target & zoom prevention */
+  .input,
+  .select,
+  textarea {
+    font-size: 16px !important;
+    min-height: 44px;
+  }
+
+  /* Ensure modal cards don't clip on small height */
+  .fb-modal-card {
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+  }
+}
+
+/* ── Ultra-compact phones (360px - 390px) ─────────────────── */
+
+@media (max-width: 390px) {
+  .page-container {
+    padding-left: var(--space-2);
+    padding-right: var(--space-2);
+  }
+
+  .fb-coffee-group-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .fb-coffee-header-actions {
+    justify-content: flex-end;
+  }
+
+  .fb-bag-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+
+  .fb-bag-row-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .fb-summary-hero-amount {
+    font-size: 2rem;
+  }
+}
+
+/* ── Tablet / Foldables (768px - 820px) ──────────────────── */
+
+@media (min-width: 769px) and (max-width: 820px) {
+  .order-cockpit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cockpit-sidebar-column {
+    position: static;
+  }
+}
+
+/* ── Landscape Mobile Inset Hardening ─────────────────────── */
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .nav-top {
+    height: 48px;
+  }
+
+  .fb-sheet-surface.is-full-height {
+    max-height: 96vh;
+  }
+
+  .fb-assign-people-list {
+    max-height: 200px;
+  }
+}

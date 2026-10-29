@@ -128,6 +128,7 @@ function mapOrder(row: DbOrder, existingOrder?: Order | null): Order {
     fees,
     payments,
     isArchived: status === 'archived',
+    listCurrency: row.list_currency || undefined,
     ownerId: row.owner_id ?? row.created_by ?? undefined,
     createdBy: row.created_by ?? undefined,
     createdAt: row.created_at,
@@ -356,6 +357,14 @@ function isRoasterBackendUnavailableError(error: unknown): boolean {
     message.includes("table 'public.roasters'") ||
     message.includes('relation "public.roasters" does not exist') ||
     message.includes('schema cache')
+  );
+}
+
+function isListCurrencyColumnMissingError(error: unknown): boolean {
+  const code = getErrorCode(error);
+  return (
+    getErrorMessage(error).toLowerCase().includes('list_currency') &&
+    (code === 'PGRST204' || code === '42703' || getErrorMessage(error).toLowerCase().includes('schema cache') || getErrorMessage(error).toLowerCase().includes('does not exist'))
   );
 }
 
@@ -1244,6 +1253,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const userId = get().user?.id;
     const initialStatus = normalizeOrderStatus(data.status, data.isArchived ?? false);
     const isArchived = initialStatus === 'archived' || Boolean(data.isArchived);
+    const defaultCurrency = safeLocalStorage.getItem('fb_last_list_currency') || 'EUR';
+    const listCurrency = data.listCurrency !== undefined ? data.listCurrency : defaultCurrency;
+    if (listCurrency) {
+      safeLocalStorage.setItem('fb_last_list_currency', listCurrency);
+    }
     const insertPayload: Record<string, unknown> = {
       workspace_id: WORKSPACE_ID,
       name: data.name,
@@ -1260,6 +1274,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       fees: data.fees,
       payments: data.payments,
       is_archived: isArchived,
+      list_currency: listCurrency ?? null,
       owner_id: userId ?? null,
       created_by: userId ?? null,
     };
@@ -1267,11 +1282,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
       insertPayload.id = data.id;
     }
 
-    const { data: row, error } = await supabase
+    let { data: row, error } = await supabase
       .from('orders')
       .insert(insertPayload)
       .select()
       .single();
+
+    if (error && isListCurrencyColumnMissingError(error)) {
+      delete insertPayload.list_currency;
+      ({ data: row, error } = await supabase
+        .from('orders')
+        .insert(insertPayload)
+        .select()
+        .single());
+    }
 
     if (error) throw new Error(error.message);
     if (row) {
@@ -1336,13 +1360,24 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (data.fees !== undefined || strictIntegrity) dbData.fees = optimisticOrder.fees;
     if (data.payments !== undefined || strictIntegrity) dbData.payments = optimisticOrder.payments;
     if (data.isArchived !== undefined || strictIntegrity) dbData.is_archived = optimisticOrder.isArchived;
+    if (data.listCurrency !== undefined) {
+      dbData.list_currency = optimisticOrder.listCurrency ?? null;
+      if (optimisticOrder.listCurrency) {
+        safeLocalStorage.setItem('fb_last_list_currency', optimisticOrder.listCurrency);
+      }
+    }
     if (data.ownerId !== undefined) dbData.owner_id = optimisticOrder.ownerId;
 
     const previousChain = orderWriteChains.get(id) ?? Promise.resolve();
     const nextChain = previousChain
       .catch(() => undefined)
       .then(async () => {
-        const { error } = await supabase.from('orders').update(dbData).eq('id', id);
+        let { error } = await supabase.from('orders').update(dbData).eq('id', id);
+        if (error && isListCurrencyColumnMissingError(error) && 'list_currency' in dbData) {
+          delete dbData.list_currency;
+          if (Object.keys(dbData).length === 0) return;
+          ({ error } = await supabase.from('orders').update(dbData).eq('id', id));
+        }
         if (error) throw new Error(error.message);
       })
       .catch((err) => {
@@ -1721,6 +1756,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
             ? Boolean(o.isArchived)
             : resolvedStatus === 'archived';
 
+          const rawCurrency = (o as any).listCurrency ?? (o as any).list_currency;
+          const importedListCurrency = typeof rawCurrency === 'string' && /^[A-Za-z]{3}$/.test(rawCurrency.trim())
+            ? rawCurrency.trim().toUpperCase()
+            : (rawCurrency === null || rawCurrency === '' ? null : undefined);
+
           const existing = get().orders.find((ex) => ex.id === o.id || (ex.name === o.name && ex.orderDate === o.orderDate));
           if (existing) {
             await get().updateOrder(existing.id, {
@@ -1738,6 +1778,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
               lots: mappedLots,
               fees: mappedFees,
               payments: mappedPayments,
+              listCurrency: importedListCurrency !== undefined ? importedListCurrency : existing.listCurrency,
             });
           } else {
             await get().createOrder({
@@ -1756,6 +1797,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
               lots: mappedLots,
               fees: mappedFees,
               payments: mappedPayments,
+              listCurrency: importedListCurrency ?? null,
             });
           }
         } catch (err) {

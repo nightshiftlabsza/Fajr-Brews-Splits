@@ -1,0 +1,496 @@
+/* ============================================================
+   Fajr Brews — Order Coffees & Bag Assignment Styles
+   Ruled ledger styling for coffee list and effortless bag assignment
+   ============================================================ */
+
+/* ── Coffee Lots List ────────────────────────────────────── */
+
+.fb-coffee-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.fb-coffee-group {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color var(--transition-fast);
+}
+
+.fb-coffee-group:hover {
+  border-color: var(--color-border-strong);
+}
+
+.fb-coffee-group-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--space-4);
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.fb-coffee-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.fb-coffee-name {
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: var(--leading-tight);
+}
+
+.fb-coffee-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  flex-wrap: wrap;
+}
+
+.fb-coffee-meta-dot {
+  color: var(--color-text-muted);
+}
+
+.fb-coffee-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.fb-coffee-status-bar {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fb-coffee-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  font-size: var(--text-xs);
+}
+
+.fb-coffee-status-chip.is-ready {
+  color: var(--color-paid);
+}
+
+.fb-coffee-status-chip.is-needed {
+  color: var(--color-warning-text);
+}
+
+/* ── Bag Ruled Rows ──────────────────────────────────────── */
+
+.fb-bag-rows-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.fb-bag-row-item {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.fb-bag-row-item:last-child {
+  border-bottom: none;
+}
+
+.fb-bag-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  gap: var(--space-3);
+  min-height: 52px;
+  background: var(--color-surface);
+  transition: background var(--transition-fast);
+}
+
+.fb-bag-row:hover {
+  background: var(--color-surface-hover);
+}
+
+.fb-bag-row.is-active-editing {
+  background: var(--color-surface-raised);
+}
+
+.fb-bag-row-lead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  flex: 1;
+}
+
+.fb-bag-number-badge {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-raised);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--color-border);
+}
+
+.fb-bag-desc {
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fb-bag-desc.is-unassigned {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.fb-bag-row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.fb-bag-action-link {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+
+.fb-bag-action-link:hover {
+  background: var(--color-accent-light);
+}
+
+.fb-bag-copy-link {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.fb-bag-copy-link:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface-raised);
+}
+
+.fb-bag-remove-btn {
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fb-bag-remove-btn:hover {
+  color: var(--color-unpaid);
+}
+
+/* ── Bag Assignment Panel (Inline & Sheet) ───────────────── */
+
+.fb-bag-assign-panel {
+  background: var(--color-surface-raised);
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  animation: fbPanelFadeIn 150ms ease;
+}
+
+@keyframes fbPanelFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fb-sheet-assign-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.fb-sheet-assign-wrap .fb-bag-assign-panel {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.fb-assign-search-bar {
+  position: relative;
+}
+
+.fb-assign-search-input {
+  width: 100%;
+  padding-left: 34px !important;
+  font-size: var(--text-sm) !important;
+}
+
+.fb-assign-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+  display: flex;
+}
+
+.fb-assign-mode-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.fb-assign-mode-link {
+  color: var(--color-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: var(--text-xs);
+  padding: 2px 4px;
+}
+
+.fb-assign-mode-link:hover {
+  text-decoration: underline;
+}
+
+/* ── 64px Compact Person Row ─────────────────────────────── */
+
+.fb-assign-people-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 380px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.fb-assign-person-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 60px;
+  padding: var(--space-2) var(--space-3);
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition-fast);
+}
+
+.fb-assign-person-row:last-child {
+  border-bottom: none;
+}
+
+.fb-assign-person-row:hover {
+  background: var(--color-surface-hover);
+}
+
+.fb-assign-person-row.is-selected {
+  background: var(--color-surface-raised);
+}
+
+.fb-assign-person-row:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: -2px;
+}
+
+.fb-assign-person-lead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  flex: 1;
+}
+
+.fb-assign-checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-accent-text);
+  background: var(--color-surface);
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+
+.fb-assign-person-row.is-selected .fb-assign-checkbox {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.fb-assign-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.fb-assign-person-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fb-assign-person-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fb-assign-person-sub {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fb-assign-grams-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.fb-assign-grams-pill {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+}
+
+.fb-assign-gram-input {
+  width: 76px;
+  text-align: right;
+  padding: 4px 6px !important;
+  font-size: var(--text-sm) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.fb-assign-gram-unit {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* ── Balance Line ────────────────────────────────────────── */
+
+.fb-assign-balance-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid transparent;
+}
+
+.fb-assign-balance-bar.is-exact {
+  background: var(--color-paid-bg);
+  border-color: var(--color-paid);
+  color: var(--color-paid);
+}
+
+.fb-assign-balance-bar.is-under {
+  background: var(--color-partial-bg);
+  border-color: var(--color-partial);
+  color: var(--color-partial);
+}
+
+.fb-assign-balance-bar.is-over {
+  background: var(--color-unpaid-bg);
+  border-color: var(--color-unpaid);
+  color: var(--color-unpaid);
+}
+
+.fb-assign-balance-msg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Panel Footer Actions ────────────────────────────────── */
+
+.fb-assign-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
+.fb-assign-add-btn {
+  font-size: var(--text-xs);
+  color: var(--color-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.fb-assign-add-btn:hover {
+  text-decoration: underline;
+}
+
+.fb-assign-btn-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}

@@ -91,7 +91,7 @@ export function MyStatsPage() {
             <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Time range</div>
             <div className="wizard-card-title">Only your finalized coffee history</div>
             <p className="wizard-card-copy" style={{ marginTop: 'var(--space-2)' }}>
-              Stats are calculated only from finalized orders where your linked participant record was part of the allocation.
+              Stats are calculated only from finalized orders where you were part of the order.
             </p>
           </div>
           <div className="stats-filter-pills" role="tablist" aria-label="Stats time range">

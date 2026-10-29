@@ -14,7 +14,7 @@ const THEMES: { id: Theme; name: string; description: string }[] = [
 const MODES: { id: ThemeMode; label: string; icon: string }[] = [
   { id: 'light', label: 'Light', icon: '☀️' },
   { id: 'dark',  label: 'Dark',  icon: '🌙' },
-  { id: 'auto',  label: 'Auto',  icon: '🖥' },
+  { id: 'auto',  label: 'System', icon: '🖥' },
 ];
 
 type SettingsTab = 'general' | 'members' | 'backup' | 'people';
@@ -352,7 +352,7 @@ export function SettingsPage() {
         <Section title="Data Backup & Restore">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', margin: 0 }}>
-              Export a complete snapshot of your workspace (orders, coffee lots, allocations, participants, roasters) as JSON, or restore from a previously exported backup file.
+              Export a complete copy of your workspace (orders, coffees, who gets what, participants, roasters) as JSON, or restore from a previously exported backup file.
             </p>
 
             {settings.lastExportDate && (

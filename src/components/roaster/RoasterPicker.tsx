@@ -202,7 +202,7 @@ export function RoasterPicker({
               <div className="field-hint">
                 {selectedRoaster
                   ? 'This roaster will be saved on the order separately from the order name.'
-                  : 'This order still keeps its saved roaster snapshot even while live roasters are unavailable.'}
+                  : 'This order still keeps its saved roaster details even while live roasters are unavailable.'}
               </div>
             </div>
           </div>

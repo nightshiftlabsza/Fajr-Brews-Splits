@@ -140,6 +140,7 @@ export interface Order {
   fees: Fee[];
   payments: Record<string, PaymentRecord>; // personId → PaymentRecord
   isArchived: boolean;       // kept in sync with status === 'archived'
+  listCurrency?: string | null; // Roaster catalog currency (ISO 4217, e.g. 'EUR')
   ownerId?: string;
   createdBy?: string;
   createdAt: string;
@@ -172,6 +173,7 @@ export interface DbOrder {
   fees: Fee[];
   payments: Record<string, PaymentRecord>;
   is_archived: boolean;
+  list_currency?: string | null;
   owner_id?: string | null;
   created_by: string | null;
   created_at: string;

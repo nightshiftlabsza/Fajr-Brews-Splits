@@ -158,7 +158,7 @@ describe('CoffeeLotsSection', () => {
     expect(container.textContent).toContain('Ready');
   });
 
-  it('assigns unassigned coffee with quick buyer chip', () => {
+  it('assigns unassigned coffee via bag assign panel', () => {
     act(() => {
       root.render(<CoffeeLotsHarness initialOrder={makeOrder([
         makeLot({
@@ -170,9 +170,19 @@ describe('CoffeeLotsSection', () => {
     });
 
     expect(container.textContent).toContain('Unassigned');
-    expect(container.textContent).toContain('Bilal');
+    clickButtonByText(container, 'Change');
 
-    clickButtonByText(container, 'Bilal');
+    expect(container.textContent).toContain('Bilal');
+    const bilalRow = Array.from(container.querySelectorAll('.fb-assign-person-row')).find((r) =>
+      r.textContent?.includes('Bilal')
+    ) as HTMLElement;
+    expect(bilalRow).toBeTruthy();
+
+    act(() => {
+      bilalRow.click();
+    });
+
+    clickButtonByText(container, 'Done');
 
     expect(mockStoreState.updateOrder).toHaveBeenCalled();
   });
@@ -280,5 +290,100 @@ describe('CoffeeLotsSection', () => {
       btn.textContent?.includes('Next: Goods & fees')
     );
     expect(nextBtn).toBeUndefined();
+  });
+
+  it('formats foreign price per bag with order listCurrency', () => {
+    const testOrder = {
+      ...makeOrder([
+        makeLot({
+          id: 'lot-1',
+          name: 'Kenya AA',
+          foreignPricePerBag: 21.5,
+          gramsPerBag: 250,
+        }),
+      ]),
+      listCurrency: 'GBP',
+    };
+
+    act(() => {
+      root.render(<CoffeeLotsSection order={testOrder} />);
+    });
+
+    expect(container.textContent).toContain('£21.50 / bag');
+  });
+
+  it('copies Bag 1 assignment when clicking "Same as Bag 1"', () => {
+    act(() => {
+      root.render(
+        <CoffeeLotsHarness
+          initialOrder={makeOrder([
+            makeLot({
+              id: 'lot-1',
+              name: 'Kenya AA',
+              bags: [
+                {
+                  id: 'bag-1',
+                  splitMode: 'full',
+                  buyers: [{ id: 'b-1', personId: 'person-1', grams: 250 }],
+                },
+                {
+                  id: 'bag-2',
+                  splitMode: 'unassigned',
+                  buyers: [],
+                },
+              ],
+            }),
+          ])}
+        />
+      );
+    });
+
+    const copyBtn = Array.from(container.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('Same as Bag 1')
+    );
+    expect(copyBtn).toBeTruthy();
+
+    act(() => {
+      copyBtn?.click();
+    });
+
+    expect(mockStoreState.updateOrder).toHaveBeenCalled();
+  });
+
+  it('prompts confirm modal when removing an assigned bag', () => {
+    act(() => {
+      root.render(
+        <CoffeeLotsHarness
+          initialOrder={makeOrder([
+            makeLot({
+              id: 'lot-1',
+              name: 'Kenya AA',
+              bags: [
+                {
+                  id: 'bag-1',
+                  splitMode: 'full',
+                  buyers: [{ id: 'b-1', personId: 'person-1', grams: 250 }],
+                },
+                {
+                  id: 'bag-2',
+                  splitMode: 'full',
+                  buyers: [{ id: 'b-2', personId: 'person-2', grams: 250 }],
+                },
+              ],
+            }),
+          ])}
+        />
+      );
+    });
+
+    const removeBtns = container.querySelectorAll('.fb-bag-remove-btn');
+    expect(removeBtns.length).toBe(2);
+
+    act(() => {
+      (removeBtns[1] as HTMLButtonElement).click();
+    });
+
+    expect(container.textContent).toContain('Remove Bag 2?');
+    expect(container.textContent).toContain('Anyone assigned to it will lose their share');
   });
 });

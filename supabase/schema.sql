@@ -61,6 +61,7 @@ create table if not exists public.orders (
   fees                 jsonb not null default '[]',
   payments             jsonb not null default '{}',
   is_archived          boolean not null default false,
+  list_currency        text,
   owner_id             uuid references auth.users(id) on delete set null,
   created_by           uuid references auth.users(id) on delete set null,
   created_at           timestamptz default now(),
@@ -745,7 +746,8 @@ RETURNS TABLE (
   owner_id uuid,
   created_by uuid,
   created_at timestamptz,
-  updated_at timestamptz
+  updated_at timestamptz,
+  list_currency text
 )
 LANGUAGE sql
 STABLE
@@ -854,7 +856,8 @@ AS $$
     NULL::uuid AS owner_id,
     NULL::uuid AS created_by,
     po.created_at,
-    po.updated_at
+    po.updated_at,
+    po.list_currency
   FROM participant_orders po;
 $$;
 

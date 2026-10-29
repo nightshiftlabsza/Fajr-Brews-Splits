@@ -61,4 +61,11 @@ describe('supabase schema access rules', () => {
     expect(rpcDefinition).toContain("CASE WHEN po.payer_id = po.me_id THEN po.payer_id ELSE NULL END AS payer_id");
     expect(rpcDefinition).toContain("po.payments ? po.me_id::text THEN jsonb_build_object(po.me_id::text, po.payments -> po.me_id::text)");
   });
+
+  it('includes nullable list_currency in orders table and get_my_participant_orders projection', () => {
+    expect(schema).toContain('list_currency        text,');
+    const rpcDefinition = schema.slice(schema.indexOf('CREATE OR REPLACE FUNCTION public.get_my_participant_orders()'));
+    expect(rpcDefinition).toContain('list_currency text');
+    expect(rpcDefinition).toContain('po.list_currency');
+  });
 });

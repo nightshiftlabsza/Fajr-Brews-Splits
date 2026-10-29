@@ -20,13 +20,12 @@ interface Props {
 }
 
 export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
-  const { people, roasters, orders, updateOrder, deleteOrder, setCurrentOrderId, flushOrderWrites, user, memberRole } = useAppStore(
+  const { people, roasters, orders, updateOrder, setCurrentOrderId, flushOrderWrites, user, memberRole } = useAppStore(
     useShallow((s) => ({
       people: s.people,
       roasters: s.roasters,
       orders: s.orders,
       updateOrder: s.updateOrder,
-      deleteOrder: s.deleteOrder,
       setCurrentOrderId: s.setCurrentOrderId,
       flushOrderWrites: s.flushOrderWrites,
       user: s.user,
@@ -35,9 +34,7 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
   );
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmArchiveOpen, setConfirmArchiveOpen] = useState(false);
 
   const personNames = Object.fromEntries(people.map((person) => [person.id, person.name]));
   const result = calculate(order, personNames);
@@ -95,22 +92,6 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
     }
   }
 
-  async function handleConfirmDelete() {
-    if (order.isArchived) return;
-
-    setDeleting(true);
-    setDeleteError(null);
-
-    try {
-      await flushOrderWrites(order.id);
-      await deleteOrder(order.id);
-      setConfirmDeleteOpen(false);
-    } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : 'Failed to delete this order. Please try again.');
-    } finally {
-      setDeleting(false);
-    }
-  }
 
   const payer = people.find((person) => person.id === order.payerId);
   const orderRoaster = resolveOrderRoaster(order, roasters);
@@ -124,58 +105,19 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
       <div className="order-cockpit-grid">
         {/* Main Left Workspace Column */}
         <div className="cockpit-main-column">
-          <section className="wizard-panel order-summary-overview">
-            <div className="order-summary-overview-top">
-              <div>
-                <div className="section-label overview-section-label">Order overview</div>
-                <div className="order-summary-title-row">
-                  {orderRoaster && (
-                    <RoasterAvatar
-                      name={orderRoaster.name}
-                      logoUrl={orderRoaster.logoUrl}
-                      size={42}
-                    />
-                  )}
-                  <h3 className="wizard-card-title">{order.name || 'Untitled order'}</h3>
-                  <span className={`summary-status-pill is-${orderStatus.tone}`}>{orderStatus.label}</span>
-                </div>
-                {orderRoaster && (
-                  <div className="field-hint roaster-hint">
-                    Roaster: {orderRoaster.name}
-                  </div>
-                )}
-              </div>
-
-              <div className="wizard-chip-row">
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => onJumpToStep('setup')}>Edit setup</button>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => onJumpToStep('coffees')}>Edit coffees</button>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => onJumpToStep('goods')}>Edit goods</button>
-              </div>
-            </div>
-          </section>
-
-          {/* Mobile-only Financial Summary Card */}
-          <section className="wizard-panel cockpit-mobile-summary-card">
-            <div className="cockpit-hero-total">
-              <span className="cockpit-hero-total-label">Grand Total</span>
-              <span className="cockpit-hero-total-amount num-cell">{formatZAR(result.totalOrderZar)}</span>
-            </div>
-            <div className="cockpit-line-items">
-              <div className="cockpit-line-item">
-                <span>Goods subtotal</span>
-                <strong className="num-cell">{formatZAR(result.totalGoodsZar)}</strong>
-              </div>
-              <div className="cockpit-line-item">
-                <span>Fees subtotal</span>
-                <strong className="num-cell">{formatZAR(result.totalFeesZar)}</strong>
-              </div>
-              <div className="cockpit-line-item">
-                <span>People charged</span>
-                <strong className="num-cell">{result.personIds.length}</strong>
-              </div>
+          {/* Grand total hero card */}
+          <section className="fb-summary-hero-card">
+            <div className="fb-summary-hero-label">Grand total</div>
+            <div className="fb-summary-hero-amount num-cell">{formatZAR(result.totalOrderZar)}</div>
+            <div className="fb-summary-hero-sub">
+              <span>Goods: {formatZAR(result.totalGoodsZar)}</span>
+              <span>·</span>
+              <span>Fees: {formatZAR(result.totalFeesZar)}</span>
+              <span>·</span>
+              <span>{result.personIds.length} {result.personIds.length === 1 ? 'person' : 'people'}</span>
             </div>
             {Math.abs(result.roundingAbsorbed) > 0.001 && (
-              <div className="rounding-absorption-badge">
+              <div className="rounding-absorption-badge" style={{ marginTop: 'var(--space-3)' }}>
                 <span className="rounding-badge-icon" aria-hidden="true">
                   <Icon name="info" size={14} />
                 </span>
@@ -187,16 +129,24 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
             )}
           </section>
 
-          <CoffeeCostSummary result={result} />
-
           <SettlementPacks
             order={order}
             people={people}
             result={result}
-            title="Participants & invoices"
+            title="Who owes what"
             onPaymentChange={updatePayment}
             paymentEditingEnabled={isOwner}
           />
+
+          <details className="fb-cost-accordion">
+            <summary className="fb-cost-accordion-summary">
+              <span>How the cost was worked out</span>
+              <Icon name="chevron-down" size={16} />
+            </summary>
+            <div className="fb-cost-accordion-body">
+              <CoffeeCostSummary result={result} />
+            </div>
+          </details>
         </div>
 
         {/* Desktop Sticky Financial & Action Cockpit Sidebar */}
@@ -239,38 +189,28 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
               <button
                 type="button"
                 className="btn btn-primary btn-lg w-full"
-                onClick={handleFinalizeOrder}
-                disabled={finalizing || deleting}
+                onClick={() => {
+                  if (savingPastOrder) {
+                    void handleFinalizeOrder();
+                  } else {
+                    setConfirmArchiveOpen(true);
+                  }
+                }}
+                disabled={finalizing}
               >
                 {finalizing ? (
                   <span className="spinner spinner-btn-primary" />
                 ) : savingPastOrder ? (
                   'Save changes'
                 ) : (
-                  'Save to past orders'
+                  'Move to past orders'
                 )}
               </button>
-              {!savingPastOrder && (
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm w-full btn-danger-ghost"
-                  onClick={() => setConfirmDeleteOpen(true)}
-                  disabled={deleting || finalizing}
-                >
-                  {deleting ? <span className="spinner spinner-btn-sm" /> : 'Delete order'}
-                </button>
-              )}
             </div>
 
             {finalizeError && (
               <div className="alert alert-error alert-error-margin" role="alert">
                 {finalizeError}
-              </div>
-            )}
-
-            {deleteError && (
-              <div className="alert alert-error alert-error-margin" role="alert">
-                {deleteError}
               </div>
             )}
           </section>
@@ -285,11 +225,6 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
             {finalizeError}
           </div>
         )}
-        {deleteError && (
-          <div className="alert alert-error summary-sticky-alert" role="alert">
-            {deleteError}
-          </div>
-        )}
         <div className="summary-sticky-status-group">
           <span className="summary-sticky-status-label">{savingPastOrder ? 'Past order' : 'Finalize order'}</span>
           <span className="summary-sticky-status-dot">·</span>
@@ -297,45 +232,44 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
         </div>
 
         <div className="summary-sticky-actions">
-          {!savingPastOrder && (
-            <button
-              type="button"
-              className="btn btn-danger"
-              onClick={() => setConfirmDeleteOpen(true)}
-              disabled={deleting || finalizing}
-            >
-              {deleting ? <span className="spinner spinner-btn-primary" /> : 'Delete order'}
-            </button>
-          )}
           <button
             type="button"
             className="btn btn-primary btn-lg"
-            onClick={handleFinalizeOrder}
-            disabled={finalizing || deleting}
+            onClick={() => {
+              if (savingPastOrder) {
+                void handleFinalizeOrder();
+              } else {
+                setConfirmArchiveOpen(true);
+              }
+            }}
+            disabled={finalizing}
           >
             {finalizing ? (
               <span className="spinner spinner-btn-primary" />
             ) : savingPastOrder ? (
               'Save changes'
             ) : (
-              'Save to past orders'
+              'Move to past orders'
             )}
           </button>
         </div>
       </div>
 
-      {/* Custom Delete Confirmation Modal */}
-      {confirmDeleteOpen && (
+      {/* Move to Past Orders Confirmation Modal */}
+      {confirmArchiveOpen && (
         <ConfirmModal
           isOpen={true}
-          title={`Delete "${order.name}"?`}
-          description="This action cannot be undone. This order and all of its bags will be permanently removed."
-          confirmText="Delete order"
+          title={`Move "${order.name}" to past orders?`}
+          description="This order will leave the active list and live under Past orders. You can still inspect it, print invoices, or duplicate it anytime from Past orders."
+          confirmText="Move to past orders"
           cancelText="Cancel"
-          variant="danger"
-          isLoading={deleting}
-          onConfirm={handleConfirmDelete}
-          onCancel={() => setConfirmDeleteOpen(false)}
+          variant="warning"
+          isLoading={finalizing}
+          onConfirm={async () => {
+            setConfirmArchiveOpen(false);
+            await handleFinalizeOrder();
+          }}
+          onCancel={() => setConfirmArchiveOpen(false)}
         />
       )}
 

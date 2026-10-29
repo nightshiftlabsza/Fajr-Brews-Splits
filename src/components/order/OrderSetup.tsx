@@ -8,8 +8,8 @@ import { createRoasterSnapshot } from '../../lib/roasters';
 import { normalizeFeeAllocationType } from '../../lib/invoiceFormatter';
 import { isOrderLocked } from '../../lib/orderLifecycle';
 import { RoasterPicker } from '../roaster/RoasterPicker';
+import { RoasterCurrencyField } from './RoasterCurrencyField';
 import { Icon } from '../ui/Icon';
-
 
 interface Props {
   order: Order;
@@ -32,6 +32,15 @@ function banksEqual(left: PayerBank, right: PayerBank): boolean {
     left.accountNumber === right.accountNumber &&
     left.beneficiary === right.beneficiary &&
     (left.branch || '') === (right.branch || '')
+  );
+}
+
+function isBankFilled(bank?: Partial<PayerBank> | null): boolean {
+  return Boolean(
+    bank?.bankName?.trim() ||
+    bank?.accountNumber?.trim() ||
+    bank?.beneficiary?.trim() ||
+    bank?.branch?.trim()
   );
 }
 
@@ -111,12 +120,9 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
   const [selectedRoasterId, setSelectedRoasterId] = useState(order.roasterId || '');
   const [payerId, setPayerId] = useState(order.payerId || '');
   const [bank, setBank] = useState<PayerBank>(normalizeBank(order.payerBank));
-  const [bankOpen, setBankOpen] = useState(Boolean(
-    order.payerBank?.bankName ||
-    order.payerBank?.accountNumber ||
-    order.payerBank?.beneficiary ||
-    order.payerBank?.branch
-  ));
+  
+  // Collapsed when filled, open when empty
+  const [bankOpen, setBankOpen] = useState(!isBankFilled(order.payerBank));
 
   const [isNameDirty, setIsNameDirty] = useState(false);
   const [isDateDirty, setIsDateDirty] = useState(false);
@@ -138,12 +144,7 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
     setSelectedRoasterId(order.roasterId || '');
     setPayerId(order.payerId || '');
     setBank(normalizeBank(order.payerBank));
-    setBankOpen(Boolean(
-      order.payerBank?.bankName ||
-      order.payerBank?.accountNumber ||
-      order.payerBank?.beneficiary ||
-      order.payerBank?.branch
-    ));
+    setBankOpen(!isBankFilled(order.payerBank));
     setIsNameDirty(false);
     setIsDateDirty(false);
     setIsRoasterDirty(false);
@@ -178,12 +179,6 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
   useEffect(() => {
     if (!isBankDirty) {
       setBank(normalizeBank(order.payerBank));
-      setBankOpen(Boolean(
-        order.payerBank?.bankName ||
-        order.payerBank?.accountNumber ||
-        order.payerBank?.beneficiary ||
-        order.payerBank?.branch
-      ));
     }
   }, [order.payerBank, isBankDirty]);
 
@@ -249,49 +244,6 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
     setIsBankDirty(false);
   }
 
-  async function flushPendingSetupChanges() {
-    if (isReadOnly) return;
-    const updates: Partial<Order> = {};
-    const trimmedName = name.trim();
-    const normalizedBank = normalizeBank(bank);
-    const selectedRoaster = roasters.find((roaster) => roaster.id === selectedRoasterId) ?? null;
-    const nextRoasterSnapshot = selectedRoaster ? createRoasterSnapshot(selectedRoaster) : null;
-
-    if (isNameDirty && trimmedName !== order.name) {
-      updates.name = trimmedName;
-    }
-    if (isDateDirty && orderDate !== order.orderDate) {
-      updates.orderDate = orderDate;
-    }
-    if (isRoasterDirty && (selectedRoasterId || null) !== order.roasterId) {
-      updates.roasterId = selectedRoasterId || null;
-      updates.roasterSnapshot = nextRoasterSnapshot;
-    }
-    if (isPayerDirty && (payerId || null) !== order.payerId) {
-      updates.payerId = payerId || null;
-    }
-    if (isBankDirty && !banksEqual(normalizedBank, normalizeBank(order.payerBank))) {
-      updates.payerBank = normalizedBank;
-    }
-
-    setName(trimmedName);
-    setBank(normalizedBank);
-    setIsNameDirty(false);
-    setIsDateDirty(false);
-    setIsRoasterDirty(false);
-    setIsPayerDirty(false);
-    setIsBankDirty(false);
-
-    if (Object.keys(updates).length > 0) {
-      await patchOrder(updates);
-    }
-  }
-
-  useEffect(() => {
-    registerCommit?.(flushPendingSetupChanges);
-    return () => registerCommit?.(null);
-  }, [registerCommit, flushPendingSetupChanges]);
-
   function handleBankChange(field: keyof PayerBank, value: string) {
     if (isReadOnly) return;
     setIsBankDirty(true);
@@ -328,9 +280,19 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
     return roaster;
   }
 
+  const bankSummary = useMemo(() => {
+    if (bank.bankName && bank.accountNumber) {
+      const lastDigits = bank.accountNumber.slice(-4);
+      return `${bank.bankName}, ending ${lastDigits}`;
+    }
+    if (bank.bankName) return bank.bankName;
+    return 'Optional';
+  }, [bank.bankName, bank.accountNumber]);
+
   return (
     <div className="wizard-step-stack">
-      <section className="wizard-panel">
+      {/* ── 1. Order Basics & Payer on Top ── */}
+      <section className="wizard-panel fb-ruled-panel">
         <div className="wizard-card-header">
           <div>
             <h3 className="wizard-card-title">Setup details</h3>
@@ -377,19 +339,33 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
           </div>
         </div>
 
-        <RoasterPicker
-          orders={orders}
-          roasters={roasters}
-          selectedRoasterId={selectedRoasterId || null}
-          selectedRoasterSnapshot={order.roasterSnapshot}
-          featureStatus={roasterFeatureStatus}
-          featureMessage={roasterFeatureMessage}
-          canManageRoasters={!isReadOnly && accessStatus === 'member'}
-          onSelectRoaster={handleRoasterSelect}
-          onCreateRoaster={handleCreateRoaster}
-        />
+        {/* Roaster Picker & Roaster Currency Slot */}
+        <div className="fb-ruled-grid-2" style={{ alignItems: 'flex-start' }}>
+          <div>
+            <RoasterPicker
+              orders={orders}
+              roasters={roasters}
+              selectedRoasterId={selectedRoasterId || null}
+              selectedRoasterSnapshot={order.roasterSnapshot}
+              featureStatus={roasterFeatureStatus}
+              featureMessage={roasterFeatureMessage}
+              canManageRoasters={!isReadOnly && accessStatus === 'member'}
+              onSelectRoaster={handleRoasterSelect}
+              onCreateRoaster={handleCreateRoaster}
+            />
+          </div>
 
-        <div className="field">
+          <div style={{ marginTop: 'var(--space-1)' }}>
+            <RoasterCurrencyField
+              value={order.listCurrency ?? null}
+              onChange={(curr) => void patchOrder({ listCurrency: curr })}
+              disabled={isReadOnly}
+            />
+          </div>
+        </div>
+
+        {/* Payer Selection & Rounding One-Liner */}
+        <div className="field" style={{ marginTop: 'var(--space-3)' }}>
           <label className="field-label" htmlFor="payer">Payer</label>
           <select
             id="payer"
@@ -405,17 +381,29 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
               </option>
             ))}
           </select>
-          <span className="field-hint">
-            The payer absorbs the final rounding remainder after all other people are rounded down.
+
+          <span className="field-hint" style={{ marginTop: 'var(--space-1)', display: 'block' }}>
+            Non-payers round down to cents; the payer absorbs the remainder so totals balance exactly.
           </span>
+
+          <details className="fb-details-block">
+            <summary className="fb-details-summary">
+              <Icon name="info" size={12} />
+              <span>How this works</span>
+            </summary>
+            <div className="fb-details-content">
+              Each member's share is rounded down to two decimal places (nearest cent). Any leftover fractions of a cent are added to the payer's share, ensuring the collected money matches the invoice total to the exact cent without shortfall.
+            </div>
+          </details>
         </div>
       </section>
 
+      {/* ── 2. Bank Details Collapsible (Collapsed when filled) ── */}
       <CollapsiblePanel
         open={bankOpen}
         onToggle={() => setBankOpen((current) => !current)}
         title="Bank details"
-        summary={bankOpen ? 'Optional payment details for payment requests' : 'Optional'}
+        summary={bankSummary}
       >
         <div className="wizard-card-grid">
           <div className="field">
@@ -471,18 +459,19 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
         </div>
       </CollapsiblePanel>
 
-      <section className="wizard-panel">
+      {/* ── 3. Finalized Order Visibility & One-Liner ── */}
+      <section className="wizard-panel fb-ruled-panel">
         <div className="wizard-card-header">
           <div>
             <div className="wizard-card-title">Finalized order visibility</div>
           </div>
         </div>
         <p className="wizard-card-copy">
-          Finalized orders are visible to workspace members and the people included in this order. No extra PIN is needed to view them.
+          Only members and people in this order can view details. No extra PIN is needed to view them.
         </p>
 
         <div className="wizard-inline-note">
-          <strong>Included automatically:</strong> buyers with grams in this order, plus the payer.
+          <strong>Included in this order:</strong> buyers with grams in this order, plus the payer.
         </div>
 
         {includedPeople.length > 0 ? (
@@ -496,13 +485,19 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
         ) : (
           <div className="wizard-inline-empty">
             <span>No one is included yet.</span>
-            <span className="field-hint">Assign buyers or choose a payer first, then protection will follow automatically.</span>
+            <span className="field-hint">Assign buyers or choose a payer first, then protection will follow.</span>
           </div>
         )}
 
-        <span className="field-hint">
-          Participant visibility is matched automatically using saved email first, then phone, then a cautious confirmed name match as a last resort. People without a linked app account will still appear in the order, but they will need to confirm their profile before the archive becomes visible.
-        </span>
+        <details className="fb-details-block">
+          <summary className="fb-details-summary">
+            <Icon name="info" size={12} />
+            <span>How this works</span>
+          </summary>
+          <div className="fb-details-content">
+            Finalized orders are visible to workspace members and the people included in this order. Participant visibility is matched using saved email first, then phone, then a confirmed profile match. People without a linked app account will still appear in the order, but will confirm their profile before the archive becomes visible.
+          </div>
+        </details>
       </section>
     </div>
   );
@@ -518,17 +513,17 @@ interface CollapsiblePanelProps {
 
 function CollapsiblePanel({ open, onToggle, title, summary, children }: CollapsiblePanelProps) {
   return (
-    <section className="wizard-panel wizard-collapsible">
-      <button className="wizard-collapsible-trigger" onClick={onToggle}>
+    <section className="wizard-panel wizard-collapsible fb-ruled-panel">
+      <button className="wizard-collapsible-trigger fb-bank-summary-bar" onClick={onToggle} type="button">
         <div>
           <div className="wizard-card-title">{title}</div>
-          <div className="wizard-collapsible-summary">{summary}</div>
+          <div className="wizard-collapsible-summary fb-bank-summary-text">{summary}</div>
         </div>
         <span className="wizard-chevron">
           <Icon name={open ? 'chevron-up' : 'chevron-down'} size={14} />
         </span>
       </button>
-      {open && <div className="wizard-collapsible-body">{children}</div>}
+      {open && <div className="wizard-collapsible-body" style={{ marginTop: 'var(--space-3)' }}>{children}</div>}
     </section>
   );
 }

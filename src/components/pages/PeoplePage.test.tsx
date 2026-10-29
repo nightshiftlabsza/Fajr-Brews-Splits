@@ -159,7 +159,7 @@ describe('PeoplePage deletion guards (BUG-ORD-09 / BUG-EDGE-05)', () => {
 
     const errorAlert = container.querySelector('.alert-error');
     expect(errorAlert).toBeTruthy();
-    expect(errorAlert?.textContent).toContain('Cannot remove "Bob" because they have assigned shares or allocations in active order "April Batch"');
+    expect(errorAlert?.textContent).toContain('Cannot remove "Bob" because they have assigned coffee bags in active order "April Batch"');
 
     // Confirm modal should not be opened
     expect(container.querySelector('.fb-modal-card')).toBeNull();
@@ -214,7 +214,7 @@ describe('PeoplePage deletion guards (BUG-ORD-09 / BUG-EDGE-05)', () => {
 
     const errorAlert = container.querySelector('.alert-error');
     expect(errorAlert).toBeTruthy();
-    expect(errorAlert?.textContent).toContain('Cannot remove "Charlie" because they have assigned shares or allocations in active order "May Roaster Special"');
+    expect(errorAlert?.textContent).toContain('Cannot remove "Charlie" because they have assigned coffee bags in active order "May Roaster Special"');
 
     expect(container.querySelector('.fb-modal-card')).toBeNull();
     expect(mockStoreState.deletePerson).not.toHaveBeenCalled();
