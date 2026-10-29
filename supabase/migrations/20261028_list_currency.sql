@@ -10,7 +10,10 @@ ALTER TABLE public.orders
 
 -- 2. Update get_my_participant_orders to include list_currency so participants can see the roaster price label
 -- Privacy invariant: All existing privacy filtering rules on lots, shares, fees, payments, and payer are strictly preserved.
-CREATE OR REPLACE FUNCTION public.get_my_participant_orders()
+-- The returned columns change, so Postgres requires dropping the function first.
+DROP FUNCTION IF EXISTS public.get_my_participant_orders();
+
+CREATE FUNCTION public.get_my_participant_orders()
 RETURNS TABLE (
   id uuid,
   workspace_id uuid,

@@ -85,6 +85,16 @@ function makeMockSupabase(initialOrders: DbOrder[] = []) {
       if (table === 'orders') {
         const builder = makeQueryBuilder(() => storedOrders);
         builder.insert = vi.fn().mockImplementation((payload: any) => {
+          if ((globalThis as any).__listCurrencyColumnMissing && 'list_currency' in payload) {
+            return {
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: { code: 'PGRST204', message: "Could not find the 'list_currency' column of 'orders' in the schema cache" },
+                }),
+              }),
+            };
+          }
           const newRow: DbOrder = {
             id: payload.id || `order-${Math.random().toString(36).slice(2, 8)}`,
             workspace_id: payload.workspace_id,
@@ -270,6 +280,33 @@ describe('listCurrency integration in appStore', () => {
 
     expect(created).toBeDefined();
     expect(created?.listCurrency).toBe('GBP');
+  });
+
+  it('still creates orders when the list_currency column has not been added yet', async () => {
+    (globalThis as any).__listCurrencyColumnMissing = true;
+    try {
+      const { useAppStore } = await import('./appStore');
+      await useAppStore.getState().initialize();
+
+      const created = await useAppStore.getState().createOrder({
+        name: 'Before Migration',
+        orderDate: '2026-05-02',
+        status: 'planning',
+        roasterId: null,
+        roasterSnapshot: null,
+        payerId: null,
+        payerBank: { bankName: '', accountNumber: '', beneficiary: '' },
+        referenceTemplate: 'FAJR-{ORDER}-{NAME}',
+        goodsTotalZar: 0,
+        lots: [],
+        fees: [],
+        payments: {},
+      });
+
+      expect(created?.name).toBe('Before Migration');
+    } finally {
+      delete (globalThis as any).__listCurrencyColumnMissing;
+    }
   });
 
   it('updates listCurrency and persists it to local storage', async () => {

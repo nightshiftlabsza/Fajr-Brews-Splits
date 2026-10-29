@@ -360,6 +360,14 @@ function isRoasterBackendUnavailableError(error: unknown): boolean {
   );
 }
 
+function isListCurrencyColumnMissingError(error: unknown): boolean {
+  const code = getErrorCode(error);
+  return (
+    getErrorMessage(error).toLowerCase().includes('list_currency') &&
+    (code === 'PGRST204' || code === '42703' || getErrorMessage(error).toLowerCase().includes('schema cache') || getErrorMessage(error).toLowerCase().includes('does not exist'))
+  );
+}
+
 function isRoasterDuplicateError(error: unknown): boolean {
   const message = getErrorMessage(error).toLowerCase();
   const code = getErrorCode(error);
@@ -1274,11 +1282,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
       insertPayload.id = data.id;
     }
 
-    const { data: row, error } = await supabase
+    let { data: row, error } = await supabase
       .from('orders')
       .insert(insertPayload)
       .select()
       .single();
+
+    if (error && isListCurrencyColumnMissingError(error)) {
+      delete insertPayload.list_currency;
+      ({ data: row, error } = await supabase
+        .from('orders')
+        .insert(insertPayload)
+        .select()
+        .single());
+    }
 
     if (error) throw new Error(error.message);
     if (row) {
@@ -1355,7 +1372,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const nextChain = previousChain
       .catch(() => undefined)
       .then(async () => {
-        const { error } = await supabase.from('orders').update(dbData).eq('id', id);
+        let { error } = await supabase.from('orders').update(dbData).eq('id', id);
+        if (error && isListCurrencyColumnMissingError(error) && 'list_currency' in dbData) {
+          delete dbData.list_currency;
+          if (Object.keys(dbData).length === 0) return;
+          ({ error } = await supabase.from('orders').update(dbData).eq('id', id));
+        }
         if (error) throw new Error(error.message);
       })
       .catch((err) => {

@@ -4,7 +4,10 @@
 BEGIN;
 
 -- 1. Restore get_my_participant_orders to previous signature without list_currency
-CREATE OR REPLACE FUNCTION public.get_my_participant_orders()
+-- The returned columns change, so Postgres requires dropping the function first.
+DROP FUNCTION IF EXISTS public.get_my_participant_orders();
+
+CREATE FUNCTION public.get_my_participant_orders()
 RETURNS TABLE (
   id uuid,
   workspace_id uuid,
