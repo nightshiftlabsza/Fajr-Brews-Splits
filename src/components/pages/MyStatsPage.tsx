@@ -2,35 +2,38 @@ import { useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../../store/appStore';
 import {
-  calculateMyStatsSummary,
-  filterParticipantOrdersByRange,
-  getParticipantFinalizedOrders,
+  getCountedOrders,
+  getCountedYears,
+  getLocalTodayString,
   resolveLinkedStatsPerson,
+  summarisePeriod,
   type StatsDateRange,
-  type StatsRangePreset,
 } from '../../lib/myStats';
-import { formatCurrency, formatDateShort, formatNumber } from '../../lib/formatters';
+import { formatDateShort, formatZAR } from '../../lib/formatters';
 import { RoasterAvatar } from '../roaster/RoasterAvatar';
-
-const RANGE_OPTIONS: { id: StatsRangePreset; label: string }[] = [
-  { id: 'all', label: 'All time' },
-  { id: '3m', label: 'Last 3 months' },
-  { id: '6m', label: 'Last 6 months' },
-  { id: '12m', label: 'Last 12 months' },
-  { id: 'custom', label: 'Custom range' },
-];
+import { YearPicker } from '../stats/YearPicker';
+import { MonthlyChart } from '../stats/MonthlyChart';
+import { CameBackToList } from '../stats/CameBackToList';
+import { YearInCoffee } from '../stats/YearInCoffee';
 
 export function MyStatsPage() {
-  const { orders, roasters, people, linkedPersonId, linkResolution } = useAppStore(
+  const { orders, roasters, people, linkedPersonId, linkResolution, isLoading } = useAppStore(
     useShallow((s) => ({
       orders: s.orders,
       roasters: s.roasters,
       people: s.people,
       linkedPersonId: s.linkedPersonId,
       linkResolution: s.linkResolution,
-    }))
+      isLoading: s.isLoading,
+    })),
   );
+
   const [range, setRange] = useState<StatsDateRange>({ preset: 'all' });
+  const [selectedYear, setSelectedYear] = useState<string | null>(null);
+  const [currentView, setCurrentView] = useState<'overview' | 'year-in-coffee'>('overview');
+
+  const today = useMemo(() => getLocalTodayString(), []);
+  const currentCalendarYear = today.split('-')[0]!;
 
   const personNames = useMemo(
     () => Object.fromEntries(people.map((person) => [person.id, person.name])),
@@ -38,28 +41,64 @@ export function MyStatsPage() {
   );
 
   const linkedStatsPerson = resolveLinkedStatsPerson(linkedPersonId, linkResolution);
-  const finalizedOrders = useMemo(
-    () => getParticipantFinalizedOrders(orders, linkedStatsPerson.personId, personNames, roasters),
-    [linkedStatsPerson.personId, orders, personNames, roasters],
+
+  const { entries: allCountedOrders, skippedCount } = useMemo(
+    () => getCountedOrders(orders, linkedStatsPerson.personId, personNames, roasters),
+    [orders, linkedStatsPerson.personId, personNames, roasters],
   );
-  const filteredOrders = useMemo(
-    () => filterParticipantOrdersByRange(finalizedOrders, range),
-    [finalizedOrders, range],
+
+  const availableYears = useMemo(
+    () => getCountedYears(orders, linkedStatsPerson.personId, personNames, roasters),
+    [orders, linkedStatsPerson.personId, personNames, roasters],
   );
-  const summary = useMemo(
-    () => calculateMyStatsSummary(filteredOrders),
-    [filteredOrders],
-  );
+
+  const orderCountByYear = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const entry of allCountedOrders) {
+      const y = entry.order.orderDate.split('-')[0]!;
+      counts[y] = (counts[y] ?? 0) + 1;
+    }
+    return counts;
+  }, [allCountedOrders]);
+
+  const summary = useMemo(() => {
+    return summarisePeriod(allCountedOrders, {
+      year: selectedYear ?? undefined,
+      range: selectedYear ? undefined : range,
+      today,
+      allTimeOrders: allCountedOrders,
+      skippedCount,
+    });
+  }, [allCountedOrders, selectedYear, range, today, skippedCount]);
+
+  if (isLoading) {
+    return (
+      <div className="stats-container">
+        <div className="stats-header-section">
+          <div style={{ height: 32, width: 200, background: 'var(--color-surface-raised)', borderRadius: 'var(--radius-sm)', marginBottom: 8 }} />
+          <div style={{ height: 18, width: 340, background: 'var(--color-surface-raised)', borderRadius: 'var(--radius-sm)' }} />
+        </div>
+        <div className="stats-card" style={{ height: 120, background: 'var(--color-surface-raised)' }} />
+      </div>
+    );
+  }
 
   if (linkedStatsPerson.state === 'unlinked') {
     return (
-      <div className="page-container">
-        <StatsHeader />
-        <div className="empty-state">
-          <div className="empty-state-icon">☕</div>
-          <h3>Link a participant to unlock My Stats</h3>
-          <p>
-            My Stats becomes available once this account is linked to a participant record in the workspace.
+      <div className="stats-container">
+        <div className="stats-header-section">
+          <h1 className="stats-title">Your coffee</h1>
+          <p className="stats-subtitle">
+            Link a participant profile to see your personal coffee journal.
+          </p>
+        </div>
+        <div className="stats-card" style={{ textAlign: 'center', padding: 'var(--space-10) var(--space-4)' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-2)' }}>☕</div>
+          <h3 style={{ margin: '0 0 var(--space-2) 0', color: 'var(--color-text-primary)' }}>
+            Link a profile to view your stats
+          </h3>
+          <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)', maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}>
+            Personal statistics become available once your signed-in account is linked to your participant profile in the workspace.
           </p>
         </div>
       </div>
@@ -68,218 +107,246 @@ export function MyStatsPage() {
 
   if (linkedStatsPerson.state === 'ambiguous') {
     return (
-      <div className="page-container">
-        <StatsHeader />
-        <div className="empty-state">
-          <div className="empty-state-icon">?</div>
-          <h3>We still need to confirm your participant link</h3>
-          <p>
-            My Stats will appear once the participant link is confirmed. The app will not guess when the match is ambiguous.
+      <div className="stats-container">
+        <div className="stats-header-section">
+          <h1 className="stats-title">Your coffee</h1>
+          <p className="stats-subtitle">Confirm your participant link to continue.</p>
+        </div>
+        <div className="stats-card" style={{ textAlign: 'center', padding: 'var(--space-10) var(--space-4)' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-2)' }}>?</div>
+          <h3 style={{ margin: '0 0 var(--space-2) 0', color: 'var(--color-text-primary)' }}>
+            We still need to confirm your profile
+          </h3>
+          <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)', maxWidth: 440, marginLeft: 'auto', marginRight: 'auto' }}>
+            Your coffee statistics will appear as soon as the link to your directory record is confirmed.
           </p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="page-container stats-page">
-      <StatsHeader />
+  if (allCountedOrders.length === 0) {
+    return (
+      <div className="stats-container">
+        <div className="stats-header-section">
+          <h1 className="stats-title">Your coffee</h1>
+          <p className="stats-subtitle">From orders you were part of, once they are done.</p>
+        </div>
+        <div className="stats-card" style={{ textAlign: 'center', padding: 'var(--space-10) var(--space-4)' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-2)' }}>📦</div>
+          <h3 style={{ margin: '0 0 var(--space-2) 0', color: 'var(--color-text-primary)' }}>
+            No orders you were part of yet
+          </h3>
+          <p style={{ margin: '0 0 var(--space-4) 0', color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
+            Once an order is done, your coffees, roasters, and grams will appear here.
+          </p>
+          <a href="/" className="btn btn-primary" style={{ display: 'inline-flex', minHeight: '44px', alignItems: 'center' }}>
+            Start an order →
+          </a>
+        </div>
+      </div>
+    );
+  }
 
-      <section className="wizard-panel">
-        <div className="wizard-card-header stats-filter-header">
-          <div>
-            <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Time range</div>
-            <div className="wizard-card-title">Only your finalized coffee history</div>
-            <p className="wizard-card-copy" style={{ marginTop: 'var(--space-2)' }}>
-              Stats are calculated only from finalized orders where you were part of the order.
-            </p>
-          </div>
-          <div className="stats-filter-pills" role="tablist" aria-label="Stats time range">
-            {RANGE_OPTIONS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                className={`stats-filter-pill ${range.preset === option.id ? 'is-active' : ''}`}
-                onClick={() => setRange((current) => ({
-                  ...current,
-                  preset: option.id,
-                }))}
-              >
-                {option.label}
-              </button>
-            ))}
+  if (currentView === 'year-in-coffee') {
+    return (
+      <YearInCoffee
+        orders={orders}
+        personId={linkedStatsPerson.personId}
+        personNames={personNames}
+        roasters={roasters}
+        initialYear={selectedYear ?? availableYears[0]}
+        onBack={() => setCurrentView('overview')}
+      />
+    );
+  }
+
+  const isOneOrderPeriod = summary.ordersCount === 1;
+
+  return (
+    <div className="stats-container">
+      {/* Header & Context */}
+      <div className="stats-header-section">
+        <h1 className="stats-title">Your coffee</h1>
+        <p className="stats-subtitle">From orders you were part of, once they are done.</p>
+
+        <div className="stats-period-bar">
+          <YearPicker
+            years={availableYears}
+            selectedRange={selectedYear ? { preset: 'all' } : range}
+            currentYear={currentCalendarYear}
+            orderCountByYear={orderCountByYear}
+            totalOrdersCount={allCountedOrders.length}
+            onSelectYear={(yr) => {
+              setSelectedYear(yr);
+              if (yr) setRange({ preset: 'all' });
+            }}
+            onSelectRange={(r) => {
+              setSelectedYear(null);
+              setRange(r);
+            }}
+          />
+          <div className="stats-period-context">
+            {summary.ordersCount} {summary.ordersCount === 1 ? 'order you were part of' : 'orders you were part of'}
+            {skippedCount > 0 && (
+              <span style={{ marginLeft: 'var(--space-2)', color: 'var(--color-warning)' }}>
+                · {skippedCount} {skippedCount === 1 ? 'order could not be counted' : 'orders could not be counted'}
+              </span>
+            )}
           </div>
         </div>
+      </div>
 
-        {range.preset === 'custom' && (
-          <div className="wizard-card-grid stats-custom-range">
-            <div className="field">
-              <label className="field-label" htmlFor="stats-start-date">Start date</label>
-              <input
-                id="stats-start-date"
-                className="input"
-                type="date"
-                value={range.startDate ?? ''}
-                onChange={(event) => setRange((current) => ({ ...current, startDate: event.target.value }))}
-              />
-            </div>
-            <div className="field">
-              <label className="field-label" htmlFor="stats-end-date">End date</label>
-              <input
-                id="stats-end-date"
-                className="input"
-                type="date"
-                value={range.endDate ?? ''}
-                onChange={(event) => setRange((current) => ({ ...current, endDate: event.target.value }))}
-              />
-            </div>
-          </div>
-        )}
-      </section>
-
-      {filteredOrders.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon">📊</div>
-          <h3>No finalized orders in this range yet</h3>
-          <p>
-            As soon as finalized orders include your linked participant record, your personal coffee stats will show up here.
+      {summary.ordersCount === 0 ? (
+        <div className="stats-card" style={{ textAlign: 'center', padding: 'var(--space-8) var(--space-4)' }}>
+          <h3 style={{ margin: '0 0 var(--space-2) 0', color: 'var(--color-text-primary)' }}>
+            No orders in this range yet
+          </h3>
+          <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
+            Try choosing another year or All time to see your full coffee history.
           </p>
         </div>
       ) : (
         <>
-          <section className="stats-grid">
-            <MetricCard label="Total Spent" value={formatCurrency(summary.totalSpent)} emphasize />
-            <MetricCard
-              label="Orders Participated"
-              value={String(filteredOrders.length)}
-              detail={filteredOrders.length > 0 ? `Newest: ${formatDateShort(filteredOrders[0]?.order.orderDate ?? '')}` : undefined}
-            />
-            <MetricCard label="Total Bags (250g eq)" value={`${formatNumber(summary.totalBags, 1)} bags`} />
-            <MetricCard
-              label="Total Coffee Grams"
-              value={`${formatNumber(summary.totalGrams, 0)}g`}
-              detail="Total grams bought"
-            />
-            <MetricCard
-              label="Average Cost per Bag"
-              value={summary.averageCostPer250g === null ? 'Not available' : formatCurrency(summary.averageCostPer250g)}
-              detail="Per 250g equivalent"
-            />
-          </section>
-
-          <section className="wizard-panel stats-favorite-panel" style={{ marginBottom: 'var(--space-6)' }}>
-            <div className="wizard-card-header">
-              <div>
-                <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Favorite roaster</div>
-                <div className="wizard-card-title">Most ordered by 250g-equivalent bags</div>
+          {/* Quiet Banner to Year in Coffee */}
+          <button
+            type="button"
+            className="stats-recap-banner"
+            onClick={() => setCurrentView('year-in-coffee')}
+            aria-label="View Year in Coffee recap"
+          >
+            <div>
+              <div className="stats-recap-title-wrap">
+                <span className="stats-recap-title">
+                  Your Year in Coffee, {selectedYear ?? currentCalendarYear}
+                  {selectedYear === currentCalendarYear || (!selectedYear && availableYears.includes(currentCalendarYear)) ? ' so far' : ''}
+                </span>
+                <span className="stats-recap-badge">Recap</span>
               </div>
+              <div className="stats-recap-sub">A look back at your year</div>
             </div>
+            <span className="stats-recap-arrow" aria-hidden="true">→</span>
+          </button>
 
-            {summary.favoriteRoaster ? (
-              <div className="stats-favorite-card">
-                <RoasterAvatar
-                  name={summary.favoriteRoaster.name}
-                  logoUrl={summary.favoriteRoaster.logoUrl}
-                  size={56}
-                />
-                <div>
-                  <div className="stats-favorite-name">{summary.favoriteRoaster.name}</div>
-                  <div className="wizard-card-copy">
-                    {formatNumber(summary.favoriteRoaster.bagCount, 1)} bags · {filteredOrders.length > 0 ? Math.round((filteredOrders.filter((o) => o.roaster?.name === summary.favoriteRoaster?.name || o.order.roasterId === summary.favoriteRoaster?.id).length / filteredOrders.length) * 100) : 0}% of finalized orders in range.
+          {/* Desktop Two-Column Arrangement for Cards */}
+          <div className="stats-desktop-grid">
+            {/* Left Column: Headline facts & Favourite roaster */}
+            <div>
+              {/* Three Headline Facts */}
+              <div className="stats-card stats-headline-grid" role="region" aria-label="Key coffee facts">
+                <div className="stats-headline-item">
+                  <div className="stats-headline-value">
+                    {summary.kgTaken}
+                    <span className="stats-headline-unit">kg</span>
                   </div>
+                  <div className="stats-headline-label">Coffee taken</div>
+                </div>
+
+                <div className="stats-headline-item">
+                  <div className="stats-headline-value">{summary.bagsSharedIn}</div>
+                  <div className="stats-headline-label">Bags you shared in</div>
+                </div>
+
+                <div className="stats-headline-item">
+                  <div className="stats-headline-value">{summary.roastersTried}</div>
+                  <div className="stats-headline-label">Roasters tried</div>
                 </div>
               </div>
-            ) : (
-              <div className="wizard-inline-empty">
-                <span>No favorite roaster yet.</span>
-                <span className="field-hint">
-                  Some finalized orders in this range do not have roaster data yet, so the app skips them instead of guessing.
-                </span>
-              </div>
-            )}
-          </section>
 
-          <section className="wizard-panel">
-            <div className="wizard-card-header">
-              <div>
-                <div className="section-label" style={{ marginBottom: 'var(--space-2)' }}>Order Breakdown</div>
-                <div className="wizard-card-title">Finalized orders in this period</div>
+              {/* Favourite Roaster Card */}
+              {summary.favouriteRoaster ? (
+                <div className="stats-card">
+                  <div className="stats-card-eyebrow">Favourite roaster</div>
+                  <div className="stats-fav-row">
+                    <RoasterAvatar
+                      name={summary.favouriteRoaster.name}
+                      logoUrl={summary.favouriteRoaster.logoUrl}
+                      size={52}
+                    />
+                    <div className="stats-fav-info">
+                      <div className="stats-fav-name">{summary.favouriteRoaster.name}</div>
+                      <div className="stats-fav-detail">
+                        {Math.round(summary.favouriteRoaster.share * 100)}% of the coffee you took · {summary.favouriteRoaster.orderCount}{' '}
+                        {summary.favouriteRoaster.orderCount === 1 ? 'order' : 'orders'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {summary.unassignedRoasterOrderCount > 0 && (
+                    <div className="stats-unassigned-note">
+                      {summary.unassignedRoasterOrderCount}{' '}
+                      {summary.unassignedRoasterOrderCount === 1
+                        ? 'order has no roaster saved'
+                        : 'orders have no roaster saved'}
+                    </div>
+                  )}
+                </div>
+              ) : summary.unassignedRoasterOrderCount > 0 ? (
+                <div className="stats-card">
+                  <div className="stats-card-eyebrow">Favourite roaster</div>
+                  <div className="stats-unassigned-note" style={{ marginTop: 0, borderTop: 'none', paddingTop: 0 }}>
+                    {summary.unassignedRoasterOrderCount}{' '}
+                    {summary.unassignedRoasterOrderCount === 1
+                      ? 'order has no roaster saved'
+                      : 'orders have no roaster saved'}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {/* Right Column: Came back to & Monthly rhythm */}
+            <div>
+              {/* You keep coming back to */}
+              <CameBackToList roasters={summary.cameBackTo} />
+
+              {/* Monthly rhythm */}
+              {!isOneOrderPeriod && (
+                <MonthlyChart
+                  monthlyOrders={summary.monthlyOrders}
+                  busiestMonth={summary.busiestMonth}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Recent Orders List */}
+          <div className="stats-card stats-orders-card" style={{ marginTop: 'var(--space-2)' }}>
+            <div className="stats-orders-header">
+              <div style={{ fontWeight: 700, color: 'var(--color-text-primary)', fontSize: 'var(--text-base)' }}>
+                Recent orders you were part of
+              </div>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+                Latest {Math.min(summary.entries.length, 10)}
               </div>
             </div>
 
-            <div className="data-table-container">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Order</th>
-                    <th>Date</th>
-                    <th>Roaster</th>
-                    <th style={{ textAlign: 'right' }}>Coffee Grams</th>
-                    <th style={{ textAlign: 'right' }}>Total Share (ZAR)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredOrders.map(({ order, personCalc, roaster }) => (
-                    <tr key={order.id}>
-                      <td style={{ fontWeight: 600 }}>{order.name}</td>
-                      <td style={{ color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
-                        {formatDateShort(order.orderDate)}
-                      </td>
-                      <td>
-                        {roaster ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                            <RoasterAvatar name={roaster.name} logoUrl={roaster.logoUrl} size={22} />
-                            <span>{roaster.name}</span>
-                          </div>
-                        ) : (
-                          <span style={{ color: 'var(--color-text-muted)' }}>—</span>
-                        )}
-                      </td>
-                      <td className="num-cell">
-                        {formatNumber(personCalc.totalGrams ?? 0, 0)}g
-                      </td>
-                      <td className="num-cell" style={{ fontWeight: 600 }}>
-                        {formatCurrency(personCalc.totalFinal ?? 0)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div>
+              {summary.entries.slice(0, 10).map(({ order, personCalc, roaster, lotNames }) => {
+                const coffeeTitle = lotNames.length > 0 ? lotNames.join(', ') : order.name;
+                const formattedDate = formatDateShort(order.orderDate);
+                const roasterLabel = roaster?.name ? `${roaster.name} · ` : '';
+
+                return (
+                  <div key={order.id} className="stats-order-row">
+                    <div className="stats-order-primary">
+                      <div className="stats-order-coffee-name">{coffeeTitle}</div>
+                      <div className="stats-order-meta">
+                        {roasterLabel}{formattedDate} · {order.name}
+                      </div>
+                    </div>
+                    <div className="stats-order-secondary">
+                      <div className="stats-order-grams">{personCalc.totalGrams}g</div>
+                      <div className="stats-order-money">
+                        Your share: {formatZAR(personCalc.totalFinal)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </section>
+          </div>
         </>
       )}
     </div>
-  );
-}
-
-function StatsHeader() {
-  return (
-    <div style={{ marginBottom: 'var(--space-6)' }}>
-      <h2 style={{ marginBottom: 4 }}>My Stats</h2>
-      <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-        Your own coffee-order metrics only. No shared invoices, payment widgets, or other people&apos;s details.
-      </p>
-    </div>
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-  detail,
-  emphasize = false,
-}: {
-  label: string;
-  value: string;
-  detail?: string;
-  emphasize?: boolean;
-}) {
-  return (
-    <article className={`wizard-metric stats-metric-card ${emphasize ? 'is-emphasized' : ''}`}>
-      <div className="wizard-metric-label">{label}</div>
-      <div className="wizard-metric-value">{value}</div>
-      {detail && <div className="field-hint">{detail}</div>}
-    </article>
   );
 }
