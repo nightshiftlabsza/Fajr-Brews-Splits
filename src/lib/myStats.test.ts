@@ -46,8 +46,8 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
     workspaceId: 'workspace-1',
     name: overrides.name ?? 'Saved Order',
     orderDate: overrides.orderDate ?? '2026-03-01',
-    roasterId: overrides.roasterId ?? 'roaster-1',
-    roasterSnapshot: overrides.roasterSnapshot ?? {
+    roasterId: 'roasterId' in overrides ? overrides.roasterId! : 'roaster-1',
+    roasterSnapshot: 'roasterSnapshot' in overrides ? overrides.roasterSnapshot! : {
       id: 'roaster-1',
       name: 'Father Coffee',
       logoUrl: 'https://example.com/father.png',
@@ -174,7 +174,8 @@ describe('myStats helpers', () => {
 
     expect(entries).toHaveLength(2);
     expect(summary.totalGrams).toBe(375);
-    expect(summary.totalBags).toBeCloseTo(1.5, 6);
+    expect(summary.totalBags).toBe(2);
+    expect(summary.bagsSharedIn).toBe(2);
     expect(summary.totalSpent).toBe(600);
     expect(summary.favoriteRoaster?.name).toBe('Father Coffee');
   });
