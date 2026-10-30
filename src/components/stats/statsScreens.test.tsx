@@ -156,7 +156,7 @@ describe('Lane T: Stats Screens & Wording Test Suite', () => {
 
     expect(texts[0]).toContain('All time');
     expect(texts[1]).toContain('2026');
-    expect(texts[1]).toContain('Current');
+    expect(texts[1]).toContain('so far');
     expect(texts[2]).toContain('2025');
     expect(texts[3]).toContain('2023');
   });
@@ -191,6 +191,40 @@ describe('Lane T: Stats Screens & Wording Test Suite', () => {
     });
 
     expect(handleSelect).toHaveBeenCalledWith('2025');
+  });
+
+  it('2b. YearPicker with selectedYear displays year in trigger and marks that year active with checkmark', () => {
+    act(() => {
+      root.render(
+        <YearPicker
+          years={['2026', '2025']}
+          selectedRange={{ preset: 'all' }}
+          selectedYear="2025"
+          currentYear="2026"
+          totalOrdersCount={5}
+          onSelectYear={vi.fn()}
+          onSelectRange={vi.fn()}
+        />,
+      );
+    });
+
+    const trigger = container.querySelector('.stats-picker-trigger') as HTMLButtonElement;
+    expect(trigger.textContent).toContain('2025');
+
+    act(() => {
+      trigger.click();
+    });
+
+    const allTimeRow = Array.from(container.querySelectorAll('.stats-sheet-row')).find((b) =>
+      b.textContent?.includes('All time'),
+    );
+    expect(allTimeRow?.classList.contains('is-active')).toBe(false);
+
+    const year2025Btn = Array.from(container.querySelectorAll('.stats-sheet-row')).find((b) =>
+      b.textContent?.includes('2025'),
+    );
+    expect(year2025Btn?.classList.contains('is-active')).toBe(true);
+    expect(year2025Btn?.textContent).toContain('✓');
   });
 
   it('3. YearInCoffee renders all 5 chapters for a multi-order year', () => {
@@ -273,6 +307,21 @@ describe('Lane T: Stats Screens & Wording Test Suite', () => {
     const pill = container.querySelector('.stats-badge-pill');
     expect(pill).toBeTruthy();
     expect(pill?.textContent).toContain('Busiest: March');
+  });
+
+  it('6b. MonthlyChart supports keyboard interaction (Enter / Space to select and show value)', () => {
+    act(() => {
+      root.render(<MonthlyChart monthlyOrders={[2, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]} busiestMonth={2} />);
+    });
+
+    const marchCol = container.querySelector('[aria-label="March: 1 order"]') as HTMLDivElement;
+    expect(marchCol).toBeTruthy();
+
+    act(() => {
+      marchCol.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+
+    expect(container.querySelector('.stats-month-inspector')?.textContent).toContain('March: 1 order');
   });
 
   it('7. Both Classic (emerald) and Modern (yinmn) themes render properly', () => {

@@ -174,6 +174,7 @@ export function MyStatsPage() {
           <YearPicker
             years={availableYears}
             selectedRange={selectedYear ? { preset: 'all' } : range}
+            selectedYear={selectedYear}
             currentYear={currentCalendarYear}
             orderCountByYear={orderCountByYear}
             totalOrdersCount={allCountedOrders.length}
@@ -197,7 +198,25 @@ export function MyStatsPage() {
         </div>
       </div>
 
-      {summary.ordersCount === 0 ? (
+      {summary.rangeStatus === 'incomplete' ? (
+        <div className="stats-card" style={{ textAlign: 'center', padding: 'var(--space-8) var(--space-4)' }}>
+          <h3 style={{ margin: '0 0 var(--space-2) 0', color: 'var(--color-text-primary)' }}>
+            Date range is incomplete
+          </h3>
+          <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
+            Please select both a start date and an end date to see orders in that period.
+          </p>
+        </div>
+      ) : summary.rangeStatus === 'invalid' ? (
+        <div className="stats-card" style={{ textAlign: 'center', padding: 'var(--space-8) var(--space-4)' }}>
+          <h3 style={{ margin: '0 0 var(--space-2) 0', color: 'var(--color-danger, #d32f2f)' }}>
+            Start date cannot be after end date
+          </h3>
+          <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
+            Please check your custom dates so the start date is on or before the end date.
+          </p>
+        </div>
+      ) : summary.ordersCount === 0 ? (
         <div className="stats-card" style={{ textAlign: 'center', padding: 'var(--space-8) var(--space-4)' }}>
           <h3 style={{ margin: '0 0 var(--space-2) 0', color: 'var(--color-text-primary)' }}>
             No orders in this range yet

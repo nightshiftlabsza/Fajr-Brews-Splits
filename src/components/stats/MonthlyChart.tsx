@@ -72,11 +72,18 @@ export function MonthlyChart({ monthlyOrders, busiestMonth }: MonthlyChartProps)
           const letter = MONTH_LETTERS[index]!;
 
           return (
-            <button
+            <div
               key={monthName}
-              type="button"
+              role="button"
+              tabIndex={0}
               className={`stats-month-col ${isBusiest ? 'is-busiest' : ''} ${isSelected ? 'is-active' : ''}`}
               onClick={() => setSelectedMonthIndex(index === selectedMonthIndex ? null : index)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setSelectedMonthIndex(index === selectedMonthIndex ? null : index);
+                }
+              }}
               aria-label={`${monthName}: ${count} ${count === 1 ? 'order' : 'orders'}`}
               aria-pressed={isSelected}
             >
@@ -93,7 +100,7 @@ export function MonthlyChart({ monthlyOrders, busiestMonth }: MonthlyChartProps)
               <span className="stats-month-label" aria-hidden="true">
                 {letter}
               </span>
-            </button>
+            </div>
           );
         })}
       </div>

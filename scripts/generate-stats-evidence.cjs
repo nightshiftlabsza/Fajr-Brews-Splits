@@ -190,18 +190,18 @@ function buildStatsHomeHtml(theme, mode, width) {
                 <div class="stats-badge-pill">Busiest: March</div>
               </div>
               <div class="stats-month-chart" role="region" aria-label="Monthly order chart">
-                <button type="button" class="stats-month-col" aria-label="January: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">J</span></button>
-                <button type="button" class="stats-month-col" aria-label="February: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">F</span></button>
-                <button type="button" class="stats-month-col is-busiest" aria-label="March: 3 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 100%;"></div></div><span class="stats-month-label">M</span></button>
-                <button type="button" class="stats-month-col" aria-label="April: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">A</span></button>
-                <button type="button" class="stats-month-col" aria-label="May: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">M</span></button>
-                <button type="button" class="stats-month-col" aria-label="June: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">J</span></button>
-                <button type="button" class="stats-month-col" aria-label="July: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">J</span></button>
-                <button type="button" class="stats-month-col" aria-label="August: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">A</span></button>
-                <button type="button" class="stats-month-col" aria-label="September: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">S</span></button>
-                <button type="button" class="stats-month-col" aria-label="October: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">O</span></button>
-                <button type="button" class="stats-month-col" aria-label="November: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">N</span></button>
-                <button type="button" class="stats-month-col" aria-label="December: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">D</span></button>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="January: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">J</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="February: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">F</span></div>
+                <div role="button" tabindex="0" class="stats-month-col is-busiest" aria-label="March: 3 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 100%;"></div></div><span class="stats-month-label">M</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="April: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">A</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="May: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">M</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="June: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">J</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="July: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">J</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="August: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">A</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="September: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">S</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="October: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">O</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="November: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">N</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="December: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">D</span></div>
               </div>
             </div>
           </div>
@@ -242,7 +242,7 @@ function buildStatsHomeHtml(theme, mode, width) {
 }
 
 function buildRecapHtml(theme, mode, width) {
-  const isDesktop = width >= 1024;
+  const isDesktop = width >= 768;
   return `
     <!DOCTYPE html>
     <html lang="en" data-theme="${theme}" data-mode="${mode}">
@@ -330,7 +330,7 @@ function buildRecapHtml(theme, mode, width) {
             <section class="yic-chapter-section">
               <div class="yic-chapter-num">03 · Coffees you tried</div>
               <h3 style="margin: 0 0 var(--space-1) 0; font-size: var(--text-xl);">Ranked by coffee taken</h3>
-              <p style="margin: 0 0 var(--space-4) 0; font-size: var(--text-sm); color: var(--color-text-muted);">Typed coffee names from orders you were part of</p>
+              <p style="margin: 0 0 var(--space-4) 0; font-size: var(--text-sm); color: var(--color-text-muted);">Coffees you took from orders you were part of</p>
               <div class="stats-rank-list">
                 <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--color-border);">
                   <div>
@@ -356,18 +356,18 @@ function buildRecapHtml(theme, mode, width) {
                 <div class="stats-badge-pill">Busiest: March</div>
               </div>
               <div class="stats-month-chart" role="region" aria-label="Monthly order chart">
-                <button type="button" class="stats-month-col" aria-label="January: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">J</span></button>
-                <button type="button" class="stats-month-col" aria-label="February: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">F</span></button>
-                <button type="button" class="stats-month-col is-busiest" aria-label="March: 3 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 100%;"></div></div><span class="stats-month-label">M</span></button>
-                <button type="button" class="stats-month-col" aria-label="April: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">A</span></button>
-                <button type="button" class="stats-month-col" aria-label="May: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">M</span></button>
-                <button type="button" class="stats-month-col" aria-label="June: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">J</span></button>
-                <button type="button" class="stats-month-col" aria-label="July: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">J</span></button>
-                <button type="button" class="stats-month-col" aria-label="August: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">A</span></button>
-                <button type="button" class="stats-month-col" aria-label="September: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">S</span></button>
-                <button type="button" class="stats-month-col" aria-label="October: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">O</span></button>
-                <button type="button" class="stats-month-col" aria-label="November: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">N</span></button>
-                <button type="button" class="stats-month-col" aria-label="December: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">D</span></button>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="January: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">J</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="February: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">F</span></div>
+                <div role="button" tabindex="0" class="stats-month-col is-busiest" aria-label="March: 3 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 100%;"></div></div><span class="stats-month-label">M</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="April: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">A</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="May: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">M</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="June: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">J</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="July: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">J</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="August: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">A</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="September: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">S</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="October: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">O</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="November: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">N</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="December: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">D</span></div>
               </div>
             </section>
 
@@ -452,7 +452,7 @@ function buildYearPickerHtml(theme, mode, width) {
               <span class="stats-sheet-row-meta">7 orders total</span>
             </button>
             <button type="button" class="stats-sheet-row is-active">
-              <span>2026<span class="stats-sheet-badge-current">Current</span></span>
+              <span>2026<span class="stats-sheet-badge-current">so far</span></span>
               <span class="stats-sheet-row-meta">4 orders ✓</span>
             </button>
             <button type="button" class="stats-sheet-row">
@@ -583,7 +583,6 @@ async function captureEvidence() {
         const outPath = path.join(EVIDENCE_DIR, `stats-home-${t.name}-${w}.png`);
         await page.screenshot({ path: outPath, fullPage: true });
 
-        // Checks
         const isNoOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
         overflowResults.push({ screen: 'stats-home', theme: t.name, width: w, passed: isNoOverflow });
 
@@ -593,7 +592,9 @@ async function captureEvidence() {
             .filter((b) => b.offsetWidth < 44 || b.offsetHeight < 44)
             .map((b) => ({ text: b.textContent?.trim() || b.getAttribute('aria-label'), w: b.offsetWidth, h: b.offsetHeight }));
         });
-        buttonSizeResults.push({ screen: 'stats-home', theme: t.name, width: w, smallButtons });
+        if (smallButtons.length > 0) {
+          buttonSizeResults.push({ screen: 'stats-home', theme: t.name, width: w, smallButtons });
+        }
         await page.close();
       }
 
@@ -606,6 +607,16 @@ async function captureEvidence() {
 
         const isNoOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
         overflowResults.push({ screen: 'recap', theme: t.name, width: w, passed: isNoOverflow });
+
+        const smallButtons = await page.evaluate(() => {
+          const btns = Array.from(document.querySelectorAll('button'));
+          return btns
+            .filter((b) => b.offsetWidth < 44 || b.offsetHeight < 44)
+            .map((b) => ({ text: b.textContent?.trim() || b.getAttribute('aria-label'), w: b.offsetWidth, h: b.offsetHeight }));
+        });
+        if (smallButtons.length > 0) {
+          buttonSizeResults.push({ screen: 'recap', theme: t.name, width: w, smallButtons });
+        }
         await page.close();
       }
 
@@ -618,26 +629,62 @@ async function captureEvidence() {
 
         const isNoOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
         overflowResults.push({ screen: 'year-picker', theme: t.name, width: w, passed: isNoOverflow });
+
+        const smallButtons = await page.evaluate(() => {
+          const btns = Array.from(document.querySelectorAll('button'));
+          return btns
+            .filter((b) => b.offsetWidth < 44 || b.offsetHeight < 44)
+            .map((b) => ({ text: b.textContent?.trim() || b.getAttribute('aria-label'), w: b.offsetWidth, h: b.offsetHeight }));
+        });
+        if (smallButtons.length > 0) {
+          buttonSizeResults.push({ screen: 'year-picker', theme: t.name, width: w, smallButtons });
+        }
         await page.close();
       }
-    }
 
-    // 4. Empty State (at 390 phone and 1280 desktop)
-    for (const w of [390, 1280]) {
-      const page = await browser.newPage({ viewport: { width: w, height: 700 } });
-      await page.setContent(buildEmptyStateHtml(t.theme, t.mode));
-      const outPath = path.join(EVIDENCE_DIR, `empty-state-${t.name}-${w}.png`);
-      await page.screenshot({ path: outPath, fullPage: true });
-      await page.close();
-    }
+      // 4. Empty State
+      {
+        const page = await browser.newPage({ viewport: { width: w, height: 700 } });
+        await page.setContent(buildEmptyStateHtml(t.theme, t.mode));
+        const outPath = path.join(EVIDENCE_DIR, `empty-state-${t.name}-${w}.png`);
+        await page.screenshot({ path: outPath, fullPage: true });
 
-    // 5. One Order State (at 390 phone and 1280 desktop)
-    for (const w of [390, 1280]) {
-      const page = await browser.newPage({ viewport: { width: w, height: 700 } });
-      await page.setContent(buildOneOrderStateHtml(t.theme, t.mode));
-      const outPath = path.join(EVIDENCE_DIR, `one-order-${t.name}-${w}.png`);
-      await page.screenshot({ path: outPath, fullPage: true });
-      await page.close();
+        const isNoOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+        overflowResults.push({ screen: 'empty-state', theme: t.name, width: w, passed: isNoOverflow });
+
+        const smallButtons = await page.evaluate(() => {
+          const btns = Array.from(document.querySelectorAll('button'));
+          return btns
+            .filter((b) => b.offsetWidth < 44 || b.offsetHeight < 44)
+            .map((b) => ({ text: b.textContent?.trim() || b.getAttribute('aria-label'), w: b.offsetWidth, h: b.offsetHeight }));
+        });
+        if (smallButtons.length > 0) {
+          buttonSizeResults.push({ screen: 'empty-state', theme: t.name, width: w, smallButtons });
+        }
+        await page.close();
+      }
+
+      // 5. One Order State
+      {
+        const page = await browser.newPage({ viewport: { width: w, height: 700 } });
+        await page.setContent(buildOneOrderStateHtml(t.theme, t.mode));
+        const outPath = path.join(EVIDENCE_DIR, `one-order-${t.name}-${w}.png`);
+        await page.screenshot({ path: outPath, fullPage: true });
+
+        const isNoOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+        overflowResults.push({ screen: 'one-order', theme: t.name, width: w, passed: isNoOverflow });
+
+        const smallButtons = await page.evaluate(() => {
+          const btns = Array.from(document.querySelectorAll('button'));
+          return btns
+            .filter((b) => b.offsetWidth < 44 || b.offsetHeight < 44)
+            .map((b) => ({ text: b.textContent?.trim() || b.getAttribute('aria-label'), w: b.offsetWidth, h: b.offsetHeight }));
+        });
+        if (smallButtons.length > 0) {
+          buttonSizeResults.push({ screen: 'one-order', theme: t.name, width: w, smallButtons });
+        }
+        await page.close();
+      }
     }
   }
 

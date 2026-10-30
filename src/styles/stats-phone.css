@@ -206,8 +206,18 @@
   margin-left: var(--space-2);
 }
 
-/* ── Phone Chapter Dots & Gentle Snapping ───────────────── */
+.yic-dot-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+}
+
 @media (max-width: 767px) {
+  .yic-chapter-nav {
+    display: none;
+  }
+
   .yic-phone-container {
     position: relative;
   }
@@ -240,10 +250,10 @@
   }
 
   .yic-dot-btn {
-    width: 24px;
-    height: 24px;
-    min-width: 24px;
-    min-height: 24px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
     padding: 0;
     display: flex;
     align-items: center;

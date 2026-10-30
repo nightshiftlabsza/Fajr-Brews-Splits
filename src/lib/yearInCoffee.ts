@@ -1,6 +1,11 @@
 import { calculate } from './calculations';
 import { normalizeRoasterName, resolveOrderRoaster, type ResolvedOrderRoaster } from './roasters';
-import type { Order, Roaster } from '../types';
+import type { CoffeeLot, Order, Roaster } from '../types';
+
+export interface PersonLotGrams {
+  name: string;
+  grams: number;
+}
 
 export interface CountedOrderEntry {
   order: Order;
@@ -12,6 +17,7 @@ export interface CountedOrderEntry {
   canonicalRoaster: CanonicalRoaster | null;
   bagsSharedIn: number;
   lotNames: string[];
+  personLots?: PersonLotGrams[];
 }
 
 export interface CanonicalRoaster {
@@ -69,6 +75,7 @@ export interface PeriodSummary {
   styleOfYear: StyleOfYear | null;
   topCoffees: TopCoffeeSummary[];
   totalSpentZar: number;
+  rangeStatus: RangeValidationStatus;
   entries: CountedOrderEntry[];
 }
 
@@ -283,6 +290,24 @@ export function countBagsSharedIn(order: Order, personId: string): number {
   return bagCount;
 }
 
+export function getPersonGramsInLot(lot: CoffeeLot, personId: string): number {
+  if (lot.bags && lot.bags.length > 0) {
+    return lot.bags.reduce((sum, bag) => {
+      const buyer = bag.buyers.find((b) => b.personId === personId);
+      return sum + (buyer && buyer.grams > 0 ? buyer.grams : 0);
+    }, 0);
+  }
+  if (lot.bagAllocations && lot.bagAllocations.length > 0) {
+    return lot.bagAllocations.reduce((sum, alloc) => {
+      const part = alloc.participants.find((p) => p.personId === personId);
+      return sum + (part && part.shareGrams > 0 ? part.shareGrams : 0);
+    }, 0);
+  }
+  return (lot.shares ?? []).reduce((sum, share) => {
+    return share.personId === personId && share.shareGrams > 0 ? sum + share.shareGrams : sum;
+  }, 0);
+}
+
 export function getCountedOrders(
   orders: Order[],
   personId: string | null,
@@ -302,23 +327,7 @@ export function getCountedOrders(
 
   for (const order of eligibleOrders) {
     const rawGrams = order.lots.reduce((total, lot) => {
-      let lotGrams = 0;
-      if (lot.bags && lot.bags.length > 0) {
-        lotGrams = lot.bags.reduce((bSum, bag) => {
-          const buyer = bag.buyers.find((b) => b.personId === personId);
-          return bSum + (buyer ? buyer.grams : 0);
-        }, 0);
-      } else if (lot.bagAllocations && lot.bagAllocations.length > 0) {
-        lotGrams = lot.bagAllocations.reduce((aSum, alloc) => {
-          const part = alloc.participants.find((p) => p.personId === personId);
-          return aSum + (part ? part.shareGrams : 0);
-        }, 0);
-      } else {
-        lotGrams = (lot.shares ?? []).reduce((sSum, share) => {
-          return share.personId === personId ? sSum + (share.shareGrams || 0) : sSum;
-        }, 0);
-      }
-      return total + lotGrams;
+      return total + getPersonGramsInLot(lot, personId);
     }, 0);
 
     if (rawGrams <= 0) {
@@ -332,14 +341,17 @@ export function getCountedOrders(
         const roaster = resolveOrderRoaster(order, roasters);
         const canonicalRoaster = resolveCanonicalRoaster(roaster, roasters);
         const bagsSharedIn = countBagsSharedIn(order, personId);
-        const lotNames = order.lots
-          .filter((lot) => {
-            const inBags = lot.bags?.some((b) => b.buyers.some((buyer) => buyer.personId === personId && buyer.grams > 0));
-            const inShares = lot.shares?.some((s) => s.personId === personId && s.shareGrams > 0);
-            return inBags || inShares;
-          })
-          .map((lot) => lot.name.trim())
-          .filter(Boolean);
+        const personLots: PersonLotGrams[] = [];
+        for (const lot of order.lots) {
+          const g = getPersonGramsInLot(lot, personId);
+          if (g > 0) {
+            personLots.push({
+              name: lot.name.trim() || 'Coffee',
+              grams: g,
+            });
+          }
+        }
+        const lotNames = personLots.map((p) => p.name);
 
         entries.push({
           order,
@@ -351,6 +363,7 @@ export function getCountedOrders(
           canonicalRoaster,
           bagsSharedIn,
           lotNames,
+          personLots,
         });
         continue;
       }
@@ -377,7 +390,17 @@ export function getCountedOrders(
         const roaster = resolveOrderRoaster(order, roasters);
         const canonicalRoaster = resolveCanonicalRoaster(roaster, roasters);
         const bagsSharedIn = countBagsSharedIn(order, personId);
-        const lotNames = order.lots.map((lot) => lot.name.trim()).filter(Boolean);
+        const personLots: PersonLotGrams[] = [];
+        for (const lot of projectedOrder.lots) {
+          const g = getPersonGramsInLot(lot, personId);
+          if (g > 0) {
+            personLots.push({
+              name: lot.name.trim() || 'Coffee',
+              grams: g,
+            });
+          }
+        }
+        const lotNames = personLots.map((p) => p.name);
 
         entries.push({
           order,
@@ -389,6 +412,7 @@ export function getCountedOrders(
           canonicalRoaster,
           bagsSharedIn,
           lotNames,
+          personLots,
         });
         continue;
       }
@@ -439,6 +463,7 @@ export function summarisePeriod(
   const today = options?.today ?? getLocalTodayString();
   const allTimeList = options?.allTimeOrders ?? allEntries;
   const skippedCount = options?.skippedCount ?? 0;
+  const rangeStatus = options?.range ? validateStatsDateRange(options.range).status : 'valid';
 
   let filteredEntries: CountedOrderEntry[];
 
@@ -510,36 +535,32 @@ export function summarisePeriod(
       }
     }
 
-    for (const lot of entry.order.lots) {
+    const lotsToCount: PersonLotGrams[] =
+      entry.personLots && entry.personLots.length > 0
+        ? entry.personLots
+        : entry.lotNames.map((name) => ({
+            name,
+            grams:
+              entry.personCalc.totalGrams > 0 && entry.lotNames.length > 0
+                ? Math.round(entry.personCalc.totalGrams / entry.lotNames.length)
+                : entry.personCalc.totalGrams,
+          }));
+
+    for (const lot of lotsToCount) {
       const rawName = lot.name.trim();
       if (!rawName) continue;
-
-      let lotGrams = 0;
-      if (lot.bags && lot.bags.length > 0) {
-        lotGrams = lot.bags.reduce((bSum, bag) => {
-          const buyersGrams = bag.buyers.reduce((sum, buyer) => {
-            return buyer.personId === entry.order.payerId ||
-              lot.shares.some((s) => s.personId === buyer.personId)
-              ? sum + buyer.grams
-              : sum;
-          }, 0);
-          return bSum + buyersGrams;
-        }, 0);
-      }
-
-      const pGrams = entry.personCalc.totalGrams > 0 ? entry.personCalc.totalGrams : lotGrams;
       const normalizedLotName = rawName.toLowerCase().replace(/\s+/g, ' ');
       const existingCoffee = coffeesMap.get(normalizedLotName);
 
       if (!existingCoffee) {
         coffeesMap.set(normalizedLotName, {
           displayName: rawName,
-          grams: pGrams,
+          grams: lot.grams,
           orderCount: 1,
           roasterName: entry.roaster?.name,
         });
       } else {
-        existingCoffee.grams += pGrams;
+        existingCoffee.grams += lot.grams;
         existingCoffee.orderCount += 1;
         if (!existingCoffee.roasterName && entry.roaster?.name) {
           existingCoffee.roasterName = entry.roaster.name;
@@ -692,6 +713,7 @@ export function summarisePeriod(
     styleOfYear,
     topCoffees,
     totalSpentZar,
+    rangeStatus,
     entries: filteredEntries,
   };
 }
@@ -711,14 +733,20 @@ export function compareSamePeriod(
     return null;
   }
 
-  const { month, day } = parseDateParts(today);
+  const { year: currentCalYear, month, day } = parseDateParts(today);
+  const isCurrentYear = currentYear === String(currentCalYear);
+
   const currentStart = `${currentYear}-01-01`;
-  const currentEnd = `${currentYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const currentEnd = isCurrentYear
+    ? `${currentYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    : `${currentYear}-12-31`;
 
   const prevStart = `${previousYear}-01-01`;
   const prevMaxDay = daysInMonth(prevYearNum, month);
   const prevClampedDay = Math.min(day, prevMaxDay);
-  const prevEnd = `${previousYear}-${String(month).padStart(2, '0')}-${String(prevClampedDay).padStart(2, '0')}`;
+  const prevEnd = isCurrentYear
+    ? `${previousYear}-${String(month).padStart(2, '0')}-${String(prevClampedDay).padStart(2, '0')}`
+    : `${previousYear}-12-31`;
 
   const currentPeriodEntries = allCountedOrders.filter(
     (e) => e.order.orderDate >= currentStart && e.order.orderDate <= currentEnd,

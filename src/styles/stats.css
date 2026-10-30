@@ -481,16 +481,27 @@
   gap: var(--space-6);
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .yic-editorial-shell {
-    grid-template-columns: 280px 1fr;
-    gap: var(--space-8);
+    grid-template-columns: 260px 1fr;
+    gap: var(--space-6);
   }
 
   .yic-sidebar-sticky {
     position: sticky;
     top: calc(var(--nav-top-height, 64px) + var(--space-4));
   }
+}
+
+@media (min-width: 1024px) {
+  .yic-editorial-shell {
+    grid-template-columns: 280px 1fr;
+    gap: var(--space-8);
+  }
+}
+
+.yic-dots-indicator {
+  display: none;
 }
 
 .yic-chapter-nav {

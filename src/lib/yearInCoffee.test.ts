@@ -307,6 +307,18 @@ describe('yearInCoffee - Lane D metric calculations & audit fixes', () => {
   });
 
   it('7. 31 Dec to 1 Jan and 29 Feb string dates do not shift under timezones', () => {
+    // In extreme negative timezone (e.g. UTC-11 / Pago Pago), converting UTC midnight string 2026-01-01T00:00:00Z shifts to 2025!
+    const utcMidnight = '2026-01-01T00:00:00Z';
+    const offsetMsUtcMinus11 = -11 * 60 * 60 * 1000;
+    const shiftedToPrevYear = new Date(new Date(utcMidnight).getTime() + offsetMsUtcMinus11);
+    expect(shiftedToPrevYear.getUTCFullYear()).toBe(2025);
+
+    // In extreme positive timezone (e.g. UTC+14 / Line Islands), 2025-12-31T12:00:00Z shifts to 2026!
+    const offsetMsUtcPlus14 = 14 * 60 * 60 * 1000;
+    const shiftedToNextYear = new Date(new Date('2025-12-31T12:00:00Z').getTime() + offsetMsUtcPlus14);
+    expect(shiftedToNextYear.getUTCFullYear()).toBe(2026);
+
+    // But text-based date parsing in yearInCoffee is strictly invariant:
     expect(parseDateParts('2025-12-31')).toEqual({
       year: 2025,
       month: 12,
@@ -542,5 +554,85 @@ describe('yearInCoffee - Lane D metric calculations & audit fixes', () => {
 
     const years = getCountedYears([o2024, o2026, uncountedPlanningOrder], 'person-1', { 'person-1': 'Amina' }, roasters);
     expect(years).toEqual(['2026', '2024']);
+  });
+
+  it('17. Multi-lot orders accurately track user personal grams per lot and distinct coffees', () => {
+    const multiLotOrder = makeOrder({
+      id: 'order-multi-lot',
+      lots: [
+        {
+          id: 'lot-1',
+          name: 'Kenya AA',
+          foreignPricePerBag: 20,
+          gramsPerBag: 250,
+          quantity: 1,
+          shares: [{ id: 's1', personId: 'person-1', shareGrams: 250, bagIndex: 0 }],
+          bags: [{ id: 'b1', splitMode: 'full', buyers: [{ id: 'bb1', personId: 'person-1', grams: 250 }] }],
+        },
+        {
+          id: 'lot-2',
+          name: 'Ethiopia Guji',
+          foreignPricePerBag: 30,
+          gramsPerBag: 500,
+          quantity: 1,
+          shares: [{ id: 's2', personId: 'person-1', shareGrams: 500, bagIndex: 0 }],
+          bags: [{ id: 'b2', splitMode: 'full', buyers: [{ id: 'bb2', personId: 'person-1', grams: 500 }] }],
+        },
+        {
+          id: 'lot-3',
+          name: 'Colombia Huila',
+          foreignPricePerBag: 25,
+          gramsPerBag: 250,
+          quantity: 1,
+          shares: [{ id: 's3', personId: 'person-2', shareGrams: 250, bagIndex: 0 }],
+          bags: [{ id: 'b3', splitMode: 'full', buyers: [{ id: 'bb3', personId: 'person-2', grams: 250 }] }],
+        },
+      ],
+    });
+
+    const { entries } = getCountedOrders(
+      [multiLotOrder],
+      'person-1',
+      { 'person-1': 'Amina', 'person-2': 'Bilal' },
+      roasters,
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.lotNames).toEqual(['Kenya AA', 'Ethiopia Guji']);
+    expect(entries[0]!.personLots).toEqual([
+      { name: 'Kenya AA', grams: 250 },
+      { name: 'Ethiopia Guji', grams: 500 },
+    ]);
+
+    const summary = summarisePeriod(entries);
+    // User only tried 2 coffees, not 3 (Colombia Huila was taken by person-2)
+    expect(summary.coffeesTried).toBe(2);
+    expect(summary.topCoffees).toHaveLength(2);
+    expect(summary.topCoffees[0]!.name).toBe('Ethiopia Guji');
+    expect(summary.topCoffees[0]!.grams).toBe(500);
+    expect(summary.topCoffees[1]!.name).toBe('Kenya AA');
+    expect(summary.topCoffees[1]!.grams).toBe(250);
+  });
+
+  it('18. summarisePeriod reports rangeStatus for incomplete and invalid ranges', () => {
+    const order = makeOrder({ orderDate: '2026-03-01' });
+    const { entries } = getCountedOrders([order], 'person-1', { 'person-1': 'Amina' }, roasters);
+
+    const incompleteSummary = summarisePeriod(entries, {
+      range: { preset: 'custom', startDate: '2026-01-01', endDate: '' },
+    });
+    expect(incompleteSummary.rangeStatus).toBe('incomplete');
+    expect(incompleteSummary.ordersCount).toBe(0);
+
+    const invalidSummary = summarisePeriod(entries, {
+      range: { preset: 'custom', startDate: '2026-05-01', endDate: '2026-02-01' },
+    });
+    expect(invalidSummary.rangeStatus).toBe('invalid');
+    expect(invalidSummary.ordersCount).toBe(0);
+
+    const validSummary = summarisePeriod(entries, {
+      range: { preset: 'custom', startDate: '2026-01-01', endDate: '2026-04-01' },
+    });
+    expect(validSummary.rangeStatus).toBe('valid');
+    expect(validSummary.ordersCount).toBe(1);
   });
 });

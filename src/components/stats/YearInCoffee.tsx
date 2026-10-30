@@ -189,6 +189,7 @@ export function YearInCoffee({
               <YearPicker
                 years={availableYears}
                 selectedRange={{ preset: 'all' }}
+                selectedYear={selectedYear}
                 currentYear={currentCalendarYear}
                 orderCountByYear={orderCountByYear}
                 totalOrdersCount={allCountedOrders.length}
@@ -361,7 +362,7 @@ export function YearInCoffee({
                 Ranked by coffee taken
               </h3>
               <p style={{ margin: '0 0 var(--space-4) 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
-                Typed coffee names from orders you were part of
+                Coffees you took from orders you were part of
               </p>
 
               <div className="stats-rank-list">

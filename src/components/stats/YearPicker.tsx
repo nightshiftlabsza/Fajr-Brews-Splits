@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, useId } from 'react';
-import type { StatsDateRange, StatsRangePreset } from '../../lib/yearInCoffee';
+import { validateStatsDateRange, type StatsDateRange, type StatsRangePreset } from '../../lib/yearInCoffee';
 
 interface YearPickerProps {
   years: string[];
   selectedRange: StatsDateRange;
+  selectedYear?: string | null;
   currentYear: string;
   orderCountByYear?: Record<string, number>;
   totalOrdersCount: number;
@@ -14,6 +15,7 @@ interface YearPickerProps {
 export function YearPicker({
   years,
   selectedRange,
+  selectedYear,
   currentYear,
   orderCountByYear = {},
   totalOrdersCount,
@@ -88,7 +90,12 @@ export function YearPicker({
     triggerRef.current?.focus();
   };
 
+  const customValidation = selectedRange.preset === 'custom' ? validateStatsDateRange(selectedRange) : null;
+
   const getTriggerLabel = (): string => {
+    if (selectedYear) {
+      return selectedYear === currentYear ? `${selectedYear} so far` : selectedYear;
+    }
     if (selectedRange.preset === 'all') {
       return 'All time';
     }
@@ -170,7 +177,7 @@ export function YearPicker({
             <div className="stats-sheet-body">
               <button
                 type="button"
-                className={`stats-sheet-row ${selectedRange.preset === 'all' ? 'is-active' : ''}`}
+                className={`stats-sheet-row ${!selectedYear && selectedRange.preset === 'all' ? 'is-active' : ''}`}
                 onClick={() => {
                   onSelectYear(null);
                   handleClose();
@@ -179,18 +186,19 @@ export function YearPicker({
                 <span>All time</span>
                 <span className="stats-sheet-row-meta">
                   {totalOrdersCount} {totalOrdersCount === 1 ? 'order' : 'orders'} total
-                  {selectedRange.preset === 'all' && <span aria-hidden="true"> ✓</span>}
+                  {!selectedYear && selectedRange.preset === 'all' && <span aria-hidden="true"> ✓</span>}
                 </span>
               </button>
 
               {years.map((year) => {
                 const isCurrent = year === currentYear;
+                const isSelected = selectedYear === year;
                 const count = orderCountByYear[year] ?? 0;
                 return (
                   <button
                     key={year}
                     type="button"
-                    className="stats-sheet-row"
+                    className={`stats-sheet-row ${isSelected ? 'is-active' : ''}`}
                     onClick={() => {
                       onSelectYear(year);
                       handleClose();
@@ -198,10 +206,11 @@ export function YearPicker({
                   >
                     <span>
                       {year}
-                      {isCurrent && <span className="stats-sheet-badge-current">Current</span>}
+                      {isCurrent && <span className="stats-sheet-badge-current">so far</span>}
                     </span>
                     <span className="stats-sheet-row-meta">
                       {count} {count === 1 ? 'order' : 'orders'}
+                      {isSelected && <span aria-hidden="true"> ✓</span>}
                     </span>
                   </button>
                 );
@@ -293,6 +302,16 @@ export function YearPicker({
                       }
                     />
                   </div>
+                  {customValidation?.status === 'incomplete' && (
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-warning)', padding: '2px 0' }}>
+                      Select both a start and end date.
+                    </div>
+                  )}
+                  {customValidation?.status === 'invalid' && (
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-danger, #d32f2f)', padding: '2px 0' }}>
+                      Start date must be on or before end date.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
