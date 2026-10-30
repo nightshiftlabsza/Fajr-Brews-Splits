@@ -1,7 +1,7 @@
 PROMPT 3 of 5 - Year in Coffee
 Repo: Fajr Brews Splits. Read AGENTS.md first and follow it (strict TS, pure logic in src/lib with colocated tests, CSS variables only, no new dependencies, no linter, gate = npm run typecheck && npm test && npm run build). Read docs/stats-redesign/AUDIT.md for the data limits and the exact metric definitions; they are the contract. The app records orders, roasters, hand-typed coffee names, grams and dates. It does NOT record origin, brewing method, ratings or tasting notes, so never show those. Plain everyday words in anything visible (no "finalized", "ZAR share", "lot", "250g eq"). No per-bag or per-gram prices anywhere. No mock data in production code. No unrelated refactors. Do not touch the header lockup.
 
-Goal: a polished yearly recap that reads like a page of a coffee journal. Design reference: Stitch screens 3, 4, 5 in docs/stats-redesign/stitch/ if present; otherwise follow this spec and say so.
+Goal: a polished yearly recap that reads like a page of a coffee journal. Design reference: Stitch screens 3, 4, 5 in docs/stats-redesign/stitch/ (read NOTES.md there first: it lists what to ignore and fix); otherwise follow this spec and say so.
 Files: new src/components/stats/YearInCoffee.tsx (+ small sections), a year picker component, route/tab wiring in src/App.tsx following how my-stats is wired, tests, src/styles/globals.css (own section).
 Rules: use only fields from summarisePeriod and friends (prompt 1). Nothing invented, no personality quizzes: the "style of year" label appears only when defined (4+ orders) and always shows its numbers ("5 of your 6 orders came from Father Coffee").
 Chapters (each a calm full-width section, large editorial type, restrained colour, generous space, one idea each):
