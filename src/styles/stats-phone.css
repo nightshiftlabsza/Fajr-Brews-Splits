@@ -9,7 +9,7 @@
   .stats-container {
     padding-left: max(var(--space-4), env(safe-area-inset-left));
     padding-right: max(var(--space-4), env(safe-area-inset-right));
-    padding-bottom: calc(var(--space-16) + 72px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(var(--space-16) + 32px + env(safe-area-inset-bottom, 0px));
   }
 
   .stats-order-meta {
@@ -229,6 +229,7 @@
 
   .yic-phone-container {
     position: relative;
+    padding-right: calc(48px + max(var(--space-2), env(safe-area-inset-right)));
   }
 
   .yic-phone-scroll {
@@ -244,19 +245,19 @@
 
   .yic-dots-indicator {
     position: fixed;
-    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
-    left: 50%;
-    transform: translateX(-50%);
+    right: max(var(--space-1), env(safe-area-inset-right));
+    top: 50%;
+    transform: translateY(-50%);
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     align-items: center;
     gap: 4px;
     z-index: var(--z-sticky, 40);
-    padding: 2px 8px;
+    padding: 6px 2px;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-full);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-sm);
   }
 
   .yic-dot-btn {
