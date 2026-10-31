@@ -68,8 +68,8 @@ export function MonthlyChart({ monthlyOrders, busiestMonth }: MonthlyChartProps)
           const isBusiest = busiestMonth === index + 1;
           const isSelected = selectedMonthIndex === index;
           const heightPercent = count > 0 ? Math.max((count / maxOrders) * 100, 15) : 0;
-          const monthName = MONTH_NAMES[index]!;
-          const letter = MONTH_LETTERS[index]!;
+          const monthName = MONTH_NAMES[index] ?? '';
+          const letter = MONTH_LETTERS[index] ?? '';
 
           return (
             <div

@@ -1557,7 +1557,6 @@ describe('Fajr Brews Splits — Comprehensive 4-Tier E2E Workflow Test Suite', (
       const summary = calculateMyStatsSummary(matchedOrders);
       expect(summary.totalGrams).toBe(750); // 500g + 250g
       expect(summary.totalBags).toBe(3);
-      expect(summary.totalSpent).toBe(800);
       expect(summary.favoriteRoaster?.name).toBe('Tim Wendelboe');
       expect(summary.favoriteRoaster?.bagCount).toBe(2);
     });

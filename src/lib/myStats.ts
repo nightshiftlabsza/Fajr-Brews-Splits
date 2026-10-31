@@ -51,7 +51,6 @@ export interface FavoriteRoasterStat extends ResolvedOrderRoaster {
 
 export interface MyStatsSummary {
   totalGrams: number;
-  totalSpent: number;
   totalBags: number;
   averageCostPer250g: number | null;
   favoriteRoaster: FavoriteRoasterStat | null;
@@ -161,7 +160,6 @@ export function calculateMyStatsSummary(orders: ParticipantOrderMatch[]): MyStat
 
   return {
     totalGrams: summary.gramsTaken,
-    totalSpent: summary.totalSpentZar,
     totalBags: summary.bagsSharedIn,
     averageCostPer250g: null,
     favoriteRoaster: summary.favouriteRoaster

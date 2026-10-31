@@ -145,6 +145,29 @@ function buildStatsHomeHtml(theme, mode, width) {
             </div>
 
             <div class="stats-card">
+              <div class="stats-monthly-header">
+                <div class="stats-card-eyebrow" style="margin-bottom: 0;">Monthly rhythm</div>
+                <div class="stats-badge-pill">Busiest: March</div>
+              </div>
+              <div class="stats-month-chart" role="region" aria-label="Monthly order chart">
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="January: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">J</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="February: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">F</span></div>
+                <div role="button" tabindex="0" class="stats-month-col is-busiest" aria-label="March: 3 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 100%;"></div></div><span class="stats-month-label">M</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="April: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">A</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="May: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">M</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="June: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">J</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="July: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">J</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="August: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">A</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="September: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">S</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="October: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">O</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="November: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">N</span></div>
+                <div role="button" tabindex="0" class="stats-month-col" aria-label="December: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">D</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="stats-card">
               <div class="stats-card-eyebrow">Favourite roaster</div>
               <div class="stats-fav-row">
                 <div style="width: 52px; height: 52px; border-radius: var(--radius-md); background: var(--color-accent-light); color: var(--color-accent); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.125rem;">FC</div>
@@ -154,9 +177,7 @@ function buildStatsHomeHtml(theme, mode, width) {
                 </div>
               </div>
             </div>
-          </div>
 
-          <div>
             <div class="stats-card">
               <div class="stats-card-eyebrow">You keep coming back to</div>
               <div class="stats-rank-list">
@@ -181,27 +202,6 @@ function buildStatsHomeHtml(theme, mode, width) {
                   </div>
                   <div class="stats-bar-track" aria-hidden="true"><div class="stats-bar-fill" style="width: 31%;"></div></div>
                 </div>
-              </div>
-            </div>
-
-            <div class="stats-card">
-              <div class="stats-monthly-header">
-                <div class="stats-card-eyebrow" style="margin-bottom: 0;">Monthly rhythm</div>
-                <div class="stats-badge-pill">Busiest: March</div>
-              </div>
-              <div class="stats-month-chart" role="region" aria-label="Monthly order chart">
-                <div role="button" tabindex="0" class="stats-month-col" aria-label="January: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">J</span></div>
-                <div role="button" tabindex="0" class="stats-month-col" aria-label="February: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">F</span></div>
-                <div role="button" tabindex="0" class="stats-month-col is-busiest" aria-label="March: 3 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 100%;"></div></div><span class="stats-month-label">M</span></div>
-                <div role="button" tabindex="0" class="stats-month-col" aria-label="April: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">A</span></div>
-                <div role="button" tabindex="0" class="stats-month-col" aria-label="May: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">M</span></div>
-                <div role="button" tabindex="0" class="stats-month-col" aria-label="June: 1 order"><div class="stats-month-bar-wrap"><div class="stats-month-bar" style="height: 33%;"></div></div><span class="stats-month-label">J</span></div>
-                <div role="button" tabindex="0" class="stats-month-col" aria-label="July: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">J</span></div>
-                <div role="button" tabindex="0" class="stats-month-col" aria-label="August: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">A</span></div>
-                <div role="button" tabindex="0" class="stats-month-col" aria-label="September: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">S</span></div>
-                <div role="button" tabindex="0" class="stats-month-col" aria-label="October: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">O</span></div>
-                <div role="button" tabindex="0" class="stats-month-col" aria-label="November: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">N</span></div>
-                <div role="button" tabindex="0" class="stats-month-col" aria-label="December: 0 orders"><div class="stats-month-bar-wrap"><div class="stats-month-bar--zero"></div></div><span class="stats-month-label">D</span></div>
               </div>
             </div>
           </div>
@@ -300,11 +300,11 @@ function buildRecapHtml(theme, mode, width) {
               <div class="yic-chapter-num">01 · Your year</div>
               <div class="yic-hero-number">12</div>
               <div style="font-size: var(--text-lg); font-weight: 600;">orders you were part of</div>
-              <div class="yic-summary-pill-row">
+              <div class="yic-summary-plain-row">
                 <span>14.5 kg of coffee taken</span> · <span>9 bags you shared in</span> · <span>5 roasters tried</span> · <span>11 coffees tried</span>
               </div>
-              <div class="yic-style-badge">
-                <span>Loyalist</span>
+              <div class="yic-style-plain-row">
+                <span class="yic-style-type">Loyalist</span>
                 <span class="yic-style-detail">(8 of your 12 orders came from Father Coffee)</span>
               </div>
             </section>

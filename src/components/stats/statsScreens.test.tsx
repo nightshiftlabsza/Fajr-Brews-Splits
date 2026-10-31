@@ -9,6 +9,8 @@ import { YearPicker } from './YearPicker';
 import { MonthlyChart } from './MonthlyChart';
 import { CameBackToList } from './CameBackToList';
 import { MyStatsPage } from '../pages/MyStatsPage';
+import { summarisePeriod } from '../../lib/yearInCoffee';
+import { calculateMyStatsSummary } from '../../lib/myStats';
 
 const mockStoreState = {
   orders: [] as Order[],
@@ -436,5 +438,95 @@ describe('Lane T: Stats Screens & Wording Test Suite', () => {
       );
     });
     assertNoStatsBannedWords('CameBackToList', container.textContent || '');
+  });
+
+  it('10. MonthlyChart letters are rendered in their own row below bars and busiest month is bold', () => {
+    act(() => {
+      root.render(<MonthlyChart monthlyOrders={[1, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]} busiestMonth={3} />);
+    });
+
+    const monthCols = container.querySelectorAll('.stats-month-col');
+    expect(monthCols).toHaveLength(12);
+
+    // Each column has bar-wrap first, then month-label below it
+    monthCols.forEach((col) => {
+      const children = Array.from(col.children);
+      expect(children).toHaveLength(2);
+      expect(children[0]?.classList.contains('stats-month-bar-wrap')).toBe(true);
+      expect(children[1]?.classList.contains('stats-month-label')).toBe(true);
+    });
+
+    // March is busiest (index 2)
+    const marchCol = monthCols[2];
+    expect(marchCol?.classList.contains('is-busiest')).toBe(true);
+    const marchLabel = marchCol?.querySelector('.stats-month-label');
+    expect(marchLabel?.textContent).toBe('M');
+  });
+
+  it('11. YearInCoffee Chapter 1 uses plain text hairline rows (no nested shaded box)', () => {
+    const orders = [
+      makeOrder({ id: 'o-1', orderDate: '2026-01-10' }),
+      makeOrder({ id: 'o-2', orderDate: '2026-03-15' }),
+      makeOrder({ id: 'o-3', orderDate: '2026-05-20' }),
+      makeOrder({ id: 'o-4', orderDate: '2026-07-25' }),
+    ];
+
+    act(() => {
+      root.render(
+        <YearInCoffee
+          orders={orders}
+          personId="person-1"
+          personNames={personNames}
+          roasters={roasters}
+          onBack={vi.fn()}
+        />,
+      );
+    });
+
+    const ch1 = container.querySelector('#chapter-1');
+    expect(ch1).toBeTruthy();
+    expect(ch1?.querySelector('.yic-summary-plain-row')).toBeTruthy();
+    expect(ch1?.querySelector('.yic-style-plain-row')).toBeTruthy();
+    expect(ch1?.textContent).toContain('kg of coffee taken');
+    expect(ch1?.textContent).toContain('Loyalist');
+  });
+
+  it('12. No non-null assertions (!) in stats source code files', () => {
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+
+    const filesToCheck = [
+      path.resolve(__dirname, '../../lib/yearInCoffee.ts'),
+      path.resolve(__dirname, 'MonthlyChart.tsx'),
+      path.resolve(__dirname, 'YearInCoffee.tsx'),
+      path.resolve(__dirname, 'YearPicker.tsx'),
+      path.resolve(__dirname, '../pages/MyStatsPage.tsx'),
+    ];
+
+    // Regex matching non-null assertion ! (excluding !=, !==, !<variable>)
+    const nonNullAssertionRegex = /([a-zA-Z0-9_\]\)])!/g;
+
+    for (const filePath of filesToCheck) {
+      const content = fs.readFileSync(filePath, 'utf8');
+      const lines = content.split('\n');
+      lines.forEach((line, lineIdx) => {
+        // Strip string literals and comments
+        const cleanLine = line.replace(/(['"`]).*?\1/g, '').replace(/\/\/.*$/, '');
+        const matches = cleanLine.match(nonNullAssertionRegex);
+        if (matches) {
+          throw new Error(
+            `Non-null assertion (!) found in ${path.basename(filePath)} at line ${lineIdx + 1}: "${line.trim()}"`,
+          );
+        }
+      });
+    }
+  });
+
+  it('13. totalSpent and totalSpentZar are completely removed from summaries', () => {
+    const summary = summarisePeriod([]);
+    expect('totalSpentZar' in summary).toBe(false);
+
+    const myStats = calculateMyStatsSummary([]);
+    expect('totalSpent' in myStats).toBe(false);
   });
 });

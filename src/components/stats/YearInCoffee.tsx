@@ -44,7 +44,7 @@ export function YearInCoffee({
   onBack,
 }: YearInCoffeeProps) {
   const today = useMemo(() => getLocalTodayString(), []);
-  const currentCalendarYear = today.split('-')[0]!;
+  const currentCalendarYear = today.split('-')[0] ?? '';
 
   const { entries: allCountedOrders, skippedCount } = useMemo(
     () => getCountedOrders(orders, personId, personNames, roasters),
@@ -81,7 +81,7 @@ export function YearInCoffee({
   const orderCountByYear = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const entry of allCountedOrders) {
-      const y = entry.order.orderDate.split('-')[0]!;
+      const y = entry.order.orderDate.split('-')[0] ?? '';
       counts[y] = (counts[y] ?? 0) + 1;
     }
     return counts;
@@ -114,8 +114,8 @@ export function YearInCoffee({
 
   const bestMonthMilestone = summary.busiestMonth
     ? {
-        monthName: MONTH_NAMES[summary.busiestMonth - 1]!,
-        ordersCount: summary.monthlyOrders[summary.busiestMonth - 1]!,
+        monthName: MONTH_NAMES[summary.busiestMonth - 1] ?? '',
+        ordersCount: summary.monthlyOrders[summary.busiestMonth - 1] ?? 0,
       }
     : null;
 
@@ -285,7 +285,7 @@ export function YearInCoffee({
               {summary.ordersCount === 1 ? 'order you were part of' : 'orders you were part of'}
             </div>
 
-            <div className="yic-summary-pill-row">
+            <div className="yic-summary-plain-row">
               <span>{summary.kgTaken} kg of coffee taken</span>
               <span aria-hidden="true">·</span>
               <span>
@@ -302,8 +302,8 @@ export function YearInCoffee({
             </div>
 
             {summary.styleOfYear && (
-              <div className="yic-style-badge">
-                <span>{summary.styleOfYear.type}</span>
+              <div className="yic-style-plain-row">
+                <span className="yic-style-type">{summary.styleOfYear.type}</span>
                 <span className="yic-style-detail">({summary.styleOfYear.detail})</span>
               </div>
             )}

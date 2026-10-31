@@ -33,7 +33,7 @@ export function MyStatsPage() {
   const [currentView, setCurrentView] = useState<'overview' | 'year-in-coffee'>('overview');
 
   const today = useMemo(() => getLocalTodayString(), []);
-  const currentCalendarYear = today.split('-')[0]!;
+  const currentCalendarYear = today.split('-')[0] ?? '';
 
   const personNames = useMemo(
     () => Object.fromEntries(people.map((person) => [person.id, person.name])),
@@ -55,7 +55,7 @@ export function MyStatsPage() {
   const orderCountByYear = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const entry of allCountedOrders) {
-      const y = entry.order.orderDate.split('-')[0]!;
+      const y = entry.order.orderDate.split('-')[0] ?? '';
       counts[y] = (counts[y] ?? 0) + 1;
     }
     return counts;
@@ -249,7 +249,7 @@ export function MyStatsPage() {
 
           {/* Desktop Two-Column Arrangement for Cards */}
           <div className="stats-desktop-grid">
-            {/* Left Column: Headline facts & Favourite roaster */}
+            {/* Left Column: Headline facts & Monthly rhythm */}
             <div>
               {/* Three Headline Facts */}
               <div className="stats-card stats-headline-grid" role="region" aria-label="Key coffee facts">
@@ -272,6 +272,17 @@ export function MyStatsPage() {
                 </div>
               </div>
 
+              {/* Monthly rhythm */}
+              {!isOneOrderPeriod && (
+                <MonthlyChart
+                  monthlyOrders={summary.monthlyOrders}
+                  busiestMonth={summary.busiestMonth}
+                />
+              )}
+            </div>
+
+            {/* Right Column: Favourite roaster & You keep coming back to */}
+            <div>
               {/* Favourite Roaster Card */}
               {summary.favouriteRoaster ? (
                 <div className="stats-card">
@@ -311,20 +322,9 @@ export function MyStatsPage() {
                   </div>
                 </div>
               ) : null}
-            </div>
 
-            {/* Right Column: Came back to & Monthly rhythm */}
-            <div>
               {/* You keep coming back to */}
               <CameBackToList roasters={summary.cameBackTo} />
-
-              {/* Monthly rhythm */}
-              {!isOneOrderPeriod && (
-                <MonthlyChart
-                  monthlyOrders={summary.monthlyOrders}
-                  busiestMonth={summary.busiestMonth}
-                />
-              )}
             </div>
           </div>
 

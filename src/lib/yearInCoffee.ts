@@ -74,7 +74,6 @@ export interface PeriodSummary {
   unassignedRoasterOrderCount: number;
   styleOfYear: StyleOfYear | null;
   topCoffees: TopCoffeeSummary[];
-  totalSpentZar: number;
   rangeStatus: RangeValidationStatus;
   entries: CountedOrderEntry[];
 }
@@ -170,15 +169,12 @@ export function validateStatsDateRange(
   }
 
   if (range.preset === 'custom') {
-    const hasStart = Boolean(range.startDate && range.startDate.trim());
-    const hasEnd = Boolean(range.endDate && range.endDate.trim());
+    const start = range.startDate?.trim();
+    const end = range.endDate?.trim();
 
-    if (!hasStart || !hasEnd) {
+    if (!start || !end) {
       return { status: 'incomplete' };
     }
-
-    const start = range.startDate!.trim();
-    const end = range.endDate!.trim();
 
     if (start > end) {
       return { status: 'invalid', startDate: start, endDate: end };
@@ -205,7 +201,10 @@ export function isOrderInDateRange(
   }
 
   if (range.preset === 'custom') {
-    const inRange = orderDate >= validation.startDate! && orderDate <= validation.endDate!;
+    if (!validation.startDate || !validation.endDate) {
+      return { inRange: false, status: 'incomplete' };
+    }
+    const inRange = orderDate >= validation.startDate && orderDate <= validation.endDate;
     return { inRange, status: 'valid' };
   }
 
@@ -471,7 +470,8 @@ export function summarisePeriod(
     const targetYear = options.year;
     filteredEntries = allEntries.filter((entry) => entry.order.orderDate.split('-')[0] === targetYear);
   } else if (options?.range) {
-    filteredEntries = allEntries.filter((entry) => isOrderInDateRange(entry.order.orderDate, options.range!, today).inRange);
+    const range = options.range;
+    filteredEntries = allEntries.filter((entry) => isOrderInDateRange(entry.order.orderDate, range, today).inRange);
   } else {
     filteredEntries = [...allEntries];
   }
@@ -479,7 +479,6 @@ export function summarisePeriod(
   const ordersCount = filteredEntries.length;
   let gramsTaken = 0;
   let bagsSharedIn = 0;
-  let totalSpentZar = 0;
   let unassignedRoasterOrderCount = 0;
 
   const roastersMap = new Map<
@@ -507,7 +506,6 @@ export function summarisePeriod(
   for (const entry of filteredEntries) {
     gramsTaken += entry.personCalc.totalGrams;
     bagsSharedIn += entry.bagsSharedIn;
-    totalSpentZar += entry.personCalc.totalFinal;
 
     const { month } = parseDateParts(entry.order.orderDate);
     if (month >= 1 && month <= 12) {
@@ -582,27 +580,29 @@ export function summarisePeriod(
     return a.canonical.name.localeCompare(b.canonical.name);
   });
 
+  const topRoaster = sortedRoasters[0];
   const favouriteRoaster: FavouriteRoasterSummary | null =
-    sortedRoasters.length > 0
+    topRoaster
       ? {
-          id: sortedRoasters[0]!.canonical.id,
-          name: sortedRoasters[0]!.canonical.name,
-          logoUrl: sortedRoasters[0]!.canonical.logoUrl,
-          grams: sortedRoasters[0]!.grams,
-          share: gramsTaken > 0 ? sortedRoasters[0]!.grams / gramsTaken : 0,
-          orderCount: sortedRoasters[0]!.orderCount,
+          id: topRoaster.canonical.id,
+          name: topRoaster.canonical.name,
+          logoUrl: topRoaster.canonical.logoUrl,
+          grams: topRoaster.grams,
+          share: gramsTaken > 0 ? topRoaster.grams / gramsTaken : 0,
+          orderCount: topRoaster.orderCount,
         }
       : null;
 
+  const secondRoaster = sortedRoasters[1];
   const runnerUpRoaster: FavouriteRoasterSummary | null =
-    sortedRoasters.length > 1
+    secondRoaster
       ? {
-          id: sortedRoasters[1]!.canonical.id,
-          name: sortedRoasters[1]!.canonical.name,
-          logoUrl: sortedRoasters[1]!.canonical.logoUrl,
-          grams: sortedRoasters[1]!.grams,
-          share: gramsTaken > 0 ? sortedRoasters[1]!.grams / gramsTaken : 0,
-          orderCount: sortedRoasters[1]!.orderCount,
+          id: secondRoaster.canonical.id,
+          name: secondRoaster.canonical.name,
+          logoUrl: secondRoaster.canonical.logoUrl,
+          grams: secondRoaster.grams,
+          share: gramsTaken > 0 ? secondRoaster.grams / gramsTaken : 0,
+          orderCount: secondRoaster.orderCount,
         }
       : null;
 
@@ -622,8 +622,9 @@ export function summarisePeriod(
     const highestMonths = monthlyOrders
       .map((count, index) => ({ count, month: index + 1 }))
       .filter((m) => m.count === maxMonthOrders);
-    if (highestMonths.length === 1) {
-      busiestMonth = highestMonths[0]!.month;
+    const topMonth = highestMonths[0];
+    if (highestMonths.length === 1 && topMonth) {
+      busiestMonth = topMonth.month;
     }
   }
 
@@ -633,7 +634,7 @@ export function summarisePeriod(
     const earliestRoasterYears = new Map<string, { year: string; roaster: ResolvedOrderRoaster }>();
     for (const entry of allTimeList) {
       if (!entry.canonicalRoaster) continue;
-      const y = entry.order.orderDate.split('-')[0]!;
+      const y = entry.order.orderDate.split('-')[0] ?? '';
       const key = entry.canonicalRoaster.key;
       const prev = earliestRoasterYears.get(key);
       if (!prev || y < prev.year) {
@@ -673,10 +674,10 @@ export function summarisePeriod(
   if (ordersCount >= 4) {
     const favOrders = favouriteRoaster?.orderCount ?? 0;
     const roastersCount = sortedRoasters.length;
-    if (favOrders / ordersCount >= 0.6) {
+    if (favouriteRoaster && favOrders / ordersCount >= 0.6) {
       styleOfYear = {
         type: 'Loyalist',
-        detail: `${favOrders} of your ${ordersCount} orders came from ${favouriteRoaster!.name}`,
+        detail: `${favOrders} of your ${ordersCount} orders came from ${favouriteRoaster.name}`,
       };
     } else if (roastersCount >= Math.ceil(ordersCount / 2)) {
       styleOfYear = {
@@ -692,7 +693,7 @@ export function summarisePeriod(
   }
 
   const firstOrder =
-    filteredEntries.length > 0 ? filteredEntries[filteredEntries.length - 1]! : null;
+    filteredEntries.length > 0 ? (filteredEntries[filteredEntries.length - 1] ?? null) : null;
 
   return {
     kgTaken: Number((gramsTaken / 1000).toFixed(3)),
@@ -712,7 +713,6 @@ export function summarisePeriod(
     unassignedRoasterOrderCount,
     styleOfYear,
     topCoffees,
-    totalSpentZar,
     rangeStatus,
     entries: filteredEntries,
   };

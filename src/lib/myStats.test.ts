@@ -176,7 +176,6 @@ describe('myStats helpers', () => {
     expect(summary.totalGrams).toBe(375);
     expect(summary.totalBags).toBe(2);
     expect(summary.bagsSharedIn).toBe(2);
-    expect(summary.totalSpent).toBe(600);
     expect(summary.favoriteRoaster?.name).toBe('Father Coffee');
   });
 
