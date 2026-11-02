@@ -17,6 +17,8 @@ import { HOME_PATH, RESET_PASSWORD_PATH } from './lib/appConfig';
 import { supabase } from './lib/supabase';
 
 import './styles/globals.css';
+import './styles/stats.css';
+import './styles/stats-phone.css';
 import './styles/print.css';
 
 function isRecoveryHash(hash: string): boolean {

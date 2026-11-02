@@ -17,6 +17,7 @@ const mockStoreState = {
     person: null,
     candidates: [],
   } as PersonLinkResolution,
+  isLoading: false,
 };
 
 vi.mock('../../store/appStore', () => ({
@@ -31,8 +32,12 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
     workspaceId: 'workspace-1',
     name: overrides.name ?? 'Saved Order',
     orderDate: overrides.orderDate ?? '2026-03-18',
-    roasterId: overrides.roasterId ?? 'roaster-1',
-    roasterSnapshot: overrides.roasterSnapshot ?? { id: 'roaster-1', name: 'Father Coffee' },
+    roasterId: 'roasterId' in overrides ? overrides.roasterId! : 'roaster-1',
+    roasterSnapshot: 'roasterSnapshot' in overrides ? overrides.roasterSnapshot! : {
+      id: 'roaster-1',
+      name: 'Father Coffee',
+      logoUrl: 'https://example.com/father.png',
+    },
     payerId: overrides.payerId ?? 'person-1',
     payerBank: overrides.payerBank ?? { bankName: '', accountNumber: '', beneficiary: '' },
     referenceTemplate: overrides.referenceTemplate ?? 'FAJR-{ORDER}-{NAME}',
@@ -45,25 +50,25 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
         gramsPerBag: 250,
         quantity: 1,
         shares: [{ id: 'share-1', personId: 'person-1', shareGrams: 250, bagIndex: 0 }],
-        bagAllocations: [
+        bags: [
           {
             id: 'bag-1',
-            bagIndex: 0,
-            mode: 'single',
-            participants: [{ id: 'participant-1', personId: 'person-1', shareGrams: 250, sourceShareId: 'share-1' }],
+            splitMode: 'full',
+            buyers: [{ id: 'buyer-1', personId: 'person-1', grams: 250 }],
           },
         ],
       },
     ],
     fees: overrides.fees ?? [],
     payments: overrides.payments ?? {},
+    status: overrides.status ?? 'completed',
     isArchived: overrides.isArchived ?? true,
     createdAt: overrides.createdAt ?? '2026-03-18T00:00:00.000Z',
     updatedAt: overrides.updatedAt ?? '2026-03-18T00:00:00.000Z',
   };
 }
 
-describe('MyStatsPage', () => {
+describe('MyStatsPage Redesign (Lane W & Lane P)', () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -86,6 +91,14 @@ describe('MyStatsPage', () => {
         id: 'roaster-1',
         workspaceId: 'workspace-1',
         name: 'Father Coffee',
+        logoUrl: 'https://example.com/father.png',
+        createdAt: '2026-03-18T00:00:00.000Z',
+        updatedAt: '2026-03-18T00:00:00.000Z',
+      },
+      {
+        id: 'roaster-2',
+        workspaceId: 'workspace-1',
+        name: 'Rosetta',
         createdAt: '2026-03-18T00:00:00.000Z',
         updatedAt: '2026-03-18T00:00:00.000Z',
       },
@@ -99,6 +112,7 @@ describe('MyStatsPage', () => {
       candidates: [],
     };
     mockStoreState.orders = [];
+    mockStoreState.isLoading = false;
   });
 
   afterEach(() => {
@@ -109,121 +123,167 @@ describe('MyStatsPage', () => {
     vi.clearAllMocks();
   });
 
-  it('shows the clean empty state when no linked participant is available', () => {
+  it('renders unlinked participant state cleanly without jargon', () => {
     act(() => {
       root.render(<MyStatsPage />);
     });
 
-    expect(container.textContent).toContain('Link a participant to unlock My Stats');
+    expect(container.textContent).toContain('Link a profile to view your stats');
+    expect(container.textContent).not.toMatch(/finalized|ZAR share|250g eq/);
   });
 
-  it('shows personal metrics from finalized linked orders only', () => {
-    mockStoreState.linkedPersonId = 'person-1';
+  it('renders ambiguous participant state asking for confirmation', () => {
     mockStoreState.linkResolution = {
-      status: 'linked',
-      linkedPersonId: 'person-1',
-      matchedBy: 'manual',
-      person: {
-        personId: 'person-1',
-        name: 'Amina',
-        matchReason: 'email',
-      },
+      status: 'ambiguous',
+      linkedPersonId: null,
+      matchedBy: null,
+      person: null,
       candidates: [],
     };
+
+    act(() => {
+      root.render(<MyStatsPage />);
+    });
+
+    expect(container.textContent).toContain('We still need to confirm your profile');
+  });
+
+  it('renders empty orders state with a friendly link to start an order', () => {
+    mockStoreState.linkedPersonId = 'person-1';
+    mockStoreState.orders = [];
+
+    act(() => {
+      root.render(<MyStatsPage />);
+    });
+
+    expect(container.textContent).toContain('No orders you were part of yet');
+    expect(container.textContent).toContain('Start an order →');
+  });
+
+  it('renders full calm coffee overview matching Stitch designs with correct numbers', () => {
+    mockStoreState.linkedPersonId = 'person-1';
     mockStoreState.orders = [
-      makeOrder(),
-      makeOrder({ id: 'order-2', isArchived: false }),
+      makeOrder({
+        id: 'order-1',
+        name: 'Autumn Restock',
+        orderDate: '2026-03-18',
+        lots: [
+          {
+            id: 'l1',
+            name: 'Kenya Nyeri AA',
+            foreignPricePerBag: 20,
+            gramsPerBag: 250,
+            quantity: 1,
+            shares: [{ id: 's1', personId: 'person-1', shareGrams: 250, bagIndex: 0 }],
+            bags: [{ id: 'b1', splitMode: 'full', buyers: [{ id: 'buy1', personId: 'person-1', grams: 250 }] }],
+          },
+        ],
+      }),
+      makeOrder({
+        id: 'order-2',
+        name: 'Spring Drop',
+        orderDate: '2026-05-10',
+        lots: [
+          {
+            id: 'l2',
+            name: 'Ethiopia Guji',
+            foreignPricePerBag: 25,
+            gramsPerBag: 500,
+            quantity: 1,
+            shares: [{ id: 's2', personId: 'person-1', shareGrams: 500, bagIndex: 0 }],
+            bags: [{ id: 'b2', splitMode: 'full', buyers: [{ id: 'buy2', personId: 'person-1', grams: 500 }] }],
+          },
+        ],
+      }),
     ];
 
     act(() => {
       root.render(<MyStatsPage />);
     });
 
-    expect(container.textContent).toContain('Total grams bought');
-    expect(container.textContent).toContain('250g');
+    // Heading
+    expect(container.textContent).toContain('Your coffee');
+    expect(container.textContent).toContain('From orders you were part of, once they are done.');
+
+    // 3 Headline Facts: 750g = 0.75kg, 2 bags shared in, 1 roaster tried
+    expect(container.textContent).toContain('0.75');
+    expect(container.textContent).toContain('Coffee taken');
+    expect(container.textContent).toContain('Bags you shared in');
+    expect(container.textContent).toContain('Roasters tried');
+
+    // Favourite Roaster
     expect(container.textContent).toContain('Father Coffee');
+    expect(container.textContent).toContain('100% of the coffee you took · 2 orders');
+
+    // Recent orders list with quiet your share
+    expect(container.textContent).toContain('Kenya Nyeri AA');
+    expect(container.textContent).toContain('Ethiopia Guji');
+    expect(container.textContent).toContain('Your share:');
+
+    // Banner to Year in Coffee
+    expect(container.textContent).toContain('Your Year in Coffee');
+    expect(container.textContent).toContain('A look back at your year');
   });
 
-  it('renders balanced 5-metric cards dashboard and favorite roaster metrics', () => {
+  it('switches to Year in Coffee view when recap banner is clicked and back to overview', () => {
     mockStoreState.linkedPersonId = 'person-1';
-    mockStoreState.linkResolution = {
-      status: 'linked',
-      linkedPersonId: 'person-1',
-      matchedBy: 'manual',
-      person: {
-        personId: 'person-1',
-        name: 'Amina',
-        matchReason: 'email',
-      },
-      candidates: [],
-    };
     mockStoreState.orders = [
-      makeOrder({ id: 'order-1', goodsTotalZar: 400 }),
-      makeOrder({ id: 'order-2', goodsTotalZar: 200, roasterId: 'roaster-1' }),
+      makeOrder({ id: 'o-1', orderDate: '2026-02-10' }),
+      makeOrder({ id: 'o-2', orderDate: '2026-04-12' }),
+      makeOrder({ id: 'o-3', orderDate: '2026-06-15' }),
+      makeOrder({ id: 'o-4', orderDate: '2026-08-20' }),
     ];
 
     act(() => {
       root.render(<MyStatsPage />);
     });
 
-    const statsGrid = container.querySelector('.stats-grid');
-    expect(statsGrid).toBeTruthy();
+    const banner = container.querySelector('.stats-recap-banner') as HTMLButtonElement;
+    expect(banner).toBeTruthy();
 
-    const metricCards = statsGrid?.querySelectorAll('.stats-metric-card');
-    expect(metricCards?.length).toBe(5);
+    act(() => {
+      banner.click();
+    });
 
-    const labels = Array.from(metricCards ?? []).map((card) =>
-      card.querySelector('.wizard-metric-label')?.textContent?.trim(),
-    );
-    expect(labels).toContain('Total Spent');
-    expect(labels).toContain('Orders Participated');
-    expect(labels).toContain('Total Bags (250g eq)');
-    expect(labels).toContain('Total Coffee Grams');
-    expect(labels).toContain('Average Cost per Bag');
+    // Now in Year in Coffee recap view
+    expect(container.textContent).toContain('What you took from the orders this year.');
+    expect(container.textContent).toContain('01 · Your year');
+    expect(container.textContent).toContain('Back to your coffee');
 
-    // Favorite roaster card
-    const favPanel = container.querySelector('.stats-favorite-panel');
-    expect(favPanel).toBeTruthy();
-    expect(favPanel?.textContent).toContain('Father Coffee');
-    expect(favPanel?.textContent).toContain('100% of finalized orders in range');
+    // Click back to return
+    const backBtn = container.querySelector('button.btn-secondary') as HTMLButtonElement;
+    act(() => {
+      backBtn.click();
+    });
+
+    expect(container.textContent).toContain('From orders you were part of, once they are done.');
   });
 
-  it('renders order breakdown table with num-cell tabular numbers and supports time range presets', async () => {
+  it('no banned words are rendered in MyStatsPage', () => {
     mockStoreState.linkedPersonId = 'person-1';
-    mockStoreState.linkResolution = {
-      status: 'linked',
-      linkedPersonId: 'person-1',
-      matchedBy: 'manual',
-      person: {
-        personId: 'person-1',
-        name: 'Amina',
-        matchReason: 'email',
-      },
-      candidates: [],
-    };
-    mockStoreState.orders = [
-      makeOrder({ id: 'order-1', name: 'March Coffee Drop' }),
-    ];
+    mockStoreState.orders = [makeOrder()];
 
     act(() => {
       root.render(<MyStatsPage />);
     });
 
-    // Check time range preset buttons
-    const pills = container.querySelectorAll('.stats-filter-pill');
-    expect(pills.length).toBe(5);
-    const pillLabels = Array.from(pills).map((p) => p.textContent?.trim());
-    expect(pillLabels).toEqual(['All time', 'Last 3 months', 'Last 6 months', 'Last 12 months', 'Custom range']);
+    const text = container.textContent || '';
+    expect(text).not.toMatch(/\b(finalized|250g eq|participated|settled by the organiser|allocated)\b/i);
+    expect(text).not.toContain('ZAR share');
+  });
 
-    // Check breakdown table
-    const table = container.querySelector('.data-table');
-    expect(table).toBeTruthy();
-    expect(table?.textContent).toContain('March Coffee Drop');
+  it('all interactive controls have accessible names', () => {
+    mockStoreState.linkedPersonId = 'person-1';
+    mockStoreState.orders = [makeOrder()];
 
-    // Tabular numbers cells
-    const numCells = table?.querySelectorAll('.num-cell');
-    expect(numCells?.length).toBeGreaterThanOrEqual(2);
-    expect(numCells?.[0].textContent).toContain('250g');
+    act(() => {
+      root.render(<MyStatsPage />);
+    });
+
+    const buttons = container.querySelectorAll('button');
+    buttons.forEach((btn) => {
+      const hasName = Boolean(btn.textContent?.trim() || btn.getAttribute('aria-label') || btn.getAttribute('title'));
+      expect(hasName).toBe(true);
+    });
   });
 });
-

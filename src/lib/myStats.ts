@@ -1,32 +1,62 @@
-import { calculate } from './calculations';
 import { normalizeFeeAllocationType } from './invoiceFormatter';
-import { resolveOrderRoaster, type ResolvedOrderRoaster } from './roasters';
-import type { Order, PersonCalculation, PersonLinkResolution, Roaster } from '../types';
+import type { Order, PersonLinkResolution, Roaster } from '../types';
+import type { ResolvedOrderRoaster } from './roasters';
+import {
+  type CountedOrderEntry,
+  type StatsDateRange,
+  type StatsRangePreset,
+  type RangeValidationStatus,
+  getCountedOrders,
+  isOrderInDateRange,
+  summarisePeriod,
+} from './yearInCoffee';
 
-export type StatsRangePreset = 'all' | '3m' | '6m' | '12m' | 'custom';
+export type {
+  CountedOrderEntry,
+  FavouriteRoasterSummary,
+  CameBackToRoaster,
+  TopCoffeeSummary,
+  StyleOfYear,
+  PeriodSummary,
+  PeriodComparison,
+  StatsRangePreset,
+  StatsDateRange,
+  RangeValidationStatus,
+} from './yearInCoffee';
 
-export interface StatsDateRange {
-  preset: StatsRangePreset;
-  startDate?: string;
-  endDate?: string;
-}
+export {
+  getLocalTodayString,
+  parseDateParts,
+  isLeapYear,
+  daysInMonth,
+  subtractCalendarMonths,
+  validateStatsDateRange,
+  isOrderInDateRange,
+  resolveCanonicalRoaster,
+  countBagsSharedIn,
+  getCountedOrders,
+  getCountedYears,
+  summarisePeriod,
+  compareSamePeriod,
+} from './yearInCoffee';
 
-export interface ParticipantOrderMatch {
-  order: Order;
-  personCalc: PersonCalculation;
-  roaster: ResolvedOrderRoaster | null;
-}
+export type ParticipantOrderMatch = CountedOrderEntry;
 
 export interface FavoriteRoasterStat extends ResolvedOrderRoaster {
   bagCount: number;
+  grams?: number;
+  share?: number;
+  orderCount?: number;
 }
 
 export interface MyStatsSummary {
   totalGrams: number;
-  totalSpent: number;
   totalBags: number;
   averageCostPer250g: number | null;
   favoriteRoaster: FavoriteRoasterStat | null;
+  bagsSharedIn: number;
+  roastersTried: number;
+  coffeesTried: number;
 }
 
 export type MyStatsAccessState = 'ready' | 'unlinked' | 'ambiguous';
@@ -97,40 +127,8 @@ export function getParticipantScopedOrders(orders: Order[], personId: string | n
   return orders.filter((order) => orderIncludesPerson(order, personId));
 }
 
-function subtractMonths(date: Date, months: number): Date {
-  const next = new Date(date);
-  next.setMonth(next.getMonth() - months);
-  return next;
-}
-
-export function isOrderInStatsRange(orderDate: string, range: StatsDateRange): boolean {
-  if (range.preset === 'all') {
-    return true;
-  }
-
-  const orderTime = new Date(`${orderDate}T00:00:00`).getTime();
-  if (Number.isNaN(orderTime)) {
-    return false;
-  }
-
-  if (range.preset === 'custom') {
-    if (!range.startDate || !range.endDate) {
-      return true;
-    }
-
-    const start = new Date(`${range.startDate}T00:00:00`).getTime();
-    const end = new Date(`${range.endDate}T23:59:59`).getTime();
-    return orderTime >= start && orderTime <= end;
-  }
-
-  const now = new Date();
-  const start = range.preset === '3m'
-    ? subtractMonths(now, 3)
-    : range.preset === '6m'
-      ? subtractMonths(now, 6)
-      : subtractMonths(now, 12);
-
-  return orderTime >= start.getTime() && orderTime <= now.getTime();
+export function isOrderInStatsRange(orderDate: string, range: StatsDateRange, today?: string): boolean {
+  return isOrderInDateRange(orderDate, range, today).inRange;
 }
 
 export function getParticipantFinalizedOrders(
@@ -139,96 +137,44 @@ export function getParticipantFinalizedOrders(
   personNames: Record<string, string>,
   roasters: Roaster[],
 ): ParticipantOrderMatch[] {
-  if (!personId) {
-    return [];
-  }
-
-  return orders
-    .filter((order) => order.isArchived || order.status === 'completed')
-    .map((order) => {
-      const result = calculate(order, personNames);
-      if (!result.isValid) {
-        return null;
-      }
-
-      const personCalc = result.personCalcs[personId];
-      if (!personCalc) {
-        return null;
-      }
-
-      return {
-        order,
-        personCalc,
-        roaster: resolveOrderRoaster(order, roasters),
-      };
-    })
-    .filter((entry): entry is ParticipantOrderMatch => entry !== null);
+  const { entries } = getCountedOrders(orders, personId, personNames, roasters);
+  return entries;
 }
 
 export function filterParticipantOrdersByRange(
   orders: ParticipantOrderMatch[],
   range: StatsDateRange,
+  today?: string,
 ): ParticipantOrderMatch[] {
-  return orders.filter((entry) => isOrderInStatsRange(entry.order.orderDate, range));
+  return orders.filter((entry) => isOrderInDateRange(entry.order.orderDate, range, today).inRange);
 }
 
 export function calculateMyStatsSummary(orders: ParticipantOrderMatch[]): MyStatsSummary {
-  const totalGrams = orders.reduce((sum, entry) => sum + entry.personCalc.totalGrams, 0);
-  const totalSpent = orders.reduce((sum, entry) => sum + entry.personCalc.totalFinal, 0);
-  const totalBags = totalGrams / 250;
-
-  const roasterTotals = new Map<string, FavoriteRoasterStat & { latestOrderDate: string }>();
-
-  for (const entry of orders) {
-    if (!entry.roaster) {
-      continue;
-    }
-
-    const key = entry.roaster.id ?? entry.roaster.name.toLowerCase();
-    const current = roasterTotals.get(key);
-    const bagCount = entry.personCalc.totalGrams / 250;
-
-    if (!current) {
-      roasterTotals.set(key, {
-        ...entry.roaster,
-        bagCount,
-        latestOrderDate: entry.order.orderDate,
-      });
-      continue;
-    }
-
-    current.bagCount += bagCount;
-    if (entry.order.orderDate > current.latestOrderDate) {
-      current.latestOrderDate = entry.order.orderDate;
-      current.logoUrl = entry.roaster.logoUrl;
-      current.name = entry.roaster.name;
-      current.id = entry.roaster.id;
-    }
-  }
-
-  const favoriteRoaster = Array.from(roasterTotals.values())
-    .sort((left, right) => {
-      if (left.bagCount !== right.bagCount) {
-        return right.bagCount - left.bagCount;
-      }
-      if (left.latestOrderDate !== right.latestOrderDate) {
-        return right.latestOrderDate.localeCompare(left.latestOrderDate);
-      }
-      return left.name.localeCompare(right.name);
-    })[0] ?? null;
+  const summary = summarisePeriod(orders);
+  const favRoasterName = summary.favouriteRoaster?.name;
+  const favBagCount = favRoasterName
+    ? orders
+        .filter((o) => o.canonicalRoaster?.name === favRoasterName)
+        .reduce((sum, o) => sum + o.bagsSharedIn, 0)
+    : 0;
 
   return {
-    totalGrams,
-    totalSpent,
-    totalBags,
-    averageCostPer250g: totalGrams > 0 ? (totalSpent / totalGrams) * 250 : null,
-    favoriteRoaster: favoriteRoaster
+    totalGrams: summary.gramsTaken,
+    totalBags: summary.bagsSharedIn,
+    averageCostPer250g: null,
+    favoriteRoaster: summary.favouriteRoaster
       ? {
-        id: favoriteRoaster.id,
-        name: favoriteRoaster.name,
-        logoUrl: favoriteRoaster.logoUrl,
-        bagCount: favoriteRoaster.bagCount,
-      }
+          id: summary.favouriteRoaster.id,
+          name: summary.favouriteRoaster.name,
+          logoUrl: summary.favouriteRoaster.logoUrl,
+          bagCount: favBagCount,
+          grams: summary.favouriteRoaster.grams,
+          share: summary.favouriteRoaster.share,
+          orderCount: summary.favouriteRoaster.orderCount,
+        }
       : null,
+    bagsSharedIn: summary.bagsSharedIn,
+    roastersTried: summary.roastersTried,
+    coffeesTried: summary.coffeesTried,
   };
 }
