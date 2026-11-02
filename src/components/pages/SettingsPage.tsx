@@ -45,7 +45,7 @@ export function SettingsPage() {
   );
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
-  const [membersLoaded, setMembersLoaded] = useState(false);
+  const [membersStatus, setMembersStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member');
   const [inviteError, setInviteError] = useState('');
@@ -60,15 +60,20 @@ export function SettingsPage() {
   const roleLabel = accessStatus === 'participant' ? 'participant' : memberRole ?? 'member';
 
   async function loadMembers() {
-    await fetchWorkspaceMembers();
-    setMembersLoaded(true);
+    setMembersStatus('loading');
+    try {
+      await fetchWorkspaceMembers();
+      setMembersStatus('ready');
+    } catch {
+      setMembersStatus('error');
+    }
   }
 
   useEffect(() => {
-    if (activeTab === 'members' && !membersLoaded && isAdmin) {
+    if (activeTab === 'members' && membersStatus === 'idle' && isAdmin) {
       void loadMembers();
     }
-  }, [activeTab, membersLoaded, isAdmin]);
+  }, [activeTab, membersStatus, isAdmin]);
 
   async function handleInvite() {
     if (!inviteEmail.trim()) return setInviteError('Email is required.');
@@ -80,7 +85,7 @@ export function SettingsPage() {
       if (err) {
         setInviteError(err);
       } else {
-        setInviteSuccess(`${inviteEmail} added to workspace.`);
+        setInviteSuccess(`${inviteEmail} can now use the app.`);
         setInviteEmail('');
       }
     } finally {
@@ -173,7 +178,7 @@ export function SettingsPage() {
             role="tab"
             aria-selected={activeTab === 'members'}
           >
-            Workspace Members
+            Who has access
           </button>
         )}
         <button
@@ -268,15 +273,14 @@ export function SettingsPage() {
       )}
 
       {activeTab === 'members' && isAdmin && (
-        <Section title="Workspace Members" action={
-          !membersLoaded ? (
-            <button className="btn btn-ghost btn-sm" onClick={loadMembers}>Load members</button>
-          ) : undefined
-        }>
-          {!membersLoaded ? (
-            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-              Click above to view and manage workspace members.
-            </p>
+        <Section title="Who has access">
+          {membersStatus === 'error' ? (
+            <div className="alert alert-error">
+              Couldn't load the list.{' '}
+              <button type="button" className="btn btn-ghost btn-sm" onClick={loadMembers}>Try again</button>
+            </div>
+          ) : membersStatus !== 'ready' ? (
+            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Loading…</p>
           ) : (
             <>
               {/* Invite */}
@@ -284,7 +288,7 @@ export function SettingsPage() {
                 <input
                   className="input"
                   type="email"
-                  placeholder="Invite by email…"
+                  placeholder="Email of someone who has signed up…"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   style={{ flex: 1, minWidth: 200 }}
@@ -299,7 +303,7 @@ export function SettingsPage() {
                   <option value="admin">Admin</option>
                 </select>
                 <button className="btn btn-primary" onClick={handleInvite} disabled={inviting}>
-                  {inviting ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Invite'}
+                  {inviting ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Add'}
                 </button>
               </div>
 
@@ -309,7 +313,7 @@ export function SettingsPage() {
 
               {/* Members list */}
               {workspaceMembers.length === 0 ? (
-                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>No members found.</p>
+                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Nobody has been added yet.</p>
               ) : (
                 <div className="data-table-container">
                   <table className="data-table">
@@ -414,12 +418,11 @@ export function SettingsPage() {
 
 // ─── Section wrapper ──────────────────────────────────────────
 
-function Section({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="card card-padded" style={{ marginBottom: 'var(--space-4)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
         <div className="section-label" style={{ marginBottom: 0 }}>{title}</div>
-        {action}
       </div>
       {children}
     </div>

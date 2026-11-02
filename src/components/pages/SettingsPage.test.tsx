@@ -79,7 +79,7 @@ describe('SettingsPage sub-tabs and management', () => {
     });
 
     expect(container.textContent).toContain('General Preferences');
-    expect(container.textContent).toContain('Workspace Members');
+    expect(container.textContent).toContain('Who has access');
     expect(container.textContent).toContain('Backup & Restore');
     expect(container.textContent).toContain('People Directory');
     expect(container.textContent).toContain('owner@example.com');
@@ -87,13 +87,13 @@ describe('SettingsPage sub-tabs and management', () => {
     expect(container.textContent).toContain('YInMn Ledger');
   });
 
-  it('switches to Workspace Members sub-tab and displays member table', async () => {
+  it('switches to Who has access sub-tab and displays member table', async () => {
     act(() => {
       root.render(<SettingsPage />);
     });
 
     const membersTabBtn = Array.from(container.querySelectorAll('button')).find(
-      (btn) => btn.textContent === 'Workspace Members',
+      (btn) => btn.textContent === 'Who has access',
     );
     expect(membersTabBtn).toBeTruthy();
 
