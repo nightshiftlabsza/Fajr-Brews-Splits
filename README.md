@@ -78,7 +78,7 @@ After running the schema, you need to:
 ### 5. Add more members
 
 - Each new member signs up via the app
-- You (as owner) go to **Settings → Workspace Members** and add them by email
+- You (as owner) go to **Settings → Who has access** and add them by email
 
 ---
 
