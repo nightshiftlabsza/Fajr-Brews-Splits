@@ -648,7 +648,7 @@ describe('appStore roaster actions', () => {
   });
 
   it('keeps the roaster row when logo upload fails and surfaces a friendly warning', async () => {
-    const { useAppStore } = await loadStore({
+    const { useAppStore, supabase } = await loadStore({
       roasterInsert: {
         data: {
           id: 'roaster-3',
@@ -678,11 +678,17 @@ describe('appStore roaster actions', () => {
       logoFile: new File(['logo'], 'logo.png', { type: 'image/png' }),
     });
 
+    const storageApi = supabase.storage.from('roaster-logos') as { upload: ReturnType<typeof vi.fn> };
+    expect(storageApi.upload).toHaveBeenCalledWith(
+      expect.stringContaining('/roasters/roaster-3/'),
+      expect.any(File),
+      expect.objectContaining({ upsert: false }),
+    );
     expect(roaster.name).toBe('Rosetta');
     expect(roaster.logoUrl).toBeUndefined();
     expect(useAppStore.getState().roasters).toHaveLength(1);
     expect(useAppStore.getState().roasterFeatureMessage).toBe(
-      'The roaster was saved, but its logo could not be uploaded because the roaster logo storage is not configured in Supabase yet.',
+      'The roaster was saved, but the logo could not be added because logo storage is not set up yet.',
     );
   });
 });

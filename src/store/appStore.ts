@@ -444,14 +444,14 @@ function getRoasterLoadFailureMessage(error: unknown): string {
 
 function getRoasterLogoFailureMessage(error: unknown): string {
   if (isRoasterLogoStorageUnavailableError(error)) {
-    return 'The roaster was saved, but its logo could not be uploaded because the roaster logo storage is not configured in Supabase yet.';
+    return 'The roaster was saved, but the logo could not be added because logo storage is not set up yet.';
   }
 
   if (isRoasterPermissionError(error)) {
-    return 'The roaster was saved, but the logo could not be uploaded because this account cannot access roaster logo storage.';
+    return 'The roaster was saved, but the logo could not be added because logo uploads are not switched on for your account yet.';
   }
 
-  return 'The roaster was saved, but its logo could not be uploaded. Check the roaster logo bucket and policies in Supabase.';
+  return 'The roaster was saved, but the logo could not be added. Please try again later.';
 }
 
 async function deleteRoasterLogoBestEffort(logoPath: string): Promise<void> {
@@ -541,7 +541,8 @@ async function uploadRoasterLogo(roasterId: string, file: File): Promise<{ logoP
   const { error: uploadError } = await supabase.storage
     .from('roaster-logos')
     .upload(logoPath, file, {
-      upsert: true,
+      // Paths are timestamped, so replacing is never needed; upsert would also require a SELECT policy on storage.objects.
+      upsert: false,
       contentType: file.type || undefined,
     });
 
