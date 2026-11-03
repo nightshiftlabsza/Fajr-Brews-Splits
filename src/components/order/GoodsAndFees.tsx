@@ -176,7 +176,7 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
           <div>
             <h2 className="wizard-card-title">Order goods total (ZAR)</h2>
             <p className="wizard-card-copy">
-              The final converted amount charged to your card for the coffee goods.
+              What your card was charged for the coffee, in rand.
             </p>
           </div>
         </div>
@@ -204,15 +204,11 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
             </div>
 
             {totalForeignListPrice > 0 && (
-              <div className="fb-foreign-sum-badge" title="Sum of roaster coffee prices">
-                <span>Sum of coffee prices:</span>
+              <div className="fb-foreign-sum-badge" title="The roaster's prices for all coffees, added together. Not in rand.">
+                <span>Roaster's prices added up:</span>
                 <strong>{formatListPrice(totalForeignListPrice, order.listCurrency)}</strong>
               </div>
             )}
-          </div>
-          <div className="field-hint goods-field-hint" style={{ marginTop: 'var(--space-2)' }}>
-            <Icon name="info" size={14} className="goods-hint-icon" />
-            <span>Each coffee's share of what you paid is worked out from its price per bag.</span>
           </div>
         </div>
       </section>
