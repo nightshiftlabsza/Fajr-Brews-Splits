@@ -6,16 +6,17 @@ import { formatDateShort, todayISO } from '../../lib/formatters';
 import { MAX_IMPORT_FILE_BYTES } from '../../lib/importValidation';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { PeoplePage } from './PeoplePage';
+import { Icon, type IconName } from '../ui/Icon';
 
 const THEMES: { id: Theme; name: string; description: string }[] = [
   { id: 'emerald', name: 'Emerald Ledger', description: 'Classic · Deep emerald · Editorial serif headings' },
   { id: 'yinmn', name: 'YInMn Ledger', description: 'Modern · YInMn blue · Clean grotesk type' },
 ];
 
-const MODES: { id: ThemeMode; label: string; icon: string }[] = [
-  { id: 'light', label: 'Light', icon: '☀️' },
-  { id: 'dark',  label: 'Dark',  icon: '🌙' },
-  { id: 'auto',  label: 'System', icon: '🖥' },
+const MODES: { id: ThemeMode; label: string; icon: IconName }[] = [
+  { id: 'light', label: 'Light', icon: 'sun' },
+  { id: 'dark',  label: 'Dark',  icon: 'moon' },
+  { id: 'auto',  label: 'System', icon: 'monitor' },
 ];
 
 type SettingsTab = 'general' | 'members' | 'backup' | 'people';
@@ -222,7 +223,6 @@ export function SettingsPage() {
                 <label
                   key={theme.id}
                   className={`settings-theme-option ${settings.theme === theme.id ? 'is-selected' : ''}`}
-                  style={settings.theme === theme.id ? { outline: '2px solid var(--color-primary)', outlineOffset: '2px' } : {}}
                 >
                   <input
                     type="radio"
@@ -230,12 +230,16 @@ export function SettingsPage() {
                     value={theme.id}
                     checked={settings.theme === theme.id}
                     onChange={() => setTheme(theme.id)}
+                    className="sr-only"
                   />
                   <ThemeSwatch themeId={theme.id} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{theme.name}</div>
                     <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{theme.description}</div>
                   </div>
+                  {settings.theme === theme.id && (
+                    <Icon name="check" size={16} style={{ color: 'var(--color-accent)' }} />
+                  )}
                 </label>
               ))}
             </div>
@@ -246,10 +250,10 @@ export function SettingsPage() {
                 <button
                   key={mode.id}
                   className={`btn btn-sm ${settings.themeMode === mode.id ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ flex: 1 }}
+                  style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)' }}
                   onClick={() => setThemeMode(mode.id)}
                 >
-                  {mode.icon} {mode.label}
+                  <Icon name={mode.icon} size={14} /> {mode.label}
                 </button>
               ))}
             </div>
@@ -268,15 +272,12 @@ export function SettingsPage() {
       )}
 
       {activeTab === 'members' && isAdmin && (
-        <Section title="Workspace Members" action={
-          !membersLoaded ? (
-            <button className="btn btn-ghost btn-sm" onClick={loadMembers}>Load members</button>
-          ) : undefined
-        }>
+        <Section title="Workspace Members">
           {!membersLoaded ? (
-            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
-              Click above to view and manage workspace members.
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', padding: 'var(--space-4) 0' }}>
+              <span className="spinner" style={{ width: 16, height: 16 }} />
+              <span style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Loading members…</span>
+            </div>
           ) : (
             <>
               {/* Invite */}

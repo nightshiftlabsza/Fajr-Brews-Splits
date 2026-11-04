@@ -138,15 +138,7 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
             paymentEditingEnabled={isOwner}
           />
 
-          <details className="fb-cost-accordion">
-            <summary className="fb-cost-accordion-summary">
-              <span>How the cost was worked out</span>
-              <Icon name="chevron-down" size={16} />
-            </summary>
-            <div className="fb-cost-accordion-body">
-              <CoffeeCostSummary result={result} />
-            </div>
-          </details>
+          <CoffeeCostSummary result={result} />
         </div>
 
         {/* Desktop Sticky Financial & Action Cockpit Sidebar */}
@@ -203,7 +195,7 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
                 ) : savingPastOrder ? (
                   'Save changes'
                 ) : (
-                  'Move to past orders'
+                  'Complete order'
                 )}
               </button>
             </div>
@@ -226,7 +218,7 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
           </div>
         )}
         <div className="summary-sticky-status-group">
-          <span className="summary-sticky-status-label">{savingPastOrder ? 'Past order' : 'Finalize order'}</span>
+          <span className="summary-sticky-status-label">{savingPastOrder ? 'Past order' : 'Complete order'}</span>
           <span className="summary-sticky-status-dot">·</span>
           <strong className="summary-sticky-status-total num-cell">{formatZAR(result.totalOrderZar)}</strong>
         </div>
@@ -249,7 +241,7 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
             ) : savingPastOrder ? (
               'Save changes'
             ) : (
-              'Move to past orders'
+              'Complete order'
             )}
           </button>
         </div>
@@ -259,9 +251,9 @@ export function OrderSummary({ order, onJumpToStep, onFinalize }: Props) {
       {confirmArchiveOpen && (
         <ConfirmModal
           isOpen={true}
-          title={`Move "${order.name}" to past orders?`}
-          description="This order will leave the active list and live under Past orders. You can still inspect it, print invoices, or duplicate it anytime from Past orders."
-          confirmText="Move to past orders"
+          title={`Complete "${order.name}"?`}
+          description="This order will be finalized and moved to Past orders. You can still inspect it, print invoices, or duplicate it anytime."
+          confirmText="Complete order"
           cancelText="Cancel"
           variant="warning"
           isLoading={finalizing}

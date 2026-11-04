@@ -79,7 +79,7 @@ describe('Header navigation', () => {
       trigger!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    const logoutButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Logout');
+    const logoutButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Sign out');
     expect(logoutButton).toBeTruthy();
 
     act(() => {

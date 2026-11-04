@@ -70,6 +70,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
     return activeOrders[0]?.id || null;
   });
 
+  const [browsingList, setBrowsingList] = useState(false);
   const [activeSection, setActiveSection] = useState<OrderSection>('coffees');
   const [orderSections, setOrderSections] = useState<Record<string, OrderSection>>({});
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
@@ -122,6 +123,14 @@ export function OrderPage({ onNavigateToHistory }: Props) {
     const isCurrentActive = Boolean(currentOrderId && activeOrders.some((o) => o.id === currentOrderId));
     const isActiveOrderValid = Boolean(activeOrderId && activeOrders.some((o) => o.id === activeOrderId));
 
+    if (browsingList) {
+      if (isCurrentActive) {
+        setBrowsingList(false);
+        setActiveOrderId(currentOrderId);
+      }
+      return;
+    }
+
     if (!isActiveOrderValid) {
       const nextId = isCurrentActive ? currentOrderId : (activeOrders[0]?.id ?? null);
       setActiveOrderId(nextId);
@@ -131,7 +140,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
     } else if (isCurrentActive && currentOrderId !== activeOrderId) {
       setActiveOrderId(currentOrderId);
     }
-  }, [currentOrderId, activeOrders, activeOrderId, setCurrentOrderId]);
+  }, [currentOrderId, activeOrders, activeOrderId, browsingList, setCurrentOrderId]);
 
   // Click outside to close actions menu
   useEffect(() => {
@@ -179,22 +188,46 @@ export function OrderPage({ onNavigateToHistory }: Props) {
     } else if ((activeSection === 'invoices' || activeSection === 'summary') && (nextOrder?.lots.length ?? 0) === 0) {
       setActiveSection('coffees');
     }
+    setBrowsingList(false);
     setActiveOrderId(orderId);
     setCurrentOrderId(orderId);
+    if (typeof window !== 'undefined' && window.history?.pushState) {
+      window.history.pushState({ orderId }, '', window.location.pathname);
+    }
   }
+
+  function showOrderList() {
+    setBrowsingList(true);
+    setActiveOrderId(null);
+    setCurrentOrderId(null);
+  }
+
+  // The phone's own back button goes to the list of orders instead of leaving the app
+  useEffect(() => {
+    window.addEventListener('popstate', showOrderList);
+    return () => window.removeEventListener('popstate', showOrderList);
+  }, [setCurrentOrderId]);
 
   async function handleNewOrder() {
     setCreating(true);
     setCreateError(null);
     try {
+      const defaultPayerId = (linkedPersonId && people.some((p) => p.id === linkedPersonId))
+        ? linkedPersonId
+        : (people[0]?.id ?? null);
+      const previousPayerOrder = defaultPayerId
+        ? orders.find((o) => o.payerId === defaultPayerId && (o.payerBank?.bankName || o.payerBank?.accountNumber))
+        : undefined;
+      const defaultBank = previousPayerOrder?.payerBank ?? { bankName: '', accountNumber: '', beneficiary: '' };
+
       const order = await createOrder({
         name: 'New Coffee Order',
         orderDate: todayISO(),
         status: 'planning',
         roasterId: null,
         roasterSnapshot: null,
-        payerId: null,
-        payerBank: { bankName: '', accountNumber: '', beneficiary: '' },
+        payerId: defaultPayerId,
+        payerBank: defaultBank,
         referenceTemplate: 'FAJR-{ORDER}-{NAME}',
         goodsTotalZar: 0,
         lots: [],
@@ -284,7 +317,7 @@ export function OrderPage({ onNavigateToHistory }: Props) {
   }
 
   // ── Render Empty State ──
-  if (activeOrders.length === 0 || !currentOrder) {
+  if (activeOrders.length === 0) {
     return (
       <div className="page-container">
         <div className="empty-state" style={{ margin: 'var(--space-8) 0', padding: 'var(--space-8)' }}>
@@ -299,6 +332,59 @@ export function OrderPage({ onNavigateToHistory }: Props) {
             {creating ? <span className="spinner" style={{ width: 18, height: 18 }} /> : '+ Start a Coffee Order'}
           </button>
         </div>
+      </div>
+    );
+  }
+
+  // ── Render Active Orders Selection View (when not viewing a specific order) ──
+  if (!currentOrder) {
+    return (
+      <div className="page-container">
+        <div className="order-picker-header" style={{ marginBottom: 'var(--space-5)' }}>
+          <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, margin: '0 0 var(--space-2)' }}>
+            Active Orders
+          </h1>
+          <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: 'var(--text-sm)' }}>
+            Choose an order to edit, or start a new one.
+          </p>
+        </div>
+
+        <div className="active-orders-grid" style={{ display: 'grid', gap: 'var(--space-3)', marginBottom: 'var(--space-6)' }}>
+          {activeOrders.map((order) => {
+            const roaster = resolveOrderRoaster(order, roasters);
+            const status = normalizeOrderStatus(order.status, order.isArchived);
+            return (
+              <button
+                key={order.id}
+                type="button"
+                className="card card-padded"
+                style={{ textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}
+                onClick={() => void handleSelectOrder(order.id)}
+              >
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 'var(--text-base)', color: 'var(--color-text-primary)' }}>
+                    {order.name || 'Untitled Order'}
+                  </div>
+                  <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', marginTop: 'var(--space-1)' }}>
+                    {formatDateShort(order.orderDate)} · {roaster?.name || 'Roaster unspecified'}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div className="num-cell" style={{ fontWeight: 700, fontSize: 'var(--text-base)' }}>
+                    {formatZAR(order.goodsTotalZar)}
+                  </div>
+                  <span className={`order-tab-status status-${status}`} style={{ marginTop: 'var(--space-1)', display: 'inline-block' }}>
+                    {status === 'planning' ? 'Planning' : status === 'locked' ? 'Locked' : 'Completed'}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <button className="btn btn-primary" onClick={() => void handleNewOrder()} disabled={creating}>
+          {creating ? <span className="spinner" style={{ width: 16, height: 16 }} /> : '+ Start a Coffee Order'}
+        </button>
       </div>
     );
   }
@@ -374,7 +460,13 @@ export function OrderPage({ onNavigateToHistory }: Props) {
           <button
             type="button"
             className="btn btn-ghost btn-icon mobile-only"
-            onClick={() => setCurrentOrderId(null)}
+            onClick={() => {
+              if (window.history.state?.orderId) {
+                window.history.back();
+              } else {
+                showOrderList();
+              }
+            }}
             aria-label="Back to orders list"
             title="Leave order"
           >

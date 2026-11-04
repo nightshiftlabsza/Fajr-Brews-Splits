@@ -16,6 +16,7 @@ import { resolveOrderRoaster } from '../../lib/roasters';
 import { MAX_IMPORT_FILE_BYTES } from '../../lib/importValidation';
 import { RoasterAvatar } from '../roaster/RoasterAvatar';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import { Icon } from '../ui/Icon';
 import {
   ORDER_WIZARD_STEPS,
   type OrderWizardStep,
@@ -336,19 +337,13 @@ export function HistoryPage({ participantOnly = false }: Props) {
 
             {!selectedOrderSummary.isValid && (
               <div className="alert alert-warning" style={{ marginTop: 'var(--space-4)' }}>
-                This saved order is missing some finalized detail fields, so the archive is showing the best available copy.
+                Older order — showing summary totals only.
               </div>
             )}
 
             {orderInvoiceError && (
               <div className="alert alert-error" style={{ marginTop: 'var(--space-4)' }}>
                 {orderInvoiceError}
-              </div>
-            )}
-
-            {!participantOnly && (
-              <div className="wizard-inline-note" style={{ marginTop: 'var(--space-4)' }}>
-                Edit order opens this same saved order inside Past Orders, so you can correct mistakes without moving it back into the active order tab.
               </div>
             )}
           </section>
@@ -415,7 +410,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
 
       {participantOnly && participantArchiveState === 'unlinked' && (
         <div className="empty-state">
-          <div className="empty-state-icon">☕</div>
+          <div className="empty-state-icon"><Icon name="cup" size={32} /></div>
           <h3>Confirm your profile to see orders you joined</h3>
           <p>
             We could not match this account to a participant record yet. Once your profile is linked, finalized orders you were part of will appear here.
@@ -425,7 +420,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
 
       {participantOnly && participantArchiveState === 'needs-confirmation' && (
         <div className="empty-state">
-          <div className="empty-state-icon">👤</div>
+          <div className="empty-state-icon"><Icon name="user" size={32} /></div>
           <h3>We found a possible match for your account</h3>
           <p>
             Confirm your participant profile to see the finalized orders you joined. The app waits for confirmation before showing personal archive data.
@@ -435,7 +430,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
 
       {participantOnly && participantArchiveState === 'ambiguous' && (
         <div className="empty-state">
-          <div className="empty-state-icon">?</div>
+          <div className="empty-state-icon"><Icon name="info" size={32} /></div>
           <h3>We found more than one possible profile</h3>
           <p>
             Choose your participant record first so the archive only shows the orders that belong to you.
@@ -459,7 +454,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
 
       {participantArchiveState === 'ready' && pastOrders.length === 0 && (
         <div className="empty-state">
-          <div className="empty-state-icon">📂</div>
+          <div className="empty-state-icon"><Icon name="archive" size={32} /></div>
           <h3>No past orders yet</h3>
           <p>{participantOnly ? 'You are linked correctly, but there are no finalized orders including you yet.' : 'Finalize an order and it will appear here as a saved record.'}</p>
         </div>
@@ -467,7 +462,7 @@ export function HistoryPage({ participantOnly = false }: Props) {
 
       {pastOrders.length > 0 && filteredPastOrders.length === 0 && (
         <div className="empty-state">
-          <div className="empty-state-icon">🔍</div>
+          <div className="empty-state-icon"><Icon name="search" size={32} /></div>
           <h3>No past orders found</h3>
           <p>No past orders match your search &quot;{search}&quot;.</p>
         </div>

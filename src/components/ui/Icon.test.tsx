@@ -43,6 +43,10 @@ describe('Icon', () => {
     'dots',
     'user',
     'clock',
+    'sun',
+    'moon',
+    'monitor',
+    'box',
   ];
 
   it('renders all supported icons as SVGs with 1.5 stroke width', () => {

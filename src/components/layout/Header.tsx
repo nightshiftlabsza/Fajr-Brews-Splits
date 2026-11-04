@@ -93,7 +93,7 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
                 <div className="nav-user-menu-label">Signed in as</div>
                 <div className="nav-user-menu-email">{user?.email}</div>
                 <button type="button" className="nav-user-menu-action" onClick={() => void handleSignOut()}>
-                  Logout
+                  Sign out
                 </button>
               </div>
             )}
@@ -357,10 +357,10 @@ export function Header({ currentTab, onTabChange, participantOnly = false }: Hea
         }
 
         .nav-bottom-label {
-          font-size: 0.72rem;
-          font-weight: 700;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
+          font-size: var(--text-xs);
+          font-weight: 600;
+          letter-spacing: normal;
+          text-transform: none;
           color: var(--color-text-muted);
         }
 

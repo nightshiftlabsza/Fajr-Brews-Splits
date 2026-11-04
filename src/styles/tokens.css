@@ -178,6 +178,7 @@
     --color-partial:        #F5D060;
     --color-partial-bg:     #2A2010;
     --color-warning:        #fbbf24;
+    --color-warning-text:   #fbbf24;
     --color-warning-bg:     #78350f;
     --color-unpaid:         #F87171;
     --color-unpaid-bg:      #2A1010;
@@ -308,6 +309,7 @@
     --color-partial:        #F5D060;
     --color-partial-bg:     #2A2010;
     --color-warning:        #fbbf24;
+    --color-warning-text:   #fbbf24;
     --color-warning-bg:     #78350f;
     --color-unpaid:         #F87171;
     --color-unpaid-bg:      #2A1010;

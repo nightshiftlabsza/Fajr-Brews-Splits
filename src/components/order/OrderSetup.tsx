@@ -44,42 +44,6 @@ function isBankFilled(bank?: Partial<PayerBank> | null): boolean {
   );
 }
 
-function getIncludedPeople(order: Order, people: Person[]): Person[] {
-  const personIds = new Set<string>();
-
-  for (const lot of order.lots) {
-    if (Array.isArray(lot.bags) && lot.bags.length > 0) {
-      for (const bag of lot.bags) {
-        for (const buyer of bag.buyers) {
-          if (buyer.personId && buyer.grams > 0) {
-            personIds.add(buyer.personId);
-          }
-        }
-      }
-    } else if (Array.isArray(lot.shares)) {
-      for (const share of lot.shares) {
-        if (share.personId && share.shareGrams > 0) {
-          personIds.add(share.personId);
-        }
-      }
-    }
-  }
-
-  for (const fee of order.fees ?? []) {
-    if (normalizeFeeAllocationType(fee.allocationType) === 'specific_person' && fee.personId) {
-      personIds.add(fee.personId);
-    }
-  }
-
-  if (order.payerId) {
-    personIds.add(order.payerId);
-  }
-
-  return Array.from(personIds)
-    .map((personId) => people.find((person) => person.id === personId) ?? null)
-    .filter((person): person is Person => person !== null);
-}
-
 export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
   const {
     people,
@@ -133,7 +97,6 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
   const hydrationRef = useRef(true);
   const bankHydrationRef = useRef(true);
 
-  const includedPeople = useMemo(() => getIncludedPeople(order, people), [order, people]);
   const canonicalPeople = useMemo(() => dedupePeopleById(people), [people]);
 
   useEffect(() => {
@@ -383,18 +346,8 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
           </select>
 
           <span className="field-hint" style={{ marginTop: 'var(--space-1)', display: 'block' }}>
-            Non-payers round down to cents; the payer absorbs the remainder so totals balance exactly.
+            Everyone else's share rounds down to the cent; the payer covers any leftover cents so the total matches the bill.
           </span>
-
-          <details className="fb-details-block">
-            <summary className="fb-details-summary">
-              <Icon name="info" size={12} />
-              <span>How this works</span>
-            </summary>
-            <div className="fb-details-content">
-              Each member's share is rounded down to two decimal places (nearest cent). Any leftover fractions of a cent are added to the payer's share, ensuring the collected money matches the invoice total to the exact cent without shortfall.
-            </div>
-          </details>
         </div>
       </section>
 
@@ -459,46 +412,9 @@ export function OrderSetup({ order, registerCommit, onOrderChange }: Props) {
         </div>
       </CollapsiblePanel>
 
-      {/* ── 3. Finalized Order Visibility & One-Liner ── */}
-      <section className="wizard-panel fb-ruled-panel">
-        <div className="wizard-card-header">
-          <div>
-            <div className="wizard-card-title">Finalized order visibility</div>
-          </div>
-        </div>
-        <p className="wizard-card-copy">
-          Only members and people in this order can view details. No extra PIN is needed to view them.
-        </p>
-
-        <div className="wizard-inline-note">
-          <strong>Included in this order:</strong> buyers with grams in this order, plus the payer.
-        </div>
-
-        {includedPeople.length > 0 ? (
-          <div className="wizard-protection-list">
-            {includedPeople.map((person) => (
-              <span key={person.id} className="wizard-badge wizard-badge-muted">
-                {person.name}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <div className="wizard-inline-empty">
-            <span>No one is included yet.</span>
-            <span className="field-hint">Assign buyers or choose a payer first, then protection will follow.</span>
-          </div>
-        )}
-
-        <details className="fb-details-block">
-          <summary className="fb-details-summary">
-            <Icon name="info" size={12} />
-            <span>How this works</span>
-          </summary>
-          <div className="fb-details-content">
-            Finalized orders are visible to workspace members and the people included in this order. Participant visibility is matched using saved email first, then phone, then a confirmed profile match. People without a linked app account will still appear in the order, but will confirm their profile before the archive becomes visible.
-          </div>
-        </details>
-      </section>
+      <p className="wizard-panel-footnote" style={{ marginTop: 'var(--space-4)', color: 'var(--color-text-muted)', fontSize: '0.8125rem', textAlign: 'center' }}>
+        Visible to group members and anyone with coffee in this order.
+      </p>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { YearPicker } from '../stats/YearPicker';
 import { MonthlyChart } from '../stats/MonthlyChart';
 import { CameBackToList } from '../stats/CameBackToList';
 import { YearInCoffee } from '../stats/YearInCoffee';
+import { Icon } from '../ui/Icon';
 
 export function MyStatsPage() {
   const { orders, roasters, people, linkedPersonId, linkResolution, isLoading } = useAppStore(
@@ -93,7 +94,9 @@ export function MyStatsPage() {
           </p>
         </div>
         <div className="stats-card" style={{ textAlign: 'center', padding: 'var(--space-10) var(--space-4)' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-2)' }}>☕</div>
+          <div style={{ marginBottom: 'var(--space-2)' }}>
+            <Icon name="cup" size={40} style={{ color: 'var(--color-accent)' }} />
+          </div>
           <h3 style={{ margin: '0 0 var(--space-2) 0', color: 'var(--color-text-primary)' }}>
             Link a profile to view your stats
           </h3>
@@ -113,7 +116,9 @@ export function MyStatsPage() {
           <p className="stats-subtitle">Confirm your participant link to continue.</p>
         </div>
         <div className="stats-card" style={{ textAlign: 'center', padding: 'var(--space-10) var(--space-4)' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-2)' }}>?</div>
+          <div style={{ marginBottom: 'var(--space-2)' }}>
+            <Icon name="info" size={40} style={{ color: 'var(--color-accent)' }} />
+          </div>
           <h3 style={{ margin: '0 0 var(--space-2) 0', color: 'var(--color-text-primary)' }}>
             We still need to confirm your profile
           </h3>
@@ -133,7 +138,9 @@ export function MyStatsPage() {
           <p className="stats-subtitle">From orders you were part of, once they are done.</p>
         </div>
         <div className="stats-card" style={{ textAlign: 'center', padding: 'var(--space-10) var(--space-4)' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: 'var(--space-2)' }}>📦</div>
+          <div style={{ marginBottom: 'var(--space-2)' }}>
+            <Icon name="box" size={40} style={{ color: 'var(--color-accent)' }} />
+          </div>
           <h3 style={{ margin: '0 0 var(--space-2) 0', color: 'var(--color-text-primary)' }}>
             No orders you were part of yet
           </h3>

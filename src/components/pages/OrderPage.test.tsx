@@ -139,6 +139,24 @@ describe('OrderPage component tests', () => {
     expect(container.querySelector('.order-header-title')?.textContent).toBe('Order 2');
   });
 
+  it('UX-02: the back button on phones returns to the list of active orders', async () => {
+    mockStoreState.orders = [makeOrder('order-1', 'Order 1'), makeOrder('order-2', 'Order 2')];
+    mockStoreState.currentOrderId = 'order-1';
+
+    await act(async () => {
+      root.render(<OrderPage onNavigateToHistory={vi.fn()} />);
+    });
+    expect(container.querySelector('.order-header-title')?.textContent).toBe('Order 1');
+
+    const back = container.querySelector('[aria-label="Back to orders list"]') as HTMLButtonElement;
+    await act(async () => {
+      back.click();
+    });
+
+    expect(container.textContent).toContain('Choose an order to edit');
+    expect(container.querySelector('.order-header-title')).toBeNull();
+  });
+
   it('BUG-ORD-02: switches key with currentOrder.id across tabs', async () => {
     const order1 = makeOrder('order-1', 'Order 1');
     const order2 = makeOrder('order-2', 'Order 2');
