@@ -149,8 +149,7 @@ describe('OrderSetup roaster flow', () => {
       root.render(<OrderSetup order={makeOrder()} />);
     });
 
-    expect(container.textContent).toContain('Finalized order visibility');
-    expect(container.textContent).toContain('No extra PIN is needed to view them.');
+    expect(container.textContent).toContain('Visible to group members and anyone with coffee in this order.');
     expect(container.textContent).not.toContain('Order PIN');
     expect(container.textContent).not.toContain('Enable PIN protection');
   });

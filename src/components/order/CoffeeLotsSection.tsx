@@ -567,7 +567,7 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
                     </span>
                   ) : (
                     <span className="fb-coffee-status-chip is-needed">
-                      <Icon name="warning" size={12} /> {assignedCount} of {bags.length} bags have someone
+                      <Icon name="warning" size={12} /> {assignedCount} of {bags.length} bags assigned
                     </span>
                   )}
                   {compactSummary && (
@@ -613,6 +613,7 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
                             <button
                               type="button"
                               className="fb-bag-action-link"
+                              aria-label={`${isAssigned ? 'Change' : 'Assign'} bag ${bagIdx + 1} (${formatGrams(lot.gramsPerBag)})`}
                               onClick={() => {
                                 if (isPanelActive) {
                                   setActiveBagTarget(null);
@@ -621,7 +622,7 @@ export function CoffeeLotsSection({ order, onOrderChange, onContinue, registerCo
                                 }
                               }}
                             >
-                              Change
+                              {isAssigned ? 'Change' : 'Assign'}
                             </button>
 
                             {bagIdx > 0 && bag1HasBuyers && (

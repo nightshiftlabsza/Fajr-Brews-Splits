@@ -80,7 +80,7 @@ export function formatCurrency(amount: number): string {
 }
 
 export function formatNumber(value: number, maximumFractionDigits = 0): string {
-  return new Intl.NumberFormat('en-ZA', {
+  return new Intl.NumberFormat('en', {
     minimumFractionDigits: 0,
     maximumFractionDigits,
   }).format(value);

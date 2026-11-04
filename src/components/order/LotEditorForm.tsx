@@ -56,7 +56,13 @@ export function LotEditorForm({
   const currencySymbol = getListCurrencySymbol(currencyCode);
 
   return (
-    <div className="lot-editor-form-stack">
+    <form
+      className="lot-editor-form-stack"
+      onSubmit={(e) => {
+        e.preventDefault();
+        (onSaveAndAssign || onSaveLater)();
+      }}
+    >
       <div className="field">
         <label className="field-label" htmlFor="coffee-name-input">Coffee name *</label>
         <input
@@ -126,18 +132,17 @@ export function LotEditorForm({
         {isNew ? (
           <>
             <button
-              type="button"
+              type="submit"
               className="btn btn-primary"
-              onClick={onSaveAndAssign || onSaveLater}
             >
-              Choose who gets each bag
+              Save & assign bags
             </button>
             <button
               type="button"
               className="btn btn-secondary"
               onClick={onSaveLater}
             >
-              Do this later
+              Save only
             </button>
             <button type="button" className="btn btn-ghost" onClick={onCancel}>
               Cancel
@@ -145,7 +150,7 @@ export function LotEditorForm({
           </>
         ) : (
           <>
-            <button type="button" className="btn btn-primary" onClick={onSaveLater}>
+            <button type="submit" className="btn btn-primary" onClick={onSaveLater}>
               Save changes
             </button>
             <button type="button" className="btn btn-ghost" onClick={onCancel}>
@@ -196,6 +201,6 @@ export function LotEditorForm({
           margin-top: var(--space-1);
         }
       `}</style>
-    </div>
+    </form>
   );
 }

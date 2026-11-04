@@ -137,8 +137,7 @@ describe('OrderSummary', () => {
 
     expect(container.textContent).toContain('Grand total');
     expect(container.textContent).toContain('Who owes what');
-    expect(container.textContent).toContain('Finalize order');
-    expect(container.textContent).toContain('Move to past orders');
+    expect(container.textContent).toContain('Complete order');
     expect(container.textContent).not.toContain('Delete order');
     expect(container.textContent).not.toContain('Payment state');
     expect(container.textContent).not.toContain('Invoices and sharing');
@@ -261,13 +260,13 @@ describe('OrderSummary', () => {
       );
     });
 
-    clickButtonByText(container, 'Move to past orders');
+    clickButtonByText(container, 'Complete order');
     await act(async () => {
       await Promise.resolve();
     });
 
     const modalConfirmBtn = Array.from(container.querySelectorAll<HTMLButtonElement>('.fb-modal-actions button')).find((b) =>
-      b.textContent?.includes('Move to past orders')
+      b.textContent?.includes('Complete order')
     );
     expect(modalConfirmBtn).toBeTruthy();
     act(() => {
@@ -389,13 +388,13 @@ describe('OrderSummary', () => {
       );
     });
 
-    clickButtonByText(container, 'Move to past orders');
+    clickButtonByText(container, 'Complete order');
     await act(async () => {
       await Promise.resolve();
     });
 
     const modalConfirmBtn = Array.from(container.querySelectorAll<HTMLButtonElement>('.fb-modal-actions button')).find((b) =>
-      b.textContent?.includes('Move to past orders')
+      b.textContent?.includes('Complete order')
     );
     act(() => {
       modalConfirmBtn?.click();

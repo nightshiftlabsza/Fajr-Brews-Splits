@@ -372,10 +372,7 @@ export function SettlementPacks({
         }
 
         .personal-share-amount-box {
-          background: var(--color-surface);
-          border: 1px solid var(--color-border);
-          border-radius: var(--radius-sm);
-          padding: var(--space-4);
+          padding: var(--space-2) 0;
           display: flex;
           flex-direction: column;
           gap: 4px;
@@ -399,10 +396,18 @@ export function SettlementPacks({
         }
 
         .personal-share-bank-box {
-          background: var(--color-surface);
-          border: 1px solid var(--color-border);
-          border-radius: var(--radius-sm);
-          padding: var(--space-4);
+          padding: var(--space-2) 0;
+          border-left: 1px solid var(--color-border);
+          padding-left: var(--space-4);
+        }
+
+        @media (max-width: 640px) {
+          .personal-share-bank-box {
+            border-left: none;
+            border-top: 1px solid var(--color-border);
+            padding-left: 0;
+            padding-top: var(--space-3);
+          }
         }
 
         .personal-share-bank-title {

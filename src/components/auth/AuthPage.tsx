@@ -121,8 +121,7 @@ export function AuthPage({
           <div className="alert alert-success" style={{ marginBottom: 0 }}>
             <strong>Account created.</strong>
             <br />
-            Check your email to confirm your address. After you sign in, Fajr Brews will try to match
-            you to any orders you were already part of.
+            Check your email to confirm your address. Sign in to view your coffee orders and what you owe.
           </div>
           <button
             className="btn btn-secondary w-full mt-4"
@@ -144,7 +143,7 @@ export function AuthPage({
 
         <p className="auth-tagline">
           {mode === 'forgot'
-            ? 'Send yourself a password reset email'
+            ? 'Reset your password'
             : mode === 'recovery'
               ? 'Choose a new password for your account'
               : 'Split coffee orders with friends'}

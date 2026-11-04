@@ -337,7 +337,7 @@ export function GoodsAndFees({ order, registerCommit, onOrderChange }: Props) {
         {/* Existing Fees List */}
         {order.fees.length === 0 ? (
           <p className="fees-empty-text">
-            No additional fees added yet. If there are customs, shipping, or courier costs, click "+ Add fee".
+            No shipping, customs, or bank fees added yet.
           </p>
         ) : (
           <div className="table-responsive">

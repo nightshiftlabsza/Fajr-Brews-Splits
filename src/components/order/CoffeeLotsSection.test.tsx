@@ -170,7 +170,7 @@ describe('CoffeeLotsSection', () => {
     });
 
     expect(container.textContent).toContain('Unassigned');
-    clickButtonByText(container, 'Change');
+    clickButtonByText(container, 'Assign');
 
     expect(container.textContent).toContain('Bilal');
     const bilalRow = Array.from(container.querySelectorAll('.fb-assign-person-row')).find((r) =>

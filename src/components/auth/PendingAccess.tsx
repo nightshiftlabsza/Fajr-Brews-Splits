@@ -113,20 +113,17 @@ export function PendingAccess() {
         {linkResolution.status === 'needs-confirmation' && linkResolution.candidates[0] && (
           <div className="card card-padded" style={{ marginBottom: 'var(--space-4)', textAlign: 'left' }}>
             <div style={{ fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: 'var(--space-2)' }}>
-              We found a possible match for you in Fajr Brews records.
+              Are you {linkResolution.candidates[0].name}?
             </div>
             <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
-              Link your account to <strong>{linkResolution.candidates[0].name}</strong> so we can show only the finalized orders you joined.
-            </div>
-            <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: 'var(--space-4)' }}>
-              Match signal: {formatCandidateDetail(linkResolution.candidates[0])}
+              Link your profile ({formatCandidateDetail(linkResolution.candidates[0])}) to see your orders and invoices.
             </div>
             <button
               className="btn btn-primary"
               onClick={() => handleConfirm(linkResolution.candidates[0].personId)}
               disabled={submittingPersonId === linkResolution.candidates[0].personId}
             >
-              {submittingPersonId === linkResolution.candidates[0].personId ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Link my account'}
+              {submittingPersonId === linkResolution.candidates[0].personId ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Yes, link my profile'}
             </button>
           </div>
         )}
@@ -137,7 +134,7 @@ export function PendingAccess() {
               We found a few possible matches for you.
             </div>
             <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-4)' }}>
-              Pick the record that belongs to you and we will link your account.
+              Pick your profile to see your orders and invoices.
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
               {linkResolution.candidates.map((candidate) => (
@@ -163,7 +160,7 @@ export function PendingAccess() {
 
         {!hasCandidates && (
           <p style={{ marginBottom: 'var(--space-6)', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
-            We could not match this account to any existing Fajr Brews person record yet. If you should already be in archived orders, ask an admin to check the email, phone number, or name saved for you.
+            We couldn't find your name in past orders under this email or phone number. Ask the order organiser to link your profile.
           </p>
         )}
 
